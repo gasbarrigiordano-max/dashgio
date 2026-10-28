@@ -13,7 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <!--
-  Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Giornale di Bordo, in futuro altre).
+  Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Giornale di Bordo, Palestra, in futuro altre).
+  La Palestra si legge direttamente dalla cassaforte (Cassaforte.tutti('palestra')).
   Nessun dato proprio: apre Bilancio (bilancio/, stesso indirizzo) in un riquadro nascosto e ne legge i numeri,
   compresi quelli che Bilancio legge dal Giornale di Bordo.
   Accesso unico: account e passphrase si chiedono qui (comune/cassaforte.js); Bilancio e Giornale, se aperti senza accesso,
@@ -177,6 +178,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <a class="navbtn on" href="#" aria-label="Panoramica" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="tip">Panoramica</span></a>
   <a class="navbtn" href="bilancio/" aria-label="Bilancio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M5 6l9-3 2 3"/></svg><span class="tip">Bilancio</span></a>
   <a class="navbtn giornale-link" href="#" aria-label="Giornale di Bordo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Giornale di Bordo</span></a>
+  <a class="navbtn" href="palestra/" aria-label="Palestra"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg><span class="tip">Palestra</span></a>
   <a class="navbtn" href="#agenda" aria-label="Scadenze"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Scadenze</span></a>
   <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
   <div class="nav-spazio"></div>
@@ -187,7 +189,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <div class="head">
     <div style="flex:1 1 260px">
       <h1 id="saluto">Ciao, Giordano</h1>
-      <p id="sotto">Ecco come stanno le tue finanze e i tuoi mezzi</p>
+      <p id="sotto">Ecco come stanno le tue finanze, i tuoi mezzi e la palestra</p>
     </div>
     <div class="cerca">
       <label><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--ink3)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -224,6 +226,11 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
     <div class="sez"><h2>I miei mezzi</h2><a class="giornale-link" href="#" style="font-size:12px">apri il Giornale</a></div>
     <div class="mezzi" id="mezzi"></div>
   </section>
+
+  <section>
+    <div class="sez"><h2>Palestra</h2><a href="palestra/" style="font-size:12px">apri la Palestra</a></div>
+    <div class="mezzi" id="palestra"></div>
+  </section>
 </main>
 
 <aside class="glass" aria-label="Agenda">
@@ -245,7 +252,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 
 </div>
 <div class="seg glass" role="navigation" aria-label="App">
-  <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Giornale di Bordo</a>
+  <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Giornale di Bordo</a><a href="palestra/">Palestra</a>
 </div>
 
 <div class="stato glass" id="stato" role="status">Apro Bilancio…</div>
@@ -352,15 +359,15 @@ function disegna(){
   if(!D) return;
   const ora = new Date().getHours();
   $('saluto').textContent = (ora < 13 ? 'Buongiorno' : ora < 18 ? 'Buon pomeriggio' : 'Buonasera') + ', Giordano';
-  $('sotto').textContent = `${D.nomeMese} ${D.anno}: ecco come stanno le tue finanze e i tuoi mezzi`;
+  $('sotto').textContent = `${D.nomeMese} ${D.anno}: ecco come stanno le tue finanze, i tuoi mezzi e la palestra`;
   const saldo = D.entrate - D.uscite, ultimi = (a) => a.slice(Math.max(0, D.mese-8), D.mese+1);
   const saldi = ultimi(D.serieE.map((e, i) => e - D.serieU[i]));
-  const prossima = D.agenda[0];
+  const agenda = tuttaAgenda(), prossima = agenda[0];
   const tiles = [
     {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), s:`entrate ${eur0(D.entrate)} · uscite ${eur0(D.uscite)}`},
     {href:'bilancio/', lab:'Da pagare', app:'Bilancio', bars:barre(ultimi(D.serieU)), v:D.daPagare ? eur0(D.daPagare) : 'Tutto pagato', s:D.nDaPagare ? `${D.nDaPagare} ${D.nDaPagare===1?'voce':'voci'} questo mese${D.pagato?' · già pagato '+eur0(D.pagato):''}` : (D.pagato ? 'già pagato '+eur0(D.pagato) : 'niente questo mese')},
     {href:'bilancio/', lab:'Patrimonio', app:'Bilancio', bars:barre(D.storico), v:eur0(D.patr), s:`liquidità ${eur0(D.liq)}`},
-    prossima ? {href: prossima.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/', lab:'Prossima scadenza', app:prossima.app.split(' · ')[0].replace('Giornale di Bordo','Giornale'),
+    prossima ? {href: hrefAgenda(prossima), lab:'Prossima scadenza', app:prossima.app.split(' · ')[0].replace('Giornale di Bordo','Giornale'),
       bars:'', v: giorniA(prossima.d)===0 ? 'Oggi' : giorniA(prossima.d)===1 ? 'Domani' : `tra ${giorniA(prossima.d)} giorni`, s:`${prossima.titolo} · ${fmtD(prossima.d)}${prossima.amt!=null?' · '+eur2(prossima.amt):''}`}
       : {href:'bilancio/', lab:'Prossima scadenza', app:'', bars:'', v:'Nessuna', s:'niente in programma'}
   ];
@@ -388,17 +395,18 @@ function disegna(){
   $('stats').innerHTML = [[D.nConti,'Conti'],[D.mezzi.length,'Mezzi'],[D.nRate,'Rate attive']].map(([v,l]) => `<div><b class="mono">${v}</b><small>${l}</small></div>`).join('');
   $('aggiornato').textContent = 'Aggiornata alle ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   disegnaCal();
-  $('lista').innerHTML = D.agenda.length ? D.agenda.map(a => `<a class="item" href="${a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'}"><div class="tag">${esc(a.tag)}</div>
+  $('lista').innerHTML = agenda.length ? agenda.map(a => `<a class="item" href="${hrefAgenda(a)}"><div class="tag">${esc(a.tag)}</div>
     <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div><small>${fmtD(a.d)} · ${giorniA(a.d)===0?'oggi':giorniA(a.d)===1?'domani':'tra '+giorniA(a.d)+' giorni'}</small></div>
-    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : '?'}</div></a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
-  const set7 = D.agenda.filter(a => giorniA(a.d) <= 7).length;
+    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div></a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
+  const set7 = agenda.filter(a => giorniA(a.d) <= 7).length;
+  disegnaPalestra();
   $('nbadge').hidden = !set7; $('nbadge').textContent = set7;
 }
 function disegnaCal(){
   const base = new Date(D.anno, D.mese + calOff, 1), y = base.getFullYear(), m = base.getMonth();
   $('cal-tit').textContent = base.toLocaleDateString('it-IT', {month:'long', year:'numeric'}).replace(/^./, c => c.toUpperCase());
   const primo = (new Date(y, m, 1).getDay() + 6) % 7, ngiorni = new Date(y, m+1, 0).getDate();
-  const ev = new Set(D.eventi.filter(d => +d.slice(0,4)===y && +d.slice(5,7)===m+1).map(d => +d.slice(8,10)));
+  const ev = new Set([...D.eventi, ...altriEventi().map(a => a.d)].filter(d => +d.slice(0,4)===y && +d.slice(5,7)===m+1).map(d => +d.slice(8,10)));
   const oggi = new Date(D.oggi + 'T12:00');
   let h = ['L','M','M','G','V','S','D'].map(w => `<div class="wd" aria-hidden="true">${w}</div>`).join('');
   for(let i = 0; i < primo; i++) h += '<div></div>';
@@ -409,6 +417,43 @@ function disegnaCal(){
   $('cal').innerHTML = h;
 }
 function calSposta(k){ calOff += k; if(D) disegnaCal(); }
+
+/* ---- Altre app nella cassaforte: Palestra ---- */
+let PAL = null;
+async function leggiPalestra(){
+  try {
+    const t = await Cassaforte.tutti('palestra'), o = {};
+    ['sessioni', 'corpo', 'abbonamento'].forEach(k => { try { o[k] = t[k] != null ? JSON.parse(t[k]) : null; } catch(e){} });
+    PAL = o;
+  } catch(e){ console.warn('Palestra', e); PAL = PAL || {errore: e.code || e.message}; }
+  disegnaPalestra(); if(D) disegna();
+}
+// scadenza dell'abbonamento (fino a 30 giorni prima) tra le cose in programma
+function altriEventi(){
+  const a = PAL && PAL.abbonamento, out = [];
+  if(a && a.scadenza && giorniA(a.scadenza) >= 0 && giorniA(a.scadenza) <= 30)
+    out.push({d:a.scadenza, titolo:`Abbonamento ${a.nome || 'palestra'}`, app:'Palestra · abbonamento', tag:'PAL', amt:null, senzaImporto:true, href:'palestra/?t=abbo'});
+  return out;
+}
+function tuttaAgenda(){ return [...D.agenda, ...altriEventi()].sort((x, y) => x.d.localeCompare(y.d)); }
+function hrefAgenda(a){ return a.href || (a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'); }
+function disegnaPalestra(){
+  const box = $('palestra'); if(!box) return;
+  if(!PAL){ box.innerHTML = '<div class="vuoto">Leggo la Palestra…</div>'; return; }
+  if(PAL.errore){ box.innerHTML = `<div class="vuoto">Palestra non leggibile (${esc(PAL.errore)}): se dice permission-denied, pubblica le regole Firestore aggiornate.</div>`; return; }
+  const ses = (PAL.sessioni || []).slice().sort((a, b) => b.d.localeCompare(a.d)), oggi = new Date(), mese = `${oggi.getFullYear()}-${String(oggi.getMonth()+1).padStart(2,'0')}`;
+  const delMese = ses.filter(s => s.d.startsWith(mese)).length, ult = ses[0], a = PAL.abbonamento;
+  const pesi = (PAL.corpo || []).filter(c => typeof c.peso === 'number').sort((x, y) => x.d.localeCompare(y.d));
+  const kgFmt = n => (Math.round(n*10)/10).toLocaleString('it-IT');
+  const ga = a && a.scadenza ? giorniA(a.scadenza) : null;
+  const card = (titolo, r1, r2, chip, v, sv, acc) => `<a class="mezzo${acc?' acc':''}" href="palestra/${chip[1]}"><div style="flex:1 1 auto;min-width:0"><b>${esc(titolo)}</b><div class="s">${r1}</div><div class="s">${r2}</div><div class="p">${esc(chip[0])}</div></div>
+    <div class="tot"><span class="mono">${esc(v)}</span><span style="font-weight:600;opacity:.75">${esc(sv)}</span></div></a>`;
+  box.innerHTML = [
+    card('Allenamenti', ult ? `Ultimo: ${esc(ult.nome)} · ${fmtD(ult.d)}` : 'Nessun allenamento ancora', ult && ult.durata ? `${ult.durata} min` : 'Inizia dalla Palestra', ['registro', ''], delMese, 'questo mese'),
+    card('Abbonamento', a ? esc(a.nome || 'Palestra') : 'Nessun abbonamento', ga == null ? (a ? 'Senza scadenza' : 'Segnalo nella Palestra') : ga < 0 ? `Scaduto il ${fmtD(a.scadenza)}` : `Scade il ${fmtD(a.scadenza)}`, ['abbonamento', '?t=abbo'], ga == null ? '–' : ga < 0 ? '!' : ga, ga == null ? '' : ga < 0 ? 'scaduto' : 'giorni', ga != null && ga <= 10),
+    card('Peso', pesi.length ? `Ultima misura: ${fmtD(pesi.at(-1).d)}` : 'Nessuna misura', pesi.length > 1 ? `${pesi.at(-1).peso - pesi[0].peso > 0 ? '+' : ''}${kgFmt(pesi.at(-1).peso - pesi[0].peso)} kg dal ${fmtD(pesi[0].d)}` : 'Aggiungi le misure', ['corpo', '?t=corpo'], pesi.length ? kgFmt(pesi.at(-1).peso) : '–', 'kg')
+  ].join('');
+}
 
 /* ---- Ricerca tra i movimenti di Bilancio ---- */
 $('q').addEventListener('input', e => {
@@ -446,12 +491,13 @@ async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
   await Cassaforte.porta({ nome: 'il tuo account', bilancio: 'bilancio/' });
   // arrivato da Bilancio o dal Giornale (?torna=…): ci si torna subito
   const torna = new URLSearchParams(location.search).get('torna');
-  if(torna === 'bilancio/' || torna === 'giornale/'){
+  if(['bilancio/', 'giornale/', 'palestra/'].includes(torna)){
     try { sessionStorage.setItem('dg:tornato', String(Date.now())); } catch(e){}
     return location.replace(torna);
   }
   bil.src = 'bilancio/index.html';
   giro = setInterval(controlla, 1000);
+  leggiPalestra(); setInterval(leggiPalestra, 60000);
 })();
 </script>
 </body>

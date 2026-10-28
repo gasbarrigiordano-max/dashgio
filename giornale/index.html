@@ -5548,6 +5548,27 @@ const VECCHIO_GIORNALE = {
   projectId: "app-gommone",
   appId: "1:291691340599:web:c6682923f4a45e1a2970b2"
 };
+// tutte le voci che il Giornale ha mai salvato: servono se le regole del vecchio progetto non permettono di elencarle
+const VOCI_GIORNALE = ['launcherPrefs', 'bilancioPagamenti',
+  'settings', 'expenses', 'trips', 'refuels', 'fuel', 'oil', 'oilRefuels', 'insurances', 'equipment', 'carrelloInsurances', 'carrelloRevisioni', 'carrelloBollo', 'carrelloLavori', 'rpmHoursLog', 'engineParts',
+  ...['auto_', 'scooter_', 'moto_'].flatMap(p => ['settings', 'expenses', 'refuels', 'insurances', 'revisioni', 'bollo', 'manutenzione', 'parts', 'plannedTrips'].map(k => p + k))];
+async function vecchieVoci(app, uid) {
+  const data = app.firestore().collection('users').doc(uid).collection('data');
+  try {
+    const snap = await data.get();
+    return snap.docs.map(d => [d.id, d.data().value]).filter(([, v]) => typeof v === 'string');
+  } catch (e) {
+    if (e.code !== 'permission-denied') throw e;
+    // elenco non permesso: una voce alla volta (quelle che non esistono si saltano)
+    const voci = [];
+    for (const k of VOCI_GIORNALE) {
+      const d = await data.doc(k).get().catch(x => { if (x.code === 'permission-denied') return null; throw x; });
+      if (d && d.exists && typeof d.data().value === 'string') voci.push([k, d.data().value]);
+    }
+    if (!voci.length) throw e;
+    return voci;
+  }
+}
 async function trasloco() {
   if (await Cassaforte.leggi('giornale', 'trasloco')) return;
   const f = Cassaforte.finestra('Porta qui il Giornale', 'Copio i dati del vecchio Giornale di Bordo nella cassaforte, cifrati con la tua passphrase. Il vecchio Giornale resta com\'è, come copia.');
@@ -5557,9 +5578,10 @@ async function trasloco() {
   return new Promise(fine => {
     const copia = async (u) => {
       f.corpo.innerHTML = '<p class="cf-sub">Copio e controllo i dati…</p>';
+      let fase = 'leggo il vecchio Giornale (progetto app-gommone)';
       try {
-        const snap = await app.firestore().collection('users').doc(u.uid).collection('data').get();
-        const voci = snap.docs.map(d => [d.id, d.data().value]).filter(([, v]) => typeof v === 'string');
+        const voci = await vecchieVoci(app, u.uid);
+        fase = 'scrivo nella cassaforte (progetto contabilit-1a500)';
         for (const [k, v] of voci) await Cassaforte.scrivi('giornale', k, v);
         // ricontrollo: ogni voce riletta e decifrata dalla cassaforte deve essere identica
         const letti = await Cassaforte.tutti('giornale');
@@ -5570,7 +5592,9 @@ async function trasloco() {
         f.corpo.querySelector('button').onclick = () => { f.chiudi(); fine(); };
       } catch (e) {
         console.error(e);
-        f.err('Trasloco non riuscito: ' + (e.code || e.message) + '. Non è stato cancellato niente: riprova.');
+        f.err('Trasloco non riuscito mentre ' + fase + ': ' + (e.code || e.message) + '.'
+          + (e.code === 'permission-denied' && fase.includes('cassaforte') ? ' Pubblica le regole aggiornate (firestore.rules) nella console di contabilit-1a500.' : '')
+          + ' Non è stato cancellato niente: riprova.');
         modulo();
       }
     };

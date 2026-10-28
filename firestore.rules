@@ -25,14 +25,14 @@ service cloud.firestore {
           && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
       }
 
-      // Giornale di Bordo: una voce cifrata per chiave (trips, auto_expenses…; le voci grandi in parti voce__p1, __p2…),
-      // stessa chiave e stesso controllo sul sale delle sezioni del Bilancio
-      match /giornale/{voce} {
-        allow read: if isOwner(uid);
+      // app nella stessa cassaforte: Giornale di Bordo e Palestra. Una voce cifrata per chiave (trips, auto_expenses, schede, sessioni…;
+      // le voci grandi in parti voce__p1, __p2…), stessa chiave e stesso controllo sul sale delle sezioni del Bilancio
+      match /{app}/{voce} {
+        allow read, delete: if isOwner(uid) && app in ['giornale', 'palestra'];
         allow create, update: if isOwner(uid)
+          && app in ['giornale', 'palestra']
           && voce.matches('^[A-Za-z0-9_]{1,60}$')
           && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
-        allow delete: if isOwner(uid);
       }
     }
   }

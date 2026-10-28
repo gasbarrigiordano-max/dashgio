@@ -583,10 +583,12 @@ const cloud = {
       const b=this.db.batch(), last={};
       b.set(this.ref(), {...meta, updated:ts()}, {merge:true});
       for(const k of SEZ){ last[k]=JSON.stringify(S[k]??[]); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await encrypt(key,last[k],k), updated:ts()}); }
-      // il Giornale di Bordo sta nella stessa cassaforte: letto con la chiave vecchia, riscritto con la nuova
+      // Giornale di Bordo e Palestra stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
       Cassaforte.adotta({db:this.db, user:this.user, meta:this.meta, key:this.key});
-      const gior = await Cassaforte.tutti('giornale');
-      for(const [id,txt] of Object.entries(gior)) await Cassaforte.nelBatch(b, 'giornale', id, txt, key, meta.salt);
+      for(const app of ['giornale','palestra']){
+        const voci = await Cassaforte.tutti(app);
+        for(const [id,txt] of Object.entries(voci)) await Cassaforte.nelBatch(b, app, id, txt, key, meta.salt);
+      }
       await b.commit();
       Cassaforte.adotta({db:this.db, user:this.user, meta, key});
       const kept = await kdb.get(this.user.uid);
