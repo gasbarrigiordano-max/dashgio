@@ -288,6 +288,16 @@ a.p{text-decoration:none}
 .v5top .p.on:hover{background:#fff}
 .v5top .brand5{font-weight:800;color:#fff;font-size:15px;margin-left:4px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
 @media (max-width:700px){ .v5top .brand5{display:none} .tile.grande .v{font-size:24px} }
+/* molo delle navi: numero grande nel riquadro Lavoro, etichetta arancione in agenda */
+.molo-t{height:34px;display:flex;align-items:baseline;gap:8px}
+.molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}
+.molo-t b{font-size:34px;line-height:1;font-weight:700;color:#fff}
+.molo-b{flex:0 0 auto;min-width:52px;padding:6px 10px;border-radius:12px;background:#F2711C;color:#fff;display:flex;flex-direction:column;align-items:center;line-height:1}
+.molo-b small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
+.molo-b b{font-size:20px;margin-top:3px}
+.molo-ev{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:rgba(242,113,28,.14);border:1px solid rgba(242,113,28,.35)}
+.molo-ev b{display:block;font-size:14px} .molo-ev span{font-size:12px;color:var(--ink2)}
+.molo-ev .molo-b{min-width:62px} .molo-ev .molo-b b{font-size:26px}
 
 /* rifiniture dal controllo a 1440 / 1024 / 768 / 390 px */
 main{container-type:inline-size}
@@ -574,7 +584,7 @@ function disegna(){
   disegnaCal();
   $('lista').innerHTML = agenda.length ? agenda.map(a => `<a class="item" href="${hrefAgenda(a)}"${a.google ? ' target="_blank" rel="noopener"' : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag)}</div>
     <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div><small>${fmtD(a.d)} · ${giorniA(a.d)===0?'oggi':giorniA(a.d)===1?'domani':'tra '+giorniA(a.d)+' giorni'}</small></div>
-    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div>${a.google ? '' : pulsanteGoogle(a)}</a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
+    ${a.molo ? badgeMolo(a) : `<div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div>`}${a.google ? '' : pulsanteGoogle(a)}</a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
   disegnaGoogle();
   const set7 = agenda.filter(a => giorniA(a.d) <= 7).length;
   $('nbadge').hidden = !set7; $('nbadge').textContent = set7;
@@ -791,9 +801,11 @@ async function gcalLeggi(){
 // moli del porto di Civitavecchia: le navi nominate nei titoli degli eventi Google (comune/porto.js)
 let PORTO = null, portoProvato = 0;
 const etichettaMolo = m => m.banchina ? `molo ${m.banchina}` : 'molo non ancora indicato';
+// il molo ben visibile: etichetta a destra delle voci in agenda
+const badgeMolo = a => a.molo ? `<div class="molo-b" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.banchina || '–')}</b></div>` : '';
 function applicaMoli(){
   if(!PORTO) return;
-  GC.eventi.forEach(e => { if(e.molo !== undefined) return; e.molo = Porto.trova(PORTO, e.titolo, e.d); if(e.molo) e.app += ' · ' + etichettaMolo(e.molo); });
+  GC.eventi.forEach(e => { if(e.molo === undefined) e.molo = Porto.trova(PORTO, e.titolo, e.d); });
 }
 function leggiPorto(){
   if(PORTO || !window.Porto || !GC.eventi.length || Date.now() - portoProvato < 10 * 60e3) return;
@@ -903,7 +915,7 @@ function disegnaCalGrande(){
   evGiorno = ev;
   $('calv-giorno').innerHTML = `<div class="sez"><h2>${esc(new Date(sel + 'T12:00').toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'}).replace(/^./, c => c.toUpperCase()))}</h2><button class="pill" type="button" style="border:0;cursor:pointer;padding:10px 14px" onclick="apriEvento({d:'${sel}'})">+ Evento</button></div>
     <div class="agenda">${ev.length ? ev.map((a, i) => `<a class="item" href="${a.href || 'bilancio/'}"${a.google ? ` onclick="event.preventDefault();apriEvento(evGiorno[${i}])"` : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag || (a.cl === 'gio' ? 'MEZZO' : a.app.includes('rate') ? 'RATA' : 'ABB'))}</div>
-      <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div>${a.paid ? '<small>pagato</small>' : ''}</div><div class="amt mono">${a.amt != null ? eur2(a.amt) : ''}</div></a>`).join('') : '<div class="vuoto">Niente in questo giorno.</div>'}</div>`;
+      <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div>${a.paid ? '<small>pagato</small>' : ''}</div>${a.molo ? badgeMolo(a) : `<div class="amt mono">${a.amt != null ? eur2(a.amt) : ''}</div>`}</a>`).join('') : '<div class="vuoto">Niente in questo giorno.</div>'}</div>`;
 }
 function scegliGiorno(iso){ giornoSel = iso; disegnaCalGrande(); }
 let evGiorno = [], evAperto = null;
@@ -921,7 +933,7 @@ function apriEvento(ev){
   const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
   const cal = gcalAttivi().flatMap(c => c.calendari.filter(k => k.scrivibile).map(k => ({ v: c.email + '|' + k.id, nome: k.nome + (GC.conti.length > 1 ? ' — ' + c.email : '') })));
   const scelto = ev.conto ? ev.conto + '|' + ev.cal : gcalAttivi()[0].email + '|primary';
-  box.innerHTML = `${ev.molo ? `<p class="nota-ev">Porto di Civitavecchia: <b>${esc(ev.molo.nave)}</b> · ${esc(etichettaMolo(ev.molo))}${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}</p>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
+  box.innerHTML = `${ev.molo ? `<div class="molo-ev">${badgeMolo(ev)}<div><b>${esc(ev.molo.nave)}</b><span>Porto di Civitavecchia${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}</span></div></div>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
     <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
     <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
     <label>Dal<input type="date" id="ev-di" value="${esc(di)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-oi" value="${esc(oi || '09:00')}"></label>
@@ -1027,8 +1039,8 @@ function tileLavoro(){
   if(!gcalAttivi().length) return {...t, v:GC.conti.length ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollegaPrimo()'};
   const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
-  const molo = ev.molo ? etichettaMolo(ev.molo).replace(/^m/, 'M') + ' · ' : '';
-  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:molo + quando(ev), href:ev.href, blank:true};
+  const molo = ev.molo ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(ev.molo.banchina || '–')}</b>${ev.molo.banchina ? '' : '<small>da definire</small>'}</div>` : '';
+  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:ev.href, blank:true, ...(molo ? {bars: molo} : {})};
 }
 function quando(ev){
   const g = giorniA(ev.d), giorno = g === 0 ? 'oggi' : g === 1 ? 'domani' : new Date(ev.d + 'T12:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short'});
