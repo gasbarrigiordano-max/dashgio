@@ -434,6 +434,7 @@ main{container-type:inline-size}
 
 <script src="comune/cassaforte.js"></script>
 <script src="comune/programma.js"></script>
+<script src="comune/porto.js"></script>
 <script>
 const GIORNALE_URL = 'giornale/';
 // Google Calendar: ID client OAuth "Applicazione web" del progetto Google Cloud contabilit-1a500, con origine
@@ -599,6 +600,9 @@ function calSposta(k){ calOff += k; if(D) disegnaCal(); disegnaCalGrande(); if(g
 /* ---- Google Calendar: uno o più account Google ----
    Accesso con Google Identity Services (permessi calendar.events e calendarlist.readonly), un permesso per account.
    I permessi restano solo in memoria per un'ora; gli eventi di Google non vengono salvati da nessuna parte.
+   Accesso automatico (facoltativo): con la chiave segreta del client, scritta una volta nelle impostazioni, Google dà anche un
+   permesso di lunga durata (refresh token). Chiave e permessi lunghi stanno solo nella cassaforte, cifrati come il resto
+   (voce dashboard/google): a ogni apertura, dopo lo sblocco, si chiede a Google un permesso fresco senza bisogno di clic.
    Su questo dispositivo si ricordano solo gli indirizzi degli account collegati e i calendari scelti (preferenze, non dati).
    Si scrive su Google solo quando lo chiedi: "+" su una scadenza (titolo e data, niente importi, con un codice dgid per
    non crearla due volte) o un evento creato o modificato dal calendario. */
@@ -621,14 +625,81 @@ function caricaGis(){
   return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.onload = ok; sc.onerror = () => ko(new Error('Google non raggiungibile')); document.head.appendChild(sc); });
 }
 // email: ricollega quell'account; senza: Google fa scegliere l'account (per aggiungerne uno)
+const SCOPE_G = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+const erroreGis = e => { GC.err = e && e.type === 'popup_closed' ? 'finestra di Google chiusa' : (e && (e.message || e.type)) || 'accesso non riuscito'; disegnaGoogle(); };
 async function gcalCollega(email){
   if(!GCAL_CLIENT_ID) return;
   try { await caricaGis(); } catch(e){ GC.err = e.message; return disegnaGoogle(); }
-  if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-    callback: r => gcalToken(r),
-    error_callback: e => { GC.err = e && e.type === 'popup_closed' ? 'finestra di Google chiusa' : (e && (e.message || e.type)) || 'accesso non riuscito'; disegnaGoogle(); } });
   GC.inAttesa = email || null;
+  // con la chiave segreta: codice da scambiare, che porta anche il permesso di lunga durata
+  if(AUTO.segreto) return google.accounts.oauth2.initCodeClient({ client_id: GCAL_CLIENT_ID, scope: SCOPE_G, ux_mode: 'popup', select_account: !email,
+    ...(email ? { login_hint: email } : {}), callback: r => gcalScambia(r), error_callback: erroreGis }).requestCode();
+  if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: SCOPE_G, callback: r => gcalToken(r), error_callback: erroreGis });
   GC.client.requestAccessToken(email ? { prompt: '', login_hint: email } : { prompt: 'select_account consent' });
+}
+/* ---- accesso automatico ---- */
+const URL_TOKEN = 'https://oauth2.googleapis.com/token';
+const AUTO = { stato: 'carico', segreto: '', conti: {}, inCorso: false, bozza: '' }; // bozza: la chiave mentre la scrivi (le impostazioni si ridisegnano) // stato: carico | ok | regole | errore
+async function autoLeggi(){
+  try { const t = await Cassaforte.leggi('dashboard', 'google'), o = t ? JSON.parse(t) : {}; Object.assign(AUTO, { segreto: o.segreto || '', conti: o.conti || {}, stato: 'ok' }); }
+  catch(e){ AUTO.stato = e.code === 'permission-denied' ? 'regole' : 'errore'; console.warn('Google automatico', e); }
+}
+const autoSalva = () => Cassaforte.scrivi('dashboard', 'google', JSON.stringify({ segreto: AUTO.segreto, conti: AUTO.conti }))
+  .catch(e => { if(e.code === 'permission-denied') AUTO.stato = 'regole'; throw e; });
+async function chiediToken(corpo){
+  const r = await fetch(URL_TOKEN, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: GCAL_CLIENT_ID, client_secret: AUTO.segreto, ...corpo }) });
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok){ const e = new Error(j.error_description || j.error || 'Google ' + r.status); e.codice = j.error; throw e; }
+  return j;
+}
+// all'apertura: un permesso fresco per ogni account che ha quello di lunga durata
+async function gcalAuto(){
+  await autoLeggi();
+  const emails = Object.keys(AUTO.conti);
+  if(!AUTO.segreto || !emails.length) return disegnaGoogle();
+  AUTO.inCorso = true; if(D) disegna();
+  caricaGis().catch(() => {});
+  let cambiato = false;
+  await Promise.all(emails.map(async email => {
+    try { await gcalToken(await chiediToken({ grant_type: 'refresh_token', refresh_token: AUTO.conti[email] }), email, true); }
+    catch(e){
+      // permesso revocato o scaduto: si torna al pulsante "Mostra eventi"
+      if(e.codice === 'invalid_grant'){ delete AUTO.conti[email]; cambiato = true; }
+      GC.err = 'accesso automatico a Google non riuscito (' + breve(email) + '): ' + e.message;
+    }
+  }));
+  AUTO.inCorso = false;
+  if(cambiato) autoSalva().catch(() => {});
+  gcalLeggi();
+}
+async function gcalScambia(r){
+  if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
+  try {
+    const t = await chiediToken({ grant_type: 'authorization_code', code: r.code, redirect_uri: 'postmessage' });
+    const email = await gcalToken(t, null, true);
+    if(t.refresh_token){ AUTO.conti[email] = t.refresh_token; await autoSalva(); }
+    else if(!AUTO.conti[email]){
+      // Google dà il permesso lungo solo alla prima autorizzazione: si revoca quella vecchia e il prossimo clic lo chiede di nuovo
+      google.accounts.oauth2.revoke(t.access_token, () => {}); contoDi(email).token = null;
+      GC.err = 'Ancora un passo: tocca di nuovo "Collega" (o "Mostra eventi") e conferma su Google per attivare l\'accesso automatico.';
+    }
+  } catch(e){ GC.err = AUTO.stato === 'regole' ? 'per l\'accesso automatico vanno aggiornate le regole di Firestore' : 'accesso a Google non riuscito: ' + e.message; }
+  gcalLeggi();
+}
+async function salvaSegreto(){
+  const v = AUTO.bozza;
+  if(!/^GOCSPX-[\w-]{10,}$/.test(v.trim())) { GC.err = 'la chiave segreta inizia con GOCSPX-'; return disegnaGoogleImp(); }
+  AUTO.segreto = v.trim(); AUTO.bozza = '';
+  try { await autoSalva(); GC.err = ''; } catch(e){ AUTO.segreto = ''; GC.err = AUTO.stato === 'regole' ? 'prima vanno aggiornate le regole di Firestore (vedi sotto)' : 'salvataggio non riuscito: ' + e.message; }
+  disegnaGoogleImp();
+}
+async function togliSegreto(){
+  if(!confirm('Togliere l\'accesso automatico? Da qui in poi Google andrà ricollegato a mano a ogni apertura.')) return;
+  if(window.google) Object.values(AUTO.conti).forEach(t => google.accounts.oauth2.revoke(t, () => {}));
+  AUTO.segreto = ''; AUTO.conti = {};
+  try { await autoSalva(); } catch(e){}
+  disegnaGoogleImp();
 }
 function gcalCollegaPrimo(){ const c = GC.conti.find(x => !attivo(x)); gcalCollega(c ? c.email : undefined); }
 async function chiamaGoogle(token, url, opz = {}){
@@ -637,22 +708,26 @@ async function chiamaGoogle(token, url, opz = {}){
   if(!r.ok) throw new Error('Google Calendar ' + r.status);
   return r.status === 204 ? {} : r.json();
 }
-async function gcalToken(r){
+// permesso arrivato (dal clic o dall'accesso automatico): di quale account è, e i suoi calendari. Restituisce l'indirizzo
+async function gcalToken(r, atteso, nonLeggere){
   if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
+  let email = atteso;
   try {
     // quale account è: il calendario principale ha come id l'indirizzo
     const l = await chiamaGoogle(r.access_token, `${API_G}/users/me/calendarList?minAccessRole=reader`);
-    const prim = (l.items || []).find(c => c.primary), email = prim ? prim.id : (GC.inAttesa || 'Google');
+    const prim = (l.items || []).find(c => c.primary); email = prim ? prim.id : (atteso || GC.inAttesa || 'Google');
     Object.assign(contoDi(email), { token: r.access_token, scade: Date.now() + (r.expires_in || 3600) * 1000 - 60000,
       calendari: (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.primary ? 'Principale' : (c.summaryOverride || c.summary || c.id), primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary })) });
     const ric = contiRicordati(); if(!ric.includes(email)) salvaPref('dg:gcalConti', [...ric, email]);
     GC.err = '';
-  } catch(e){ GC.err = 'accesso a Google non riuscito: ' + e.message; }
-  gcalLeggi();
+  } catch(e){ GC.err = 'accesso a Google non riuscito: ' + e.message; if(atteso) throw e; }
+  if(!nonLeggere) gcalLeggi();
+  return email;
 }
 function gcalScollega(email){
   const c = GC.conti.find(x => x.email === email); if(!c) return;
   if(c.token && window.google) google.accounts.oauth2.revoke(c.token, () => {});
+  if(AUTO.conti[email]){ if(window.google) google.accounts.oauth2.revoke(AUTO.conti[email], () => {}); delete AUTO.conti[email]; autoSalva().catch(() => {}); }
   GC.conti = GC.conti.filter(x => x !== c);
   salvaPref('dg:gcalConti', contiRicordati().filter(x => x !== email));
   const v = pref('dg:gcalVisti', {}); delete v[email]; salvaPref('dg:gcalVisti', v);
@@ -710,7 +785,20 @@ async function gcalLeggi(){
   const cl = lavConto && (GC.conti.find(c => c.email === lavConto) || {calendari: []}).calendari.find(x => x.id === lavId);
   Object.assign(GC, { eventi, collegate, nomeLavoro: cl ? cl.nome : 'Google' });
   if(attivi.length) GC.err = errore;
+  applicaMoli(); leggiPorto();
   if(D) disegna(); else disegnaGoogle();
+}
+// moli del porto di Civitavecchia: le navi nominate nei titoli degli eventi Google (comune/porto.js)
+let PORTO = null, portoProvato = 0;
+const etichettaMolo = m => m.banchina ? `molo ${m.banchina}` : 'molo non ancora indicato';
+function applicaMoli(){
+  if(!PORTO) return;
+  GC.eventi.forEach(e => { if(e.molo !== undefined) return; e.molo = Porto.trova(PORTO, e.titolo, e.d); if(e.molo) e.app += ' · ' + etichettaMolo(e.molo); });
+}
+function leggiPorto(){
+  if(PORTO || !window.Porto || !GC.eventi.length || Date.now() - portoProvato < 10 * 60e3) return;
+  portoProvato = Date.now();
+  Porto.leggi().then(d => { PORTO = d; applicaMoli(); if(D) disegna(); else disegnaGoogle(); }).catch(e => console.warn('porto', e));
 }
 const dgid = a => ('dg' + [...(a.app + '|' + a.titolo + '|' + a.d)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + a.d.replace(/-/g, '')).slice(0, 60);
 // le scadenze vanno nel calendario principale del primo account collegato
@@ -742,6 +830,7 @@ function disegnaGoogle(){
   disegnaCalGrande();
   const box = $('goo'); if(!box) return;
   if(!GCAL_CLIENT_ID){ box.innerHTML = '<span>Google Calendar: da configurare</span>'; return; }
+  if(AUTO.inCorso && !gcalAttivi().length){ box.innerHTML = '<span>Collego Google…</span>'; return; }
   const attivi = gcalAttivi(), spenti = GC.conti.filter(c => !attivo(c));
   const testo = attivi.length ? `Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${attivi.length > 1 ? ` · ${attivi.length} account` : ''}` : 'Google Calendar';
   box.innerHTML = `<span>${esc(GC.err || testo)}</span><span style="display:flex;gap:6px">${spenti.length ? `<button type="button" onclick="gcalCollegaPrimo()">Mostra eventi${GC.conti.length > 1 ? ` (${breve(spenti[0].email)})` : ''}</button>` : attivi.length ? '<button type="button" onclick="gcalLeggi()">Aggiorna</button>' : '<button type="button" onclick="gcalCollega()">Collega</button>'}</span>`;
@@ -749,18 +838,33 @@ function disegnaGoogle(){
 // impostazioni: gli account, i calendari da vedere per ciascuno, il calendario di lavoro
 function disegnaGoogleImp(){
   const box = $('gcal-imp'); if(!box) return;
+  const fuoco = document.activeElement && document.activeElement.id === 'g-seg';
   if(!GCAL_CLIENT_ID){ box.innerHTML = '<p>Da configurare (ID client).</p>'; return; }
   const sel = 'height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 10px;font:600 13px Manrope,sans-serif;width:100%';
   const conti = GC.conti.map(c => `<div style="border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:13px;word-break:break-all">${esc(c.email)}</b>
-        <span class="imp-az">${attivo(c) ? '' : `<button type="button" onclick="gcalCollega(${esc(JSON.stringify(c.email))})">Mostra eventi</button>`}<button type="button" class="rosso" onclick="gcalScollega(${esc(JSON.stringify(c.email))})">Scollega</button></span></div>
+        <span class="imp-az">${AUTO.conti[c.email] ? '<small style="color:var(--ok);font-weight:700">automatico</small>' : AUTO.segreto ? `<button type="button" onclick="gcalCollega(${esc(JSON.stringify(c.email))})">Attiva automatico</button>` : ''}${attivo(c) || (AUTO.segreto && !AUTO.conti[c.email]) ? '' : `<button type="button" onclick="gcalCollega(${esc(JSON.stringify(c.email))})">Mostra eventi</button>`}<button type="button" class="rosso" onclick="gcalScollega(${esc(JSON.stringify(c.email))})">Scollega</button></span></div>
       ${attivo(c) ? `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12.5px">${c.calendari.map(k => `<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${vistiDi(c.email).includes(k.id) ? 'checked' : ''} onchange="mostraCalendario(${esc(JSON.stringify(c.email))},${esc(JSON.stringify(k.id))},this.checked)" style="accent-color:var(--acc)">${esc(k.nome)}</label>`).join('')}</div>` : '<p style="margin:6px 0 0;font-size:12px">non collegato in questa sessione</p>'}</div>`).join('');
   const opzioni = gcalAttivi().flatMap(c => c.calendari.map(k => [`${c.email}|${k.id}`, `${k.nome}${GC.conti.length > 1 ? ' — ' + c.email : ''}`]));
   box.innerHTML = `${conti || '<p>Nessun account collegato.</p>'}
     <div class="imp-az" style="margin:4px 0 10px"><button type="button" onclick="gcalCollega()">+ ${GC.conti.length ? 'Aggiungi un account Google' : 'Collega Google Calendar'}</button></div>
     ${opzioni.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)">Calendario di lavoro (riquadro "Lavoro")
       <select id="lav-sel" onchange="scegliLavoro(this.value)" style="${sel}"><option value="">Principale del primo account</option>${opzioni.map(([v, n]) => `<option value="${esc(v)}"${v === calLavoro() ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
-    ${GC.err ? `<p style="color:#ffb3a1;margin:8px 0 0">${esc(GC.err)}</p>` : ''}`;
+    ${GC.err ? `<p style="color:#ffb3a1;margin:8px 0 0">${esc(GC.err)}</p>` : ''}
+    ${disegnaAuto()}`;
+  if(fuoco && $('g-seg')) $('g-seg').focus();
+}
+function disegnaAuto(){
+  const tit = '<b style="display:block;font-size:13px;margin:16px 0 6px">Accesso automatico all\'apertura</b>';
+  if(AUTO.stato === 'carico') return tit + '<p style="font-size:12px">Leggo la cassaforte…</p>';
+  if(AUTO.stato === 'regole') return tit + `<p style="font-size:12px;line-height:1.5">Prima vanno aggiornate le regole di Firestore: in console Firebase → Firestore → Regole incolla il file <b>firestore.rules</b> aggiornato (c'è la nuova voce "dashboard"), metti il tuo UID al posto di IL_TUO_UID e pubblica. Poi ricarica la pagina.</p>`;
+  if(AUTO.stato === 'errore') return tit + '<p style="font-size:12px">La cassaforte non risponde: riprova più tardi.</p>';
+  if(!AUTO.segreto) return tit + `<p style="font-size:12px;line-height:1.5">Senza questo, a ogni apertura Google va ricollegato con un tocco. Con la <b>chiave segreta del client</b> la Dashboard si ricollega da sola: chiave e permessi restano cifrati nella cassaforte.<br>
+    Dove si trova: Google Cloud → Google Auth Platform → Client → il tuo client Web → "Aggiungi chiave segreta" → copia il valore (inizia con GOCSPX-).</p>
+    <div style="display:flex;gap:8px;margin-top:8px"><input id="g-seg" type="password" autocomplete="off" placeholder="GOCSPX-…" value="${esc(AUTO.bozza)}" oninput="AUTO.bozza=this.value" style="flex:1 1 auto;min-width:0;height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 10px"><span class="imp-az"><button type="button" onclick="salvaSegreto()">Salva</button></span></div>`;
+  const auto = GC.conti.filter(c => AUTO.conti[c.email]).map(c => breve(c.email)), manca = GC.conti.filter(c => !AUTO.conti[c.email]).map(c => breve(c.email));
+  return tit + `<p style="font-size:12px;line-height:1.5">Attivo${auto.length ? ' per ' + esc(auto.join(', ')) : ''}.${manca.length ? ` Per ${esc(manca.join(', '))}: tocca "Attiva automatico" e conferma su Google.` : ''}${GC.conti.length ? '' : ' Collega un account Google per attivarlo.'}</p>
+    <span class="imp-az"><button type="button" class="rosso" onclick="togliSegreto()">Togli l'accesso automatico</button></span>`;
 }
 function mostraCalendario(email, id, si){
   const v = pref('dg:gcalVisti', {}), l = new Set(v[email] || ['primary']);
@@ -817,7 +921,7 @@ function apriEvento(ev){
   const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
   const cal = gcalAttivi().flatMap(c => c.calendari.filter(k => k.scrivibile).map(k => ({ v: c.email + '|' + k.id, nome: k.nome + (GC.conti.length > 1 ? ' — ' + c.email : '') })));
   const scelto = ev.conto ? ev.conto + '|' + ev.cal : gcalAttivi()[0].email + '|primary';
-  box.innerHTML = `<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
+  box.innerHTML = `${ev.molo ? `<p class="nota-ev">Porto di Civitavecchia: <b>${esc(ev.molo.nave)}</b> · ${esc(etichettaMolo(ev.molo))}${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}</p>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
     <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
     <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
     <label>Dal<input type="date" id="ev-di" value="${esc(di)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-oi" value="${esc(oi || '09:00')}"></label>
@@ -919,10 +1023,12 @@ function tilePalestra(){
 function tileLavoro(){
   const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
   if(!GCAL_CLIENT_ID) return {...t, v:'Da configurare', s:'Google Calendar non ancora collegato', on:'apriImpostazioni()'};
+  if(!gcalAttivi().length && AUTO.inCorso) return {...t, v:'…', s:'collego Google'};
   if(!gcalAttivi().length) return {...t, v:GC.conti.length ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollegaPrimo()'};
   const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
-  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:ev.href, blank:true};
+  const molo = ev.molo ? etichettaMolo(ev.molo).replace(/^m/, 'M') + ' · ' : '';
+  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:molo + quando(ev), href:ev.href, blank:true};
 }
 function quando(ev){
   const g = giorniA(ev.d), giorno = g === 0 ? 'oggi' : g === 1 ? 'domani' : new Date(ev.d + 'T12:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short'});
@@ -1033,6 +1139,7 @@ document.addEventListener('click', e => {
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);
   disegnaGoogle();
+  if(GCAL_CLIENT_ID){ if(GC.conti.length) caricaGis().catch(() => {}); gcalAuto(); }
 })();
 </script>
 </body>

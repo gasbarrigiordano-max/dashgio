@@ -25,12 +25,12 @@ service cloud.firestore {
           && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
       }
 
-      // app nella stessa cassaforte: Giornale di Bordo e Palestra. Una voce cifrata per chiave (trips, auto_expenses, schede, sessioni…;
+      // app nella stessa cassaforte: Mezzi (giornale), Palestra e Dashboard (accesso automatico a Google). Una voce cifrata per chiave (trips, auto_expenses, schede, sessioni…;
       // le voci grandi in parti voce__p1, __p2…), stessa chiave e stesso controllo sul sale delle sezioni del Bilancio
       match /{app}/{voce} {
-        allow read, delete: if isOwner(uid) && app in ['giornale', 'palestra'];
+        allow read, delete: if isOwner(uid) && app in ['giornale', 'palestra', 'dashboard'];
         allow create, update: if isOwner(uid)
-          && app in ['giornale', 'palestra']
+          && app in ['giornale', 'palestra', 'dashboard']
           && voce.matches('^[A-Za-z0-9_]{1,60}$')
           && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
       }
