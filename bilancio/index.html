@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#f6f4ef">
+<meta name="theme-color" content="#1a1411">
 <script>
-  let t = 'vetro'; try{ t = localStorage.getItem('bilancio:tema') || 'vetro'; }catch(e){}
+  let t = 'notte'; try{ t = localStorage.getItem('bilancio:tema2') || 'notte'; }catch(e){}
   document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name=theme-color]').content = {scuro:'#1e2629', carta:'#f6f4ef'}[t] || '#e6dccf';
+  document.querySelector('meta[name=theme-color]').content = {scuro:'#1e2629', carta:'#f6f4ef', vetro:'#e6dccf'}[t] || '#1a1411';
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
@@ -29,7 +29,7 @@
   --solid:var(--panel); --solid2:var(--panel2);
   --brand-bg:#0f9f6e; --brand-fg:#ffffff; --brand-cl:#0a6347; --brand-dot:#0f9f6e;
   --nav-glass:rgba(255,255,255,.72); --nav-line:rgba(255,255,255,.9); --nav-on:rgba(20,30,25,.07);
-  --r:14px;
+  --r:14px; --pos:var(--acc);
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
 }
 /* tema scuro Ardesia: grafite morbida e verde brillante */
@@ -80,7 +80,7 @@ h2.sec{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--
 .hero{background:var(--hero-bg);border-color:var(--hero-line)}
 .hero small{color:var(--hero-ink)}
 .hero b{font-size:30px;letter-spacing:-.02em}
-.pos{color:var(--acc)} .neg{color:var(--neg)} .mut{color:var(--ink3)}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .mut{color:var(--ink3)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .empty{color:var(--ink3);text-align:center;padding:26px 10px;font-size:13px}
 
@@ -106,7 +106,7 @@ h2.sec{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--
 .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
 .seg button{flex:1;background:none;border:none;padding:8px 6px;border-radius:8px;font-weight:700;font-size:12.5px;color:var(--ink2);cursor:pointer}
 .seg button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
-.seg button.on.u{color:var(--neg)} .seg button.on.e{color:var(--acc)}
+.seg button.on.u{color:var(--neg)} .seg button.on.e{color:var(--pos)}
 input,select,textarea{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:11px;padding:11px 12px;font-family:inherit;font-size:15px;outline:none}
 input:focus,select:focus{border-color:var(--acc)}
 .search{margin:10px 0}
@@ -373,6 +373,56 @@ nav button.on{color:var(--acc)}
   .inv-r{grid-template-columns:1fr 110px 110px 70px}
 }
 
+/* ===== tema Notte (predefinito, come la Dashboard): sfondo caldo sfumato, vetro fumé, accento arancione ===== */
+:root[data-theme="notte"]{
+  color-scheme:dark;
+  --bg:#1f1814; --panel:rgba(40,32,28,.55); --panel2:rgba(255,255,255,.06); --line:rgba(255,255,255,.10);
+  --ink:#ffffff; --ink2:rgba(255,255,255,.74); --ink3:rgba(255,255,255,.55);
+  --acc:#F2711C; --acc-dim:rgba(242,113,28,.18); --on-acc:#1a1411; --acc-shadow:rgba(242,113,28,.40); --pos:#7fd3a8;
+  --neg:#ff8a73; --neg-line:rgba(255,138,115,.35); --warn:#f5c46b; --blue:#8ab4f8;
+  --glass:rgba(30,23,19,.72); --sheet:#2a211c; --overlay:rgba(10,8,6,.62); --track:rgba(0,0,0,.30); --sub-bg:rgba(255,255,255,.03);
+  --hero-bg:rgba(40,32,28,.55); --hero-line:rgba(255,255,255,.10); --hero-ink:#ffb07a; --gate-glow:transparent;
+  --solid:#2a211c; --solid2:#33281f;
+  --brand-bg:#F2711C; --brand-fg:#1a1411; --brand-cl:#7a3606; --brand-dot:#F2711C;
+  --nav-glass:rgba(40,32,28,.62); --nav-line:rgba(255,255,255,.10); --nav-on:rgba(255,255,255,.10);
+  --r:20px;
+  --mesh:radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%),
+         radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
+         radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%),
+         radial-gradient(40% 45% at 10% 90%, rgba(90,70,60,.6), transparent 70%),
+         linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%);
+}
+:root[data-theme="notte"] body{background:#17120f}
+:root[data-theme="notte"] body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--mesh)}
+:root[data-theme="notte"] .gate{background:var(--mesh)}
+:root[data-theme="notte"] .card,
+:root[data-theme="notte"] .seg,
+:root[data-theme="notte"] .mx-wrap,
+:root[data-theme="notte"] .ptip{-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);box-shadow:0 20px 60px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.07)}
+:root[data-theme="notte"] .tx{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.07);border-radius:16px}
+:root[data-theme="notte"] .mast{background:rgba(30,23,19,.6);border-bottom-color:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
+:root[data-theme="notte"] input,:root[data-theme="notte"] select,:root[data-theme="notte"] textarea{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.12);color:#fff}
+:root[data-theme="notte"] select option{background:#2a211c}
+:root[data-theme="notte"] .seg button.on{background:var(--acc);color:var(--on-acc)}
+:root[data-theme="notte"] .seg button.on.u,:root[data-theme="notte"] .seg button.on.e{background:rgba(255,255,255,.12)}
+:root[data-theme="notte"] .btn{border-radius:99px}
+:root[data-theme="notte"] .btn.ghost{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff}
+:root[data-theme="notte"] .btn.danger{background:rgba(255,138,115,.12);border:1px solid var(--neg-line);color:var(--neg)}
+:root[data-theme="notte"] .chip{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.10);color:var(--ink2)}
+:root[data-theme="notte"] .fab{border-radius:50%}
+:root[data-theme="notte"] .icon-btn{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
+:root[data-theme="notte"] .sheet{-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);background:rgba(42,33,28,.94)}
+/* il saldo in Panoramica: riquadro chiaro come i riquadri della Dashboard */
+:root[data-theme="notte"] .hero.sq{background:rgba(255,255,255,.94);border-color:transparent;color:#1d1a18}
+:root[data-theme="notte"] .hero.sq small{color:#5e5650}
+:root[data-theme="notte"] .hero.sq b{color:#a04a0c}
+:root[data-theme="notte"] .hero.sq .pos{color:#1b8752}
+:root[data-theme="notte"] .hero.sq .neg{color:#c43c29}
+@media (min-width:900px){
+  :root[data-theme="notte"] nav{background:rgba(40,32,28,.55);border-right-color:rgba(255,255,255,.08)}
+  :root[data-theme="notte"] nav button.on{background:var(--acc);color:#fff}
+}
+
 /* ===== tema Vetro (stile Apple): sfondo sfumato caldo, schede di vetro smerigliato ===== */
 :root[data-theme="vetro"]{
   color-scheme:light;
@@ -606,13 +656,14 @@ const PAL_TEMA = {
   carta: ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948']
 };
 PAL_TEMA.vetro = PAL_TEMA.carta;
-const tema = () => ({scuro:'scuro', carta:'carta'})[document.documentElement.dataset.theme] || 'vetro';
+PAL_TEMA.notte = PAL_TEMA.scuro;
+const tema = () => ({scuro:'scuro', carta:'carta', notte:'notte'})[document.documentElement.dataset.theme] || 'vetro';
 let PAL = PAL_TEMA[tema()];
 function setTema(t){
   document.documentElement.dataset.theme = t;
-  try{ localStorage.setItem('bilancio:tema', t); }catch(e){}
-  PAL = PAL_TEMA[t];
-  document.querySelector('meta[name=theme-color]').content = {scuro:'#1e2629', carta:'#f6f4ef'}[t] || '#e6dccf';
+  try{ localStorage.setItem('bilancio:tema2', t); }catch(e){}
+  PAL = PAL_TEMA[tema()];
+  document.querySelector('meta[name=theme-color]').content = {scuro:'#1e2629', carta:'#f6f4ef', vetro:'#e6dccf'}[t] || '#1a1411';
   render(); openSettings();
 }
 
@@ -979,7 +1030,7 @@ function renderHome(){
   const mx = Math.max(1,...yU,...yE);
   const bars = M3.map((m,i)=>`<div style="flex:1;text-align:center;cursor:pointer" onclick="setMonth(${i})">
       <div style="display:flex;gap:2px;align-items:flex-end;height:90px;justify-content:center">
-        <div style="width:6px;height:${yE[i]/mx*100}%;background:var(--acc);border-radius:3px;min-height:2px;opacity:${ui.month===i||ui.month==='all'?1:.35}"></div>
+        <div style="width:6px;height:${yE[i]/mx*100}%;background:var(--pos);border-radius:3px;min-height:2px;opacity:${ui.month===i||ui.month==='all'?1:.35}"></div>
         <div style="width:6px;height:${yU[i]/mx*100}%;background:var(--neg);border-radius:3px;min-height:2px;opacity:${ui.month===i||ui.month==='all'?1:.35}"></div>
       </div><div style="font-size:9px;color:var(--ink3);margin-top:5px;font-weight:700">${m[0]}</div></div>`).join('');
   $('v-home').innerHTML = `<div class="home">
@@ -993,7 +1044,7 @@ function renderHome(){
     <div class="card">${byCat.length ? `<div class="donut-wrap">${donut(byCat)}<div class="legend">${byCat.map(([k,v],i)=>`<div><i style="background:${k==='Altre'&&i===PAL.length-1?'#9a9f9c':PAL[i%PAL.length]}"></i><span>${esc(k)}</span><b class="mono eu">${eurI(v)}</b><b class="mono pc">${Math.round(v/(tu||1)*100)}%</b></div>`).join('')}</div></div>` : '<div class="empty">Nessuna uscita nel periodo</div>'}</div></div>
     <div class="h-bars"><h2 class="sec">Entrate vs uscite · ${ui.year}</h2>
     <div class="card"><div style="display:flex;gap:2px">${bars}</div>
-      <div class="note" style="margin-top:10px;display:flex;gap:14px"><span><b style="color:var(--acc)">●</b> Entrate</span><span><b style="color:var(--neg)">●</b> Uscite</span></div></div></div></div>`;
+      <div class="note" style="margin-top:10px;display:flex;gap:14px"><span><b style="color:var(--pos)">●</b> Entrate</span><span><b style="color:var(--neg)">●</b> Uscite</span></div></div></div></div>`;
 }
 
 // conti da mostrare in Panoramica: i saldi di oggi, o per un mese passato la foto dello storico del patrimonio
@@ -1429,7 +1480,7 @@ function renderAltro(){
     const yr = sum(S.trading.filter(t=>+t.d.slice(0,4)===ui.year).map(t=>t.v));
     body = `<div class="chips" style="margin:0 0 10px">${MESI.map((x,i)=>`<button class="chip ${m===i?'on':''}" onclick="ui.plMonth=${i};render()">${M3[i]}</button>`).join('')}</div>
       <div class="grid2"><div class="card kpi"><small>P&L ${M3[m]}</small><b class="mono ${tot<0?'neg':tot>0?'pos':''}">${eur(tot)}</b></div><div class="card kpi"><small>P&L ${ui.year}</small><b class="mono ${yr<0?'neg':yr>0?'pos':''}">${eur(yr)}</b></div></div>
-      <div class="card" style="margin-top:10px">${list.length?`<div class="pl-bars">${list.map(t=>`<div style="height:${Math.abs(t.v)/mx*100}%;background:${t.v>=0?'var(--acc)':'var(--neg)'}"></div>`).join('')}</div>`:'<div class="empty">Nessun giorno registrato</div>'}</div>
+      <div class="card" style="margin-top:10px">${list.length?`<div class="pl-bars">${list.map(t=>`<div style="height:${Math.abs(t.v)/mx*100}%;background:${t.v>=0?'var(--pos)':'var(--neg)'}"></div>`).join('')}</div>`:'<div class="empty">Nessun giorno registrato</div>'}</div>
       <h2 class="sec">Aggiungi giornata</h2>
       <div class="grid2"><input type="date" id="pl-d" value="${now.toISOString().slice(0,10)}"><input id="pl-v" inputmode="decimal" placeholder="P&L in €, es. -120,50"></div>
       <button class="btn" style="margin-top:8px" onclick="addPL()">Aggiungi</button>
@@ -2382,7 +2433,7 @@ function openSettings(){
     : `<p class="note">I dati restano solo in questo browser. Configura Firebase (vedi HANDOFF.md) per sincronizzarli cifrati.</p>`;
   sheet(`<h3>Impostazioni</h3>
     <h2 class="sec" style="margin-top:4px">Tema</h2>
-    <div class="seg" style="margin-bottom:6px">${[['vetro','Vetro'],['carta','Carta'],['scuro','Ardesia']].map(([v,l])=>`<button class="${tema()===v?'on':''}" onclick="setTema('${v}')">${l}</button>`).join('')}</div>
+    <div class="seg" style="margin-bottom:6px">${[['notte','Notte'],['vetro','Vetro'],['carta','Carta'],['scuro','Ardesia']].map(([v,l])=>`<button class="${tema()===v?'on':''}" onclick="setTema('${v}')">${l}</button>`).join('')}</div>
     <p class="note" style="margin:0 0 4px">Il tema vale per questo dispositivo.</p>
     <h2 class="sec">Dati e backup</h2>
     ${acct}

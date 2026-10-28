@@ -197,6 +197,15 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 #ev-err{color:#ffb3a1;margin:0}
 @media (max-width:700px){ .calv{gap:3px} .calv .g{min-height:58px;padding:4px;border-radius:10px} .ev-c{font-size:0;height:6px;padding:0;border-radius:3px} .ev-piu{display:none} .pannello .box{padding:16px;border-radius:22px} }
 
+/* app dentro la Dashboard: Bilancio (il riquadro già aperto), Mezzi, Palestra */
+.app-vista{display:none;flex:999 1 560px;min-width:0;border-radius:28px;overflow:hidden;position:relative;height:calc(100vh - 40px - var(--sat))}
+body.in-app .app-vista{display:block}
+body.in-app main, body.in-app aside, body.in-app .seg{display:none}
+body.in-app{overflow:hidden}
+.app-vista iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:transparent}
+.app-vista iframe.on{display:block}
+#bil.in-vista{opacity:1;pointer-events:auto;z-index:6;border-radius:28px;transform:none}
+
 /* attesa e sblocco di Bilancio */
 .stato{position:fixed;left:50%;bottom:calc(20px + var(--sab));transform:translateX(-50%);z-index:20;border-radius:99px;padding:10px 16px;font-size:12.5px;font-weight:600;display:none}
 .stato.on{display:block}
@@ -240,6 +249,8 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <div class="nav-spazio"></div>
   <button class="navbtn" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="tip">Impostazioni</span></button>
 </nav>
+
+<section class="app-vista glass" id="app-vista" aria-label="App"></section>
 
 <main class="glass">
   <div class="head">
@@ -798,22 +809,80 @@ function controlla(){
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
-  } else if(bloccato() && !$('sblocco').classList.contains('on')) mostraSblocco();
+  } else if(bloccato() && vista !== 'bilancio' && !$('sblocco').classList.contains('on')) mostraSblocco();
   else if(!pronto) $('stato').classList.add('on');
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && pronto) setTimeout(leggi, 1500); });
 async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 
+/* ---- Le app si aprono qui dentro (#bilancio, #mezzi, #palestra): la barra a sinistra resta ---- */
+let vista = 'panoramica';
+const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/' };
+const frames = {};
+function frameDi(v, extra){
+  if(!frames[v]){
+    const f = document.createElement('iframe');
+    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra'}[v];
+    $('app-vista').appendChild(f); frames[v] = f;
+  }
+  return frames[v];
+}
+function dimensiona(){
+  const box = $('app-vista'); if(!document.body.classList.contains('in-app')) return;
+  const sotto = innerWidth <= 700 ? 14 : 18;
+  box.style.height = Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
+  if(vista === 'bilancio'){ const r = box.getBoundingClientRect(); bil.style.inset = 'auto'; Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px'}); }
+}
+function liberaBil(){ bil.classList.remove('in-vista'); ['inset','left','top','width','height'].forEach(k => bil.style[k] = ''); }
+function mostraVista(v, extra = ''){
+  vista = PERCORSI[v] ? v : 'panoramica';
+  chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
+  document.body.classList.toggle('in-app', vista !== 'panoramica');
+  const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra'}[vista];
+  document.querySelectorAll('nav .navbtn').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
+  document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
+  Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
+  liberaBil();
+  if(vista === 'panoramica'){ if(pronto) leggi(); return; }
+  if(vista === 'bilancio'){
+    bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; dimensiona();
+    // bilancio/#passphrase e #impostazioni: la finestra giusta di Bilancio
+    if(/#(passphrase|impostazioni)/.test(extra)){ try { W().openSettings(); if(extra.includes('passphrase')) W().openPass(); } catch(e){} }
+    return;
+  }
+  bil.setAttribute('aria-hidden', 'true'); bil.tabIndex = -1;
+  const nuovo = !frames[vista], f = frameDi(vista, extra); f.classList.add('on'); dimensiona();
+  // palestra/?t=abbo: la scheda giusta anche se la Palestra è già aperta
+  const t = new URLSearchParams((extra.split('#')[0] || '').replace(/^\?/, '')).get('t');
+  if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
+}
+const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra'})[location.hash] || 'panoramica';
+function dashVai(dest){
+  const m = String(dest || '').match(/^(bilancio|giornale|palestra)\/(.*)$/);
+  const v = m ? (m[1] === 'giornale' ? 'mezzi' : m[1]) : 'panoramica';
+  const h = v === 'panoramica' ? '' : '#' + v;
+  if(location.hash !== h) history.pushState(null, '', location.pathname + h);
+  mostraVista(v, m ? m[2] : '');
+}
+window.dashVai = dashVai;
+addEventListener('popstate', () => mostraVista(vistaDaHash()));
+addEventListener('resize', dimensiona);
+// i link della Dashboard verso le app (riquadri, scadenze, barra) cambiano vista invece di aprire un'altra pagina
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href]'); if(!a || a.target === '_blank' || e.defaultPrevented || a.closest('.cf-porta')) return; // la porta (prima volta) apre Bilancio da solo
+  const h = a.getAttribute('href');
+  if(/^(bilancio|giornale|palestra)\//.test(h)){ e.preventDefault(); dashVai(h); }
+  else if(h === '#' && (a.closest('nav') || a.closest('.seg'))){ e.preventDefault(); dashVai(''); }
+});
+
 /* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Mezzi si aprono senza chiedere ---- */
 (async () => {
   await Cassaforte.porta({ nome: 'il tuo account', bilancio: 'bilancio/' });
-  // arrivato da Bilancio o da Mezzi (?torna=…): ci si torna subito
-  const torna = new URLSearchParams(location.search).get('torna');
-  if(['bilancio/', 'giornale/', 'palestra/'].includes(torna)){
-    try { sessionStorage.setItem('dg:tornato', String(Date.now())); } catch(e){}
-    return location.replace(torna);
-  }
   bil.src = 'bilancio/index.html';
+  // arrivato da un'app aperta da sola (?torna=…): si apre qui dentro
+  const torna = new URLSearchParams(location.search).get('torna');
+  if(['bilancio/', 'giornale/', 'palestra/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
+  else if(vistaDaHash() !== 'panoramica') mostraVista(vistaDaHash());
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);
   disegnaGoogle();

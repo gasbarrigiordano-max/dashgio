@@ -94,6 +94,9 @@
       if (this.key && await keyOk(this.key, this.meta)) return 'pronta';
       const saved = await kdb.get(this.user.uid);
       if (saved && saved.salt === this.meta.salt && await keyOk(saved.key, this.meta)) { this.key = saved.key; return 'pronta'; }
+      // dentro la Dashboard: la chiave sbloccata lì (anche se non ricordata sul dispositivo)
+      const pk = dashboard() && dashboard().Cassaforte && dashboard().Cassaforte.key;
+      if (pk && dashboard().Cassaforte.meta && dashboard().Cassaforte.meta.salt === this.meta.salt && await keyOk(pk, this.meta)) { this.key = pk; return 'pronta'; }
       this.key = null;
       return 'sblocca';
     },
@@ -173,6 +176,7 @@
     // accesso unico: si va alla Dashboard (cartella sopra) con ?torna=bilancio/ o giornale/. Se la Dashboard ha appena
     // rimandato qui e la cassaforte non è aperta (passphrase non ricordata), l'app chiede da sé per non girare in tondo
     allaDashboard(torna) {
+      if (dashboard()) return false; // già dentro la Dashboard: chiede qui
       try {
         const t = +sessionStorage.getItem('dg:tornato') || 0;
         sessionStorage.removeItem('dg:tornato');
@@ -261,6 +265,29 @@
       .cf-link{display:block;margin:14px auto 0;background:none;border:0;color:#ffb07a;font:600 13px Manrope,system-ui,sans-serif;cursor:pointer;min-height:44px}
       .cf-err{min-height:18px;margin:10px 0 0;color:#ffb3a1;font-size:13px;text-align:center}`;
     document.head.appendChild(st);
+  }
+
+  // Dashboard che contiene questa pagina (stesso sito), se c'è
+  function dashboard() {
+    try { return window.top !== window && window.top.dashVai ? window.top : null; } catch (e) { return null; }
+  }
+  C.dashboard = dashboard;
+  // dentro la Dashboard: niente pulsante "Dashboard" e i link tra le app cambiano vista nella Dashboard invece di aprire la pagina qui
+  if (window.top !== window) {
+    document.documentElement.classList.add('incorporata');
+    const st = document.createElement('style');
+    st.textContent = 'html.incorporata a[href="../"]{display:none !important}';
+    (document.head || document.documentElement).appendChild(st);
+    document.addEventListener('click', e => {
+      const a = e.target.closest && e.target.closest('a[href]'), d = dashboard();
+      if (!a || !d || a.target === '_blank') return;
+      const u = new URL(a.getAttribute('href'), location.href), base = new URL('../', location.href);
+      if (u.origin !== location.origin || !u.pathname.startsWith(base.pathname)) return;
+      const resto = u.pathname.slice(base.pathname.length);
+      if (!/^(bilancio|giornale|palestra)\/|^$/.test(resto)) return;
+      e.preventDefault();
+      d.dashVai(resto + u.search + u.hash);
+    }, true);
   }
 
   window.Cassaforte = C;

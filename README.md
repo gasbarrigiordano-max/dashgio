@@ -10,6 +10,8 @@ Le mie app personali in un solo sito, con un solo account e una sola cassaforte 
 | `/palestra/` | Palestra: schede, registro degli allenamenti e record, progressi del corpo, abbonamento e ingressi. |
 | `/comune/cassaforte.js` | Accesso e cifratura condivisi (login, sblocco, lettura e scrittura cifrata). |
 
+Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
+
 Sito: GitHub Pages dal ramo `main`, cartella principale → `https://gasbarrigiordano-max.github.io/dashgio/`.
 
 ## Sicurezza
