@@ -954,6 +954,12 @@
   /* dentro la Dashboard: si vede lo sfondo della Dashboard; le schermate a tutto schermo restano velate per coprire quelle sotto */
   html.incorporata body{background:transparent;}
   html.incorporata body::before{display:none;}
+  /* dentro la Dashboard: niente margini per l'orologio e la barra dell'iPhone (li gestisce la Dashboard) */
+  html.incorporata .masthead{padding-top:10px;}
+  html.incorporata .tabbar{padding-bottom:10px;}
+  html.incorporata .modal{padding-bottom:24px;}
+  html.incorporata body.tracking-active main#view-uscite{padding-top:18px;}
+  html.incorporata body.tracking-active .play-btn{padding-bottom:0;}
   html.incorporata #launcher-screen, html.incorporata #auth-screen, html.incorporata #vehicle-onboarding-screen, html.incorporata #launcher-settings-screen, html.incorporata #vehicle-proposal-screen{background:rgba(25,18,13,0.40) !important; -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);}
 </style>
 </head>

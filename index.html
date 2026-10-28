@@ -309,6 +309,7 @@ a.p{text-decoration:none}
   .tile .molo-t b{font-size:26px}
   .grafico svg{height:120px}
   .mesi{font-size:9.5px}
+  .app-vista iframe{width:calc(100% / .9);height:calc(100% / .9);transform:scale(.9);transform-origin:0 0}
   nav.glass{background:rgba(30,20,14,.62) !important}
   .mezzo{padding:12px 13px;gap:10px}
   .mezzo .tot{width:52px;height:52px;font-size:10px}
@@ -349,6 +350,7 @@ main{container-type:inline-size}
 </style>
 </head>
 <body>
+<div id="sab-sonda" aria-hidden="true" style="position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none"></div>
 <header class="v5top" aria-label="Barra della Dashboard">
   <div class="grp"><span class="av" aria-hidden="true">G</span><span class="brand5">Giordano</span></div>
   <div class="grp centro" role="navigation" aria-label="App">
@@ -1120,13 +1122,19 @@ function frameDi(v, extra){
   }
   return frames[v];
 }
+// sul telefono le app si vedono al 90%: più spazio in larghezza, niente cifre che vanno a capo
+const SCALA_TEL = .9, tel = () => innerWidth <= 700;
+const sabPx = () => $('sab-sonda').getBoundingClientRect().height;
 function dimensiona(){
   const box = $('app-vista'); if(!document.body.classList.contains('in-app')) return;
-  const sotto = innerWidth <= 700 ? 12 : 18; // sul telefono, dentro un'app, il dock in basso si nasconde
+  const sotto = tel() ? 8 + sabPx() : 18; // sul telefono, dentro un'app, il dock in basso si nasconde; l'app finisce sopra la barra dell'iPhone
   box.style.height = Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
-  if(vista === 'bilancio'){ const r = box.getBoundingClientRect(); bil.style.inset = 'auto'; Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px'}); }
+  if(vista === 'bilancio'){
+    const r = box.getBoundingClientRect(), k = tel() ? SCALA_TEL : 1; bil.style.inset = 'auto';
+    Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width / k + 'px', height: r.height / k + 'px', transform: k < 1 ? `scale(${k})` : '', transformOrigin: '0 0'});
+  }
 }
-function liberaBil(){ bil.classList.remove('in-vista'); ['inset','left','top','width','height'].forEach(k => bil.style[k] = ''); }
+function liberaBil(){ bil.classList.remove('in-vista'); ['inset','left','top','width','height','transform','transformOrigin'].forEach(k => bil.style[k] = ''); }
 function mostraVista(v, extra = ''){
   vista = PERCORSI[v] ? v : 'panoramica';
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();

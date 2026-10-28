@@ -400,6 +400,7 @@ nav button.on{color:var(--acc)}
 /* dentro la Dashboard: niente sfondo proprio, si vede quello della Dashboard attraverso il vetro */
 :root[data-theme="notte"].incorporata,:root[data-theme="notte"].incorporata .gate{background:transparent}
 :root[data-theme="notte"].incorporata body::before{display:none}
+html.incorporata,html.incorporata[data-theme]{--sat:0px;--sab:0px}
 :root[data-theme="notte"] body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--mesh)}
 :root[data-theme="notte"] .gate{background:var(--mesh)}
 :root[data-theme="notte"] .card,
