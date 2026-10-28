@@ -2628,6 +2628,8 @@ async function openVault(key){
   afterLoad();
   $('gate').classList.remove('on'); setSync(cloud.timer?'saving':'ok'); render();
   bordoLeggi(); // il Giornale, dalla stessa cassaforte
+  // dalla Dashboard: bilancio/#passphrase o #impostazioni
+  if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
 }
 function resetVault(){
   clearTimeout(cloud.timer); clearTimeout(cloud.rt);

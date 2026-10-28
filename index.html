@@ -149,6 +149,38 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .seg a{color:var(--ink2);text-decoration:none;font-weight:600;font-size:12.5px;padding:10px 14px;border-radius:99px}
 .seg a.on{background:var(--acc);color:#fff}
 
+/* finestre della Dashboard: calendario e impostazioni */
+.pannello{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:calc(16px + var(--sat)) 16px calc(16px + var(--sab));background:rgba(10,8,6,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.pannello.on{display:flex}
+.pannello .box{width:min(1100px,100%);max-height:100%;overflow:auto;border-radius:28px;padding:20px}
+.pannello .box.stretto{width:min(560px,100%)}
+.pann-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.pann-h h2{margin:0;font-size:20px;font-weight:800}
+.pann-h button,.tondo{width:40px;height:40px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:grid;place-items:center}
+.calv{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.calv .wd{font-size:11px;color:var(--ink3);text-align:center;padding:2px 0}
+.calv .g{min-height:96px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid transparent;padding:6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;text-align:left;color:#fff;min-width:0;font:inherit}
+.calv .g:hover{background:rgba(255,255,255,.1)}
+.calv .g.fuori{opacity:.35}
+.calv .g.oggi{border-color:var(--acc)}
+.calv .g.sel{background:rgba(242,113,28,.16)}
+.calv .n{font-size:12px;font-weight:800}
+.calv .g.oggi .n{color:var(--acc-soft)}
+.ev-c{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.1)}
+.ev-c.bil{background:rgba(242,113,28,.28)} .ev-c.gio{background:rgba(70,160,190,.32)} .ev-c.pal{background:rgba(160,120,230,.32)} .ev-c.goo{background:rgba(138,180,248,.28)}
+.ev-piu{font-size:10px;color:var(--ink3)}
+.giorno-sel{margin-top:14px}
+.leg-c{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:var(--ink2);margin:10px 0 0}
+.leg-c i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.imp-sez{border-top:1px solid var(--line);padding:14px 0}
+.imp-sez:first-of-type{border-top:0;padding-top:0}
+.imp-sez h3{margin:0 0 4px;font-size:14px;font-weight:800}
+.imp-sez p{margin:0 0 10px;font-size:12.5px;color:var(--ink2);line-height:1.45}
+.imp-az{display:flex;flex-wrap:wrap;gap:8px}
+.imp-az a,.imp-az button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 14px;min-height:40px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.imp-az .rosso{color:#ffb3a1}
+@media (max-width:700px){ .calv{gap:3px} .calv .g{min-height:58px;padding:4px;border-radius:10px} .ev-c{font-size:0;height:6px;padding:0;border-radius:3px} .ev-piu{display:none} .pannello .box{padding:16px;border-radius:22px} }
+
 /* attesa e sblocco di Bilancio */
 .stato{position:fixed;left:50%;bottom:calc(20px + var(--sab));transform:translateX(-50%);z-index:20;border-radius:99px;padding:10px 16px;font-size:12.5px;font-weight:600;display:none}
 .stato.on{display:block}
@@ -187,10 +219,10 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <a class="navbtn" href="bilancio/" aria-label="Bilancio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M5 6l9-3 2 3"/></svg><span class="tip">Bilancio</span></a>
   <a class="navbtn giornale-link" href="#" aria-label="Giornale di Bordo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Giornale di Bordo</span></a>
   <a class="navbtn" href="palestra/" aria-label="Palestra"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg><span class="tip">Palestra</span></a>
-  <a class="navbtn" href="#agenda" aria-label="Scadenze"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Scadenze</span></a>
+  <button class="navbtn" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Calendario</span></button>
   <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
   <div class="nav-spazio"></div>
-  <a class="navbtn" href="bilancio/" aria-label="Impostazioni (in Bilancio)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="tip">Impostazioni</span></a>
+  <button class="navbtn" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="tip">Impostazioni</span></button>
 </nav>
 
 <main class="glass">
@@ -204,7 +236,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
         <input id="q" type="search" placeholder="Cerca spese, mezzi, voci…" aria-label="Cerca tra i movimenti di Bilancio" autocomplete="off"></label>
       <div class="risultati glass" id="ris"></div>
     </div>
-    <a class="campana" href="#agenda" aria-label="Scadenze dei prossimi 7 giorni"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></a>
+    <button class="campana" type="button" onclick="apriCalendario()" aria-label="Scadenze dei prossimi 7 giorni"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></button>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -264,6 +296,16 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Giornale di Bordo</a><a href="palestra/">Palestra</a>
 </div>
 
+<div class="pannello" id="p-cal" onclick="if(event.target===this) chiudiPannello()"><div class="box glass" role="dialog" aria-modal="true" aria-labelledby="calv-tit">
+  <div class="pann-h"><h2 id="calv-tit">Calendario</h2><div style="display:flex;gap:6px"><button type="button" aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button type="button" aria-label="Questo mese" onclick="calSposta(-calOff)" style="width:auto;padding:0 12px;font-size:12px;font-weight:700">Oggi</button><button type="button" aria-label="Mese successivo" onclick="calSposta(1)">›</button><button type="button" aria-label="Chiudi" onclick="chiudiPannello()">✕</button></div></div>
+  <div class="calv" id="calv"></div>
+  <div class="leg-c"><span><i style="background:rgba(242,113,28,.6)"></i>Bilancio</span><span><i style="background:rgba(70,160,190,.7)"></i>Giornale</span><span><i style="background:rgba(160,120,230,.7)"></i>Palestra</span><span><i style="background:var(--goo)"></i>Google</span></div>
+  <div class="giorno-sel" id="calv-giorno"></div>
+</div></div>
+<div class="pannello" id="p-imp" onclick="if(event.target===this) chiudiPannello()"><div class="box glass stretto" role="dialog" aria-modal="true" aria-labelledby="imp-tit">
+  <div class="pann-h"><h2 id="imp-tit">Impostazioni</h2><button type="button" aria-label="Chiudi" onclick="chiudiPannello()">✕</button></div>
+  <div id="imp-corpo"></div>
+</div></div>
 <div class="stato glass" id="stato" role="status">Apro Bilancio…</div>
 <div class="sblocco" id="sblocco" role="dialog" aria-modal="true" aria-label="Bilancio">
   <div class="box glass">
@@ -274,6 +316,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 <iframe id="bil" title="Bilancio (in background)" aria-hidden="true" tabindex="-1"></iframe>
 
 <script src="comune/cassaforte.js"></script>
+<script src="comune/programma.js"></script>
 <script>
 const GIORNALE_URL = 'giornale/';
 // Google Calendar: ID client OAuth "Applicazione web" del progetto Google Cloud contabilit-1a500, con origine
@@ -329,13 +372,19 @@ function estrai(){
     ...S.rate.flatMap(r => r.first ? Array.from({length:r.n - r.fi}, (_, i) => dueDate(r, r.fi + i)) : []),
     ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => a.next),
     ...S.tx.filter(t => t.abid).map(t => t.d)])].filter(Boolean);
+  const eventiDett = [
+    ...bordo.voci.map(v => ({d:v.d, titolo:v.n, app:'Giornale di Bordo', amt:v.amt, paid:!!v.paid})),
+    ...S.rate.flatMap(r => r.first ? Array.from({length:r.n - r.fi}, (_, i) => ({d:dueDate(r, r.fi + i), titolo:(r.prod||r.tipo||'Rata') + (r.tipo && r.prod ? ' · '+r.tipo : ''), app:'Bilancio · rate', amt:quota(r, r.fi + i), paid: r.fi + i < pagate(r)})) : []),
+    ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => ({d:a.next, titolo:a.n, app:'Bilancio · abbonamenti', amt:a.costo, paid:false})),
+    ...S.tx.filter(t => t.abid).map(t => ({d:t.d, titolo:(S.abbo||[]).find(a => a.id===t.abid)?.n || t.sub || 'Abbonamento', app:'Bilancio · abbonamenti', amt:spesa(t), paid:true}))
+  ].filter(x => x.d);
   const storico = (S.storico||[]).slice(-8).map(f => f.tot).concat([patr]);
   return {
     oggi, mese, anno:y, nomeMese:MESI[mese],
     entrate:serieE[mese], uscite:serieU[mese], serieU, serieE,
     daPagare: sumA(daPagare.filter(x => !x.paid), x => x.amt), pagato: sumA(daPagare.filter(x => x.paid), x => x.amt), nDaPagare: daPagare.filter(x => !x.paid).length,
     patr, liq, storico,
-    mezzi, spesaMezzi: sumA(mz, spesa), agenda: agenda.slice(0, 7), eventi,
+    mezzi, spesaMezzi: sumA(mz, spesa), agenda: agenda.slice(0, 7), eventi, eventiDett,
     nConti: S.conti.length, nRate: S.rate.filter(r => residue(r) > 0).length,
     bordo: bordo.stato
   };
@@ -430,7 +479,7 @@ function disegnaCal(){
   }
   $('cal').innerHTML = h;
 }
-function calSposta(k){ calOff += k; if(D) disegnaCal(); if(GC.token) gcalLeggi(); }
+function calSposta(k){ calOff += k; if(D) disegnaCal(); disegnaCalGrande(); if(GC.token) gcalLeggi(); }
 
 /* ---- Google Calendar: leggere gli eventi e aggiungere scadenze e rate ----
    Accesso con Google Identity Services (permesso calendar.events). Il token resta solo in memoria per un'ora,
@@ -519,19 +568,73 @@ async function gcalAggiungi(id, btn){
   } catch(e){ btn.disabled = false; GC.err = 'non aggiunta: ' + e.message; disegnaGoogle(); }
 }
 function disegnaGoogle(){
-  const box = $('goo'); if(!box) return;
+  const b2 = $('goo-imp'); if(b2 && $('p-imp').classList.contains('on')) disegnaGoogleIn(b2);
+  disegnaCalGrande();
+  const box = $('goo'); if(box) disegnaGoogleIn(box);
+}
+function disegnaGoogleIn(box){
   if(!GCAL_CLIENT_ID){ box.innerHTML = '<span>Google Calendar: da configurare</span>'; return; }
   if(GC.token && Date.now() < GC.scade){
     box.innerHTML = `<span>Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${GC.err ? ' · ' + esc(GC.err) : ''}</span><span style="display:flex;gap:6px"><button type="button" onclick="gcalLeggi()">Aggiorna</button><button type="button" onclick="gcalScollega()">Scollega</button></span>`;
   } else box.innerHTML = `<span>${GC.err ? esc(GC.err) : gcalUsato() ? 'Google Calendar collegato' : 'Google Calendar'}</span><button type="button" onclick="gcalCollega()">${gcalUsato() ? 'Mostra eventi' : 'Collega'}</button>`;
 }
 
+/* ---- Calendario grande: tutte le app nello stesso mese ---- */
+let giornoSel = null;
+function apriCalendario(){ $('p-cal').classList.add('on'); disegnaCalGrande(); document.body.style.overflow = 'hidden'; if(GC.token) gcalLeggi(); }
+function apriImpostazioni(){ $('p-imp').classList.add('on'); disegnaImpostazioni(); document.body.style.overflow = 'hidden'; }
+function chiudiPannello(){ document.querySelectorAll('.pannello').forEach(p => p.classList.remove('on')); document.body.style.overflow = ''; }
+document.addEventListener('keydown', e => { if(e.key === 'Escape') chiudiPannello(); });
+function eventiDelGiorno(iso){
+  const out = [];
+  if(D) D.eventiDett.filter(e => e.d === iso).forEach(e => out.push({...e, cl: e.app.startsWith('Giornale') ? 'gio' : 'bil', href: e.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'}));
+  altriEventi().filter(e => e.d === iso).forEach(e => out.push({...e, cl:'pal'}));
+  const al = allenamento(iso); if(al) out.push({...al, cl:'pal'});
+  GC.eventi.filter(e => e.d === iso).forEach(e => out.push({...e, cl:'goo'}));
+  return out;
+}
+function disegnaCalGrande(){
+  if(!$('p-cal').classList.contains('on')) return;
+  const oggi = new Date(), base = new Date(oggi.getFullYear(), oggi.getMonth() + calOff, 1), y = base.getFullYear(), m = base.getMonth();
+  $('calv-tit').textContent = base.toLocaleDateString('it-IT', {month:'long', year:'numeric'}).replace(/^./, c => c.toUpperCase());
+  const primo = (base.getDay() + 6) % 7, start = new Date(y, m, 1 - primo), oggiIso = isoLocale(oggi);
+  let h = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(w => `<div class="wd" aria-hidden="true">${w}</div>`).join('');
+  const celle = Math.ceil((primo + new Date(y, m + 1, 0).getDate()) / 7) * 7;
+  for(let i = 0; i < celle; i++){
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), iso = isoLocale(d), ev = eventiDelGiorno(iso);
+    h += `<button type="button" class="g${d.getMonth() !== m ? ' fuori' : ''}${iso === oggiIso ? ' oggi' : ''}${iso === giornoSel ? ' sel' : ''}" onclick="scegliGiorno('${iso}')" aria-label="${d.toLocaleDateString('it-IT', {day:'numeric', month:'long'})}: ${ev.length} eventi">
+      <span class="n">${d.getDate()}</span>${ev.slice(0, 3).map(e => `<span class="ev-c ${e.cl}">${esc(e.titolo)}</span>`).join('')}${ev.length > 3 ? `<span class="ev-piu">+${ev.length - 3}</span>` : ''}</button>`;
+  }
+  $('calv').innerHTML = h;
+  const sel = giornoSel || oggiIso, ev = eventiDelGiorno(sel);
+  $('calv-giorno').innerHTML = `<div class="sez"><h2>${esc(new Date(sel + 'T12:00').toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'}).replace(/^./, c => c.toUpperCase()))}</h2></div>
+    <div class="agenda">${ev.length ? ev.map(a => `<a class="item" href="${a.href || 'bilancio/'}"${a.google ? ' target="_blank" rel="noopener"' : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag || (a.cl === 'gio' ? 'MEZZO' : a.app.includes('rate') ? 'RATA' : 'ABB'))}</div>
+      <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div>${a.paid ? '<small>pagato</small>' : ''}</div><div class="amt mono">${a.amt != null ? eur2(a.amt) : ''}</div></a>`).join('') : '<div class="vuoto">Niente in questo giorno.</div>'}</div>`;
+}
+function scegliGiorno(iso){ giornoSel = iso; disegnaCalGrande(); }
+
+function disegnaImpostazioni(){
+  const u = Cassaforte.user;
+  $('imp-corpo').innerHTML = `
+    <section class="imp-sez"><h3>Account</h3><p>${u ? 'Accesso come <b>' + esc(u.email || '') + '</b>. Lo stesso account e la stessa passphrase aprono Bilancio, Giornale e Palestra.' : 'Non hai fatto l\'accesso.'}</p>
+      <div class="imp-az"><button type="button" onclick="bloccaTutto()">Blocca</button><button type="button" class="rosso" onclick="esciTutto()">Esci dall'account</button></div></section>
+    <section class="imp-sez"><h3>Passphrase</h3><p>Cifra tutti i dati prima che arrivino su Firebase. Cambiandola si ricifrano Bilancio, Giornale e Palestra in un colpo solo.</p>
+      <div class="imp-az"><a href="bilancio/#passphrase">Cambia passphrase</a></div></section>
+    <section class="imp-sez"><h3>Google Calendar</h3><p>Eventi di Google nel calendario e "+" per aggiungere scadenze e rate (solo titolo e data). Il permesso resta in memoria per un'ora.</p>
+      <div class="goo-bar" id="goo-imp" style="margin-top:0"></div></section>
+    <section class="imp-sez"><h3>Impostazioni delle app</h3><p>Conti, carte, categorie e importazioni stanno in Bilancio; veicoli e preferenze nel Giornale; muscoli, giorni e blocchi nel Programma della Palestra.</p>
+      <div class="imp-az"><a href="bilancio/#impostazioni">Bilancio</a><a href="giornale/">Giornale di Bordo</a><a href="palestra/?t=schede">Palestra</a></div></section>
+    <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
+  disegnaGoogle();
+}
+async function esciTutto(){ if(!confirm('Uscire dall\'account su questo dispositivo?')) return; await Cassaforte.esci(); location.reload(); }
+
 /* ---- Altre app nella cassaforte: Palestra ---- */
 let PAL = null;
 async function leggiPalestra(){
   try {
     const t = await Cassaforte.tutti('palestra'), o = {};
-    ['sessioni', 'corpo', 'abbonamento'].forEach(k => { try { o[k] = t[k] != null ? JSON.parse(t[k]) : null; } catch(e){} });
+    ['sessioni', 'corpo', 'abbonamento', 'programma', 'muscoli'].forEach(k => { try { o[k] = t[k] != null ? JSON.parse(t[k]) : null; } catch(e){} });
     PAL = o;
   } catch(e){ console.warn('Palestra', e); PAL = PAL || {errore: e.code || e.message}; }
   disegnaPalestra(); if(D) disegna();
@@ -543,7 +646,17 @@ function altriEventi(){
     out.push({d:a.scadenza, titolo:`Abbonamento ${a.nome || 'palestra'}`, app:'Palestra · abbonamento', tag:'PAL', amt:null, senzaImporto:true, href:'palestra/?t=abbo'});
   return out;
 }
-function tuttaAgenda(){ return [...D.agenda, ...altriEventi(), ...GC.eventi.filter(e => giorniA(e.d) >= 0 && giorniA(e.d) <= 30)].sort((x, y) => x.d.localeCompare(y.d)); }
+function allenamento(d){
+  if(!PAL || !PAL.programma || !window.Programma) return null;
+  const g = Programma.giorno(PAL.programma, d); if(!g) return null;
+  const mu = PAL.muscoli && PAL.muscoli.length ? PAL.muscoli : Programma.MUSCOLI_BASE, nome = id => (mu.find(m => m.id === id) || {nome:id}).nome;
+  return {d, titolo:g.ordine.map(nome).join(' → '), app:'Palestra · allenamento', tag:'GYM', amt:null, senzaImporto:true, href:'palestra/'};
+}
+function prossimoAllenamento(){
+  const oggi = new Date(); for(let i = 0; i < 7; i++){ const a = allenamento(isoLocale(new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + i))); if(a) return a; }
+  return null;
+}
+function tuttaAgenda(){ const al = prossimoAllenamento(); return [...D.agenda, ...altriEventi(), ...(al ? [al] : []), ...GC.eventi.filter(e => giorniA(e.d) >= 0 && giorniA(e.d) <= 30)].sort((x, y) => x.d.localeCompare(y.d)); }
 function hrefAgenda(a){ return a.href || (a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'); }
 function disegnaPalestra(){
   const box = $('palestra'); if(!box) return;
