@@ -682,12 +682,23 @@ async function gcalCollega(email){
 /* ---- accesso automatico ---- */
 const URL_TOKEN = 'https://oauth2.googleapis.com/token';
 const AUTO = { stato: 'carico', segreto: '', conti: {}, inCorso: false, bozza: '' }; // bozza: la chiave mentre la scrivi (le impostazioni si ridisegnano) // stato: carico | ok | regole | errore
+// rifiutato: quale operazione (la lettura e la scrittura hanno ciascuna la sua riga nelle regole)
 async function autoLeggi(){
-  try { const t = await Cassaforte.leggi('dashboard', 'google'), o = t ? JSON.parse(t) : {}; Object.assign(AUTO, { segreto: o.segreto || '', conti: o.conti || {}, stato: 'ok' }); }
-  catch(e){ AUTO.stato = e.code === 'permission-denied' ? 'regole' : 'errore'; console.warn('Google automatico', e); }
+  try { const t = await Cassaforte.leggi('dashboard', 'google'), o = t ? JSON.parse(t) : {}; Object.assign(AUTO, { segreto: o.segreto || '', conti: o.conti || {}, stato: 'ok', rifiuto: '' }); }
+  catch(e){ AUTO.stato = e.code === 'permission-denied' ? 'regole' : 'errore'; AUTO.rifiuto = 'lettura'; console.warn('Google automatico', e); }
 }
 const autoSalva = () => Cassaforte.scrivi('dashboard', 'google', JSON.stringify({ segreto: AUTO.segreto, conti: AUTO.conti }))
-  .catch(e => { if(e.code === 'permission-denied') AUTO.stato = 'regole'; throw e; });
+  .then(() => { AUTO.stato = 'ok'; AUTO.rifiuto = ''; })
+  .catch(e => { if(e.code === 'permission-denied'){ AUTO.stato = 'regole'; AUTO.rifiuto = 'scrittura'; } throw e; });
+// dopo aver pubblicato le regole: si ricontrolla senza ricaricare la pagina
+async function riprovaAuto(btn){
+  if(btn){ btn.disabled = true; btn.textContent = 'Controllo…'; }
+  await autoLeggi();
+  // la lettura va: si prova anche la scrittura (riscrive la stessa voce)
+  if(AUTO.stato === 'ok') await autoSalva().catch(() => {});
+  disegnaGoogleImp(); disegnaGoogle();
+  if(AUTO.stato === 'ok' && GC.conti.some(c => !attivo(c)) && Object.keys(AUTO.conti).length) gcalAuto();
+}
 async function chiediToken(corpo){
   const r = await fetch(URL_TOKEN, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: GCAL_CLIENT_ID, client_secret: AUTO.segreto, ...corpo }) });
@@ -912,7 +923,8 @@ function disegnaGoogleImp(){
 function disegnaAuto(){
   const tit = '<b style="display:block;font-size:13px;margin:16px 0 6px">Accesso automatico all\'apertura</b>';
   if(AUTO.stato === 'carico') return tit + '<p style="font-size:12px">Leggo la cassaforte…</p>';
-  if(AUTO.stato === 'regole') return tit + `<p style="font-size:12px;line-height:1.5">Prima vanno aggiornate le regole di Firestore: in console Firebase → Firestore → Regole incolla il file <b>firestore.rules</b> aggiornato (c'è la nuova voce "dashboard"), metti il tuo UID al posto di IL_TUO_UID e pubblica. Poi ricarica la pagina.</p>`;
+  if(AUTO.stato === 'regole') return tit + `<p style="font-size:12px;line-height:1.5">Firestore rifiuta la <b>${AUTO.rifiuto === 'scrittura' ? 'scrittura' : 'lettura'}</b> della voce "dashboard". In console Firebase → Firestore Database → Regole, la riga <code>app in ['giornale', 'palestra']</code> va cambiata in <code>app in ['giornale', 'palestra', 'dashboard']</code> in <b>tutti e due</b> i punti (${AUTO.rifiuto === 'scrittura' ? 'qui manca quella di "allow create, update"' : 'qui manca quella di "allow read, delete"'}), poi Pubblica. Le regole nuove possono metterci un minuto.</p>
+    <span class="imp-az"><button type="button" onclick="riprovaAuto(this)">Riprova</button></span>`;
   if(AUTO.stato === 'errore') return tit + '<p style="font-size:12px">La cassaforte non risponde: riprova più tardi.</p>';
   if(!AUTO.segreto) return tit + `<p style="font-size:12px;line-height:1.5">Senza questo, a ogni apertura Google va ricollegato con un tocco. Con la <b>chiave segreta del client</b> la Dashboard si ricollega da sola: chiave e permessi restano cifrati nella cassaforte.<br>
     Dove si trova: Google Cloud → Google Auth Platform → Client → il tuo client Web → "Aggiungi chiave segreta" → copia il valore (inizia con GOCSPX-).</p>
@@ -930,7 +942,7 @@ function scegliLavoro(v){ salvaPref('dg:gcalLavoro2', v || null); gcalLeggi(); }
 /* ---- Calendario grande: tutte le app nello stesso mese ---- */
 let giornoSel = null;
 function apriCalendario(){ $('p-cal').classList.add('on'); disegnaCalGrande(); document.body.style.overflow = 'hidden'; if(gcalAttivi().length) gcalLeggi(); }
-function apriImpostazioni(){ $('p-imp').classList.add('on'); disegnaImpostazioni(); document.body.style.overflow = 'hidden'; }
+function apriImpostazioni(){ $('p-imp').classList.add('on'); disegnaImpostazioni(); document.body.style.overflow = 'hidden'; if(AUTO.stato === 'regole' || AUTO.stato === 'errore') riprovaAuto(); }
 function chiudiPannello(){ document.querySelectorAll('.pannello').forEach(p => p.classList.remove('on')); document.body.style.overflow = ''; }
 document.addEventListener('keydown', e => { if(e.key !== 'Escape') return; if($('p-ev').classList.contains('on')) chiudiEvento(); else chiudiPannello(); });
 function eventiDelGiorno(iso){
