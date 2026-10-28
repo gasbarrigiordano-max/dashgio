@@ -15,6 +15,8 @@
     appId: '1:771839838672:web:9943e49e505942b400d1d5'
   };
   const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
+  // sfondo panoramico comune, accanto a questo file
+  const SFONDO = (() => { try { return new URL('sfondo.svg', document.currentScript.src).href; } catch (e) { return ''; } })();
   const CHECK = 'bilancio-ok';
   const ENC = new TextEncoder(), DEC = new TextDecoder();
 
@@ -247,8 +249,8 @@
     const st = document.createElement('style'); st.id = 'cf-stile';
     st.textContent = `
       .cf-porta{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Manrope,system-ui,sans-serif;color:#fff;
-        background:radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%), radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
-        radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%), linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%)}
+        background:#2a201a url(${SFONDO}) center/cover no-repeat}
+      html.incorporata .cf-porta{background:rgba(25,18,13,.40);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
       .cf-box{width:min(400px,100%);border-radius:28px;padding:28px 24px;background:rgba(40,32,28,.6);-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);
         border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 60px rgba(0,0,0,.4)}
       .cf-logo{width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;color:#F2711C;font-weight:800;font-size:22px;margin-bottom:16px}

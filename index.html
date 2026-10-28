@@ -233,9 +233,80 @@ body.in-app{overflow:hidden}
   .tile{padding:13px}
   .tile .v{font-size:17px}
 }
+
+/* stile "Glassy V5": foto panoramica dietro, vetro chiaro quasi trasparente, menu a pillole in alto, dock a sinistra */
+body{background:#2a201a}
+body::before{background:url(comune/sfondo.svg) center/cover no-repeat !important}
+.glass{background:rgba(255,255,255,.10) !important;border:1px solid rgba(255,255,255,.24) !important;-webkit-backdrop-filter:blur(22px) saturate(150%) !important;backdrop-filter:blur(22px) saturate(150%) !important;box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28) !important}
+.wrap{padding:84px 24px 24px 92px !important}
+nav{position:fixed !important;left:18px;top:50%;transform:translateY(-50%);border-radius:99px !important;padding:10px 6px !important;gap:6px !important;align-self:auto !important}
+nav .brand,nav .nav-spazio{display:none}
+.navbtn{width:38px !important;height:38px !important;border-radius:99px !important;color:rgba(255,255,255,.85) !important}
+.navbtn.on{background:#fff !important;color:#1d1a18 !important;box-shadow:0 6px 18px rgba(0,0,0,.25) !important}
+.seg{display:none !important}
+main,aside{border-radius:30px !important}
+.head h1{text-shadow:0 2px 16px rgba(60,30,10,.35)}
+.head p{color:rgba(255,255,255,.85)}
+.cerca label{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25)}
+.tile,.mezzo{background:linear-gradient(rgba(40,24,12,.16),rgba(40,24,12,.16)),rgba(255,255,255,.12) !important;color:#fff !important;border:1px solid rgba(255,255,255,.22);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.tile .tile-h small{color:rgba(255,255,255,.88) !important}
+.tile .tile-h span{color:#ffd2ad !important}
+.tile .v{color:#fff !important}
+.tile .s{color:rgba(255,255,255,.78) !important}
+.tile .s .pos{color:#a6f2c9 !important} .tile .s .neg{color:#ffc0b0 !important}
+.tile .ico{color:#ffd2ad}
+.mesi,.leg{color:rgba(255,255,255,.8) !important}
+.grafico svg g{stroke:rgba(255,255,255,.18)}
+.giornale{background:rgba(20,32,44,.28) !important;border:1px solid rgba(255,255,255,.22) !important;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.mezzo .p{background:rgba(255,255,255,.18) !important;color:#fff}
+.mezzo .tot{background:rgba(255,255,255,.2) !important}
+.mezzo.acc{background:rgba(242,113,28,.55) !important}
+.cal,.stats div,.item{background:rgba(255,255,255,.10) !important;border-color:rgba(255,255,255,.14) !important}
+/* barra in alto */
+.v5top{position:fixed;left:0;right:0;top:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:12;
+  background:linear-gradient(180deg,rgba(25,18,13,.55),rgba(25,18,13,.15));-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.v5top .grp{display:flex;gap:8px;align-items:center}
+.v5top .t{width:38px;height:38px;border-radius:99px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;cursor:pointer;position:relative}
+.v5top .t b{position:absolute;top:-2px;right:-2px;width:15px;height:15px;border-radius:99px;background:#F2711C;font-size:9px;display:grid;place-items:center}
+.v5top .p{height:36px;border-radius:99px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;gap:7px;padding:0 14px;font:600 12.5px Manrope,sans-serif;cursor:pointer}
+.v5top .p.on{background:#fff;color:#1d1a18}
+.v5top .av{width:38px;height:38px;border-radius:99px;background:#F2711C;color:#fff;font-weight:800;display:grid;place-items:center;border:2px solid rgba(255,255,255,.6)}
+@media (max-width:700px){
+  .wrap{padding:76px 12px 90px !important}
+  nav{top:auto !important;bottom:14px;left:50% !important;transform:translateX(-50%) !important;flex-direction:row !important;width:auto !important;flex:0 0 auto !important}
+  .v5top .centro{display:none}
+}
+
+:root{color-scheme:dark}
+/* leggibilità sulle parti chiare del cielo */
+.tile .tile-h small,.tile .tile-h span,.tile .s,.head p,.mesi,.leg,.item .t span,.item .t small,.sez h2{text-shadow:0 1px 8px rgba(40,20,5,.35)}
+.tile .tile-h span,.item .t span{color:#ffe0c7 !important}
+.leg span{color:#fff}
+.v5top .t b[hidden]{display:none}
+a.p{text-decoration:none}
+.v5top .p:hover,.v5top .t:hover{background:rgba(255,255,255,.22)}
+.v5top .p.on:hover{background:#fff}
+.v5top .brand5{font-weight:800;color:#fff;font-size:15px;margin-left:4px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
+@media (max-width:700px){ .v5top .brand5{display:none} .tile.grande .v{font-size:24px} }
 </style>
 </head>
 <body>
+<header class="v5top" aria-label="Barra della Dashboard">
+  <div class="grp"><span class="av" aria-hidden="true">G</span><span class="brand5">Giordano</span></div>
+  <div class="grp centro" role="navigation" aria-label="App">
+    <a class="p on" href="#" aria-label="Panoramica"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Panoramica</a>
+    <a class="p" href="bilancio/" aria-label="Bilancio"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/></svg>Bilancio</a>
+    <a class="p" href="giornale/" aria-label="Mezzi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0"/></svg>Mezzi</a>
+    <a class="p" href="palestra/" aria-label="Palestra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>Palestra</a>
+    <button class="p" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Impostazioni</button>
+  </div>
+  <div class="grp">
+    <button class="t" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
+    <button class="t" type="button" onclick="apriCalendario()" aria-label="Scadenze dei prossimi 7 giorni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></button>
+    <button class="t" type="button" onclick="dashVai('');setTimeout(()=>$('q').focus(),50)" aria-label="Cerca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    <button class="t" type="button" onclick="bloccaTutto()" aria-label="Blocca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+  </div>
+</header>
 <div class="wrap">
 
 <nav class="glass" aria-label="Sezioni">
@@ -263,7 +334,6 @@ body.in-app{overflow:hidden}
         <input id="q" type="search" placeholder="Cerca spese, mezzi, voci…" aria-label="Cerca tra i movimenti di Bilancio" autocomplete="off"></label>
       <div class="risultati glass" id="ris"></div>
     </div>
-    <button class="campana" type="button" onclick="apriCalendario()" aria-label="Scadenze dei prossimi 7 giorni"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></button>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -858,7 +928,9 @@ function controlla(){
     try { const g = W().document.getElementById('gate'); if(g && g.dataset.st==='unlock' && W().eval('!!cloud.meta')){ passata = true; W().openVault(Cassaforte.key); return; } } catch(e){}
   }
   if(bilancioPronto()){
-    if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on'); }
+    if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on');
+      // Mezzi e Palestra si preparano in sottofondo: aprendoli dopo, il cambio di vista è immediato
+      setTimeout(() => { frameDi('mezzi'); frameDi('palestra'); }, 800); }
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
@@ -882,7 +954,7 @@ function frameDi(v, extra){
 }
 function dimensiona(){
   const box = $('app-vista'); if(!document.body.classList.contains('in-app')) return;
-  const sotto = innerWidth <= 700 ? 14 : 18;
+  const sotto = innerWidth <= 700 ? 92 : 18; // sul telefono la barra delle app sta in basso
   box.style.height = Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
   if(vista === 'bilancio'){ const r = box.getBoundingClientRect(); bil.style.inset = 'auto'; Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px'}); }
 }
@@ -892,7 +964,7 @@ function mostraVista(v, extra = ''){
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
   document.body.classList.toggle('in-app', vista !== 'panoramica');
   const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra'}[vista];
-  document.querySelectorAll('nav .navbtn').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
+  document.querySelectorAll('nav .navbtn, .v5top .p').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
   liberaBil();
@@ -925,7 +997,7 @@ document.addEventListener('click', e => {
   const a = e.target.closest('a[href]'); if(!a || a.target === '_blank' || e.defaultPrevented || a.closest('.cf-porta')) return; // la porta (prima volta) apre Bilancio da solo
   const h = a.getAttribute('href');
   if(/^(bilancio|giornale|palestra)\//.test(h)){ e.preventDefault(); dashVai(h); }
-  else if(h === '#' && (a.closest('nav') || a.closest('.seg'))){ e.preventDefault(); dashVai(''); }
+  else if(h === '#' && (a.closest('nav') || a.closest('.seg') || a.closest('.v5top'))){ e.preventDefault(); dashVai(''); }
 });
 
 /* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Mezzi si aprono senza chiedere ---- */

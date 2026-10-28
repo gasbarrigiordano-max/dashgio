@@ -22,23 +22,21 @@
 :root{
   --ink:#fff; --ink2:rgba(255,255,255,.74); --ink3:rgba(255,255,255,.58);
   --acc:#F2711C; --acc-soft:#ffb07a; --acc-ink:#a04a0c;
-  --glass:rgba(40,32,28,.55); --line:rgba(255,255,255,.10); --campo:rgba(0,0,0,.28);
+  --glass:linear-gradient(rgba(40,24,12,.16),rgba(40,24,12,.16)),rgba(255,255,255,.10); --line:rgba(255,255,255,.22); --campo:rgba(0,0,0,.28);
   --ok:#7fd3a8; --ko:#ffb3a1;
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{min-height:100vh;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#17120f;-webkit-font-smoothing:antialiased}
-body::before{content:'';position:fixed;inset:0;z-index:-1;background:
-  radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%),
-  radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
-  radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%),
-  radial-gradient(40% 45% at 10% 90%, rgba(90,70,60,.6), transparent 70%),
-  linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%)}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:url(../comune/sfondo.svg) center/cover no-repeat}
+/* dentro la Dashboard: si vede lo sfondo della Dashboard */
+html.incorporata body{background:transparent} html.incorporata body::before{display:none}
+:root{color-scheme:dark}
 a{color:var(--acc-soft)}
 button,input,select,textarea{font:inherit;color:inherit}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
-.glass{background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08)}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--line);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 10px rgba(40,20,5,.45)}
 .wrap{max-width:760px;margin:0 auto;padding:calc(14px + var(--sat)) 16px calc(110px + var(--sab))}
 
 header.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}

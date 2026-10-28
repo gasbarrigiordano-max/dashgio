@@ -386,28 +386,26 @@ nav button.on{color:var(--acc)}
   --brand-bg:#F2711C; --brand-fg:#1a1411; --brand-cl:#7a3606; --brand-dot:#F2711C;
   --nav-glass:rgba(40,32,28,.62); --nav-line:rgba(255,255,255,.10); --nav-on:rgba(255,255,255,.10);
   --r:20px;
-  --mesh:radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%),
-         radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
-         radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%),
-         radial-gradient(40% 45% at 10% 90%, rgba(90,70,60,.6), transparent 70%),
-         linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%);
+  --mesh:url(../comune/sfondo.svg) center/cover no-repeat;
 }
 :root[data-theme="notte"]{background:#17120f}
 :root[data-theme="notte"] body{background:transparent}
-/* i riquadri come quelli della Dashboard: chiari sul vetro scuro (le variabili valgono per tutto quello che c'è dentro) */
-:root[data-theme="notte"] .card{background:rgba(255,255,255,.94);border-color:transparent;color:#1d1a18;
-  --ink:#1d1a18; --ink2:#5e5650; --ink3:#8a817a; --line:rgba(0,0,0,.08); --panel:#f4efea; --panel2:rgba(0,0,0,.04); --sub-bg:rgba(0,0,0,.03);
-  --track:rgba(0,0,0,.08); --pos:#1b8752; --neg:#c43c29; --neg-line:rgba(196,60,41,.3); --warn:#b26b00; --acc-dim:rgba(242,113,28,.14); --hero-ink:#a04a0c}
-:root[data-theme="notte"] .card input,:root[data-theme="notte"] .card select,:root[data-theme="notte"] .card textarea{background:#fff;border-color:rgba(0,0,0,.12);color:#1d1a18}
-:root[data-theme="notte"] .card .btn.ghost{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:#1d1a18}
-:root[data-theme="notte"] .card .tx{background:rgba(0,0,0,.035);border-color:rgba(0,0,0,.05)}
+/* vetro chiaro quasi trasparente sullo sfondo panoramico, come la Dashboard */
+:root[data-theme="notte"]{--panel:rgba(255,255,255,.10);--panel2:rgba(255,255,255,.08);--line:rgba(255,255,255,.20);--ink2:rgba(255,255,255,.82);--ink3:rgba(255,255,255,.66);--glass:rgba(30,20,14,.35)}
+:root[data-theme="notte"] .card{background:linear-gradient(rgba(40,24,12,.16),rgba(40,24,12,.16)),rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
+:root[data-theme="notte"] .card,:root[data-theme="notte"] .tx,:root[data-theme="notte"] .sec,:root[data-theme="notte"] .note{text-shadow:0 1px 10px rgba(40,20,5,.45)}
+:root[data-theme="notte"]{--neg:#ffb4a3;--solid:rgba(30,21,15,.9);--solid2:rgba(40,29,21,.9)}
+:root[data-theme="notte"] .mx-wrap{background:rgba(30,20,14,.45)}
+/* dentro la Dashboard: niente sfondo proprio, si vede quello della Dashboard attraverso il vetro */
+:root[data-theme="notte"].incorporata,:root[data-theme="notte"].incorporata .gate{background:transparent}
+:root[data-theme="notte"].incorporata body::before{display:none}
 :root[data-theme="notte"] body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--mesh)}
 :root[data-theme="notte"] .gate{background:var(--mesh)}
 :root[data-theme="notte"] .card,
 :root[data-theme="notte"] .seg,
 :root[data-theme="notte"] .mx-wrap,
-:root[data-theme="notte"] .ptip{-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);box-shadow:0 20px 60px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.07)}
-:root[data-theme="notte"] .tx{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.07);border-radius:16px}
+:root[data-theme="notte"] .ptip{-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28)}
+:root[data-theme="notte"] .tx{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.16);border-radius:16px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 :root[data-theme="notte"] .mast{background:rgba(30,23,19,.6);border-bottom-color:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
 :root[data-theme="notte"] input,:root[data-theme="notte"] select,:root[data-theme="notte"] textarea{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.12);color:#fff}
 :root[data-theme="notte"] select option{background:#2a211c}
@@ -418,19 +416,18 @@ nav button.on{color:var(--acc)}
 :root[data-theme="notte"] .chip{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.10);color:var(--ink2)}
 :root[data-theme="notte"] .fab{border-radius:50%}
 :root[data-theme="notte"] a{color:#ffb07a}
-:root[data-theme="notte"] .card a{color:#a04a0c}
+
 :root[data-theme="notte"] .icon-btn{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
 :root[data-theme="notte"] .sheet{-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);background:rgba(42,33,28,.94)}
 /* il saldo in Panoramica: riquadro chiaro come i riquadri della Dashboard */
-:root[data-theme="notte"] .hero.sq{background:rgba(255,255,255,.94);border-color:transparent;color:#1d1a18}
-:root[data-theme="notte"] .hero.sq small{color:#5e5650}
-:root[data-theme="notte"] .hero.sq b{color:#a04a0c}
-:root[data-theme="notte"] .hero.sq .pos{color:#1b8752}
-:root[data-theme="notte"] .hero.sq .neg{color:#c43c29}
+:root[data-theme="notte"] .hero.sq b{color:#fff}
+:root[data-theme="notte"] .hero.sq .pos{color:#a6f2c9}
+:root[data-theme="notte"] .hero.sq .neg{color:#ffc0b0}
 @media (min-width:900px){
   /* su schermo largo la testata si fonde con lo sfondo, come la Dashboard */
   :root[data-theme="notte"] .mast{background:transparent;border-bottom-color:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
-  :root[data-theme="notte"] nav{background:rgba(40,32,28,.55);border-right-color:rgba(255,255,255,.08)}
+  :root[data-theme="notte"] nav{background:rgba(255,255,255,.10);border-right-color:rgba(255,255,255,.18);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%)}
+  :root[data-theme="notte"] nav button:not(.on){color:rgba(255,255,255,.88)}
   :root[data-theme="notte"] nav button.on{background:var(--acc);color:#fff}
 }
 

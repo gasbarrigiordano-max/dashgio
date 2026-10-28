@@ -901,9 +901,9 @@
      Fondo caldo sfocato, pannelli di vetro fumé, accento arancione. */
   :root{
     --navy-deep:#1a1411;                    /* fondo e testo sui pulsanti arancioni */
-    --navy-panel:rgba(255,255,255,0.07);    /* schede di vetro */
-    --navy-panel-2:rgba(255,255,255,0.12);
-    --navy-line:rgba(255,255,255,0.11);
+    --navy-panel:rgba(255,255,255,0.10);    /* schede di vetro */
+    --navy-panel-2:rgba(255,255,255,0.16);
+    --navy-line:rgba(255,255,255,0.20);
     --paper:#ffffff;
     --brass:#F2711C;                        /* accento */
     --brass-bright:#ff9a52;
@@ -914,15 +914,12 @@
     --ink-faint:rgba(255,255,255,0.56);
     --radius:18px;
     --radius-lg:24px;
-    --vetro:rgba(40,32,28,0.55);
-    --vetro-bordo:rgba(255,255,255,0.10);
+    --vetro:linear-gradient(rgba(40,24,12,0.16),rgba(40,24,12,0.16)),rgba(255,255,255,0.10);
+    --vetro-bordo:rgba(255,255,255,0.22);
   }
-  :root{--mesh:
-    radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%),
-    radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
-    radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%),
-    radial-gradient(40% 45% at 10% 90%, rgba(90,70,60,.6), transparent 70%),
-    linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%);}
+  /* sfondo panoramico comune a tutte le app (stile Glassy V5) */
+  :root{color-scheme:dark}
+  :root{--mesh:url(../comune/sfondo.svg) center/cover no-repeat;}
   body{background:#17120f; font-family:Manrope,'Inter',system-ui,sans-serif;}
   body::before{content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--mesh);}
   /* schermate a tutto schermo (scelta del mezzo, accesso, impostazioni): coprono l'app, quindi fondo sfumato pieno */
@@ -952,6 +949,12 @@
   .tab-btn.active{background:rgba(242,113,28,0.18); color:var(--brass);}
   .cat-opt{border-radius:16px;}
   ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18);}
+  /* leggibilità sul cielo chiaro */
+  .hero-stat, .stat-card, .chart-card, .fuel-card, .nav-card, .card, .section-label, .brand-text{text-shadow:0 1px 10px rgba(40,20,5,0.45);}
+  /* dentro la Dashboard: si vede lo sfondo della Dashboard; le schermate a tutto schermo restano velate per coprire quelle sotto */
+  html.incorporata body{background:transparent;}
+  html.incorporata body::before{display:none;}
+  html.incorporata #launcher-screen, html.incorporata #auth-screen, html.incorporata #vehicle-onboarding-screen, html.incorporata #launcher-settings-screen, html.incorporata #vehicle-proposal-screen{background:rgba(25,18,13,0.40) !important; -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);}
 </style>
 </head>
 <body>
