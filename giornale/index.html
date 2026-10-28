@@ -9278,7 +9278,7 @@ async function bootApp() {
   document.getElementById('fab-add').style.display = 'none';
 }
 async function init() {
-  await Cassaforte.porta({ nome: 'il Giornale di Bordo', bilancio: '../bilancio/' });
+  await Cassaforte.porta({ nome: 'il Giornale di Bordo', bilancio: '../bilancio/', torna: 'giornale/' });
   firebaseUser = Cassaforte.user;
   await trasloco();
   await loadLauncherPrefs();

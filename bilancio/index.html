@@ -2490,7 +2490,18 @@ function syncTap(el){
   else toast(el.title);
 }
 function gate(st, info=''){
+  // accesso unico dalla Dashboard: aperto da solo (non nel riquadro della Dashboard), Bilancio rimanda lì per accesso e sblocco
+  if((st==='login' || st==='unlock') && window.top===window && window.Cassaforte && Cassaforte.allaDashboard('bilancio/')){
+    st='loading'; info='Vado all\'accesso…';
+  }
   const u = cloud.user;
+  $('gate').dataset.st = st; // la Dashboard lo legge per sapere se Bilancio sta ancora caricando
+  // se Firebase non risponde, dopo 15 secondi lo dice invece di restare fermo su "Caricamento…"
+  clearTimeout(gate.t);
+  if(st==='loading') gate.t = setTimeout(()=>{
+    if(!$('gate').classList.contains('on') || $('gate').dataset.st!=='loading') return;
+    $('gate-box').insertAdjacentHTML('beforeend', `<p class="note neg">Firebase non risponde da 15 secondi (${esc(info||'caricamento')}). Controlla la connessione e gli eventuali blocchi della pubblicità per questo sito.</p><button class="btn" onclick="location.reload()">Riprova</button>`);
+  }, 15000);
   const who = u ? `<p class="note">${esc(u.email)}</p>` : '';
   const exit = u ? `<button class="btn ghost" style="margin-top:8px" onclick="logout()">Esci</button>` : '';
   // nome utente distinto da quello del login, così il portachiavi salva la passphrase come voce separata
@@ -2538,8 +2549,9 @@ async function boot(){
   try{ for(const f of ['app','auth','firestore']) await loadScript(`${FIREBASE_SDK}firebase-${f}-compat.js`); }
   catch(e){ return gate('error','Impossibile caricare Firebase. Controlla la connessione e riprova.'); }
   firebase.initializeApp(FIREBASE_CONFIG);
+  // niente cache di Firestore su disco: Bilancio, Giornale e Dashboard stanno sullo stesso indirizzo e una cache condivisa
+  // fra più schede (e il riquadro della Dashboard) su Safari può bloccare l'avvio; i dati si leggono sempre dal server
   cloud.db = firebase.firestore();
-  try{ await cloud.db.enablePersistence({synchronizeTabs:true}); }catch(e){} // cache offline (cifrata come su server)
   firebase.auth().onAuthStateChanged(onUser);
 }
 // l'account si crea dalla console Firebase (Authentication → Utenti): l'app non ha la registrazione

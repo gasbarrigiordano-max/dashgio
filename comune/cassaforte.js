@@ -75,8 +75,8 @@
         if (!firebase.auth) await carica(SDK + 'firebase-auth-compat.js');
         if (!firebase.firestore) await carica(SDK + 'firebase-firestore-compat.js');
         if (!(firebase.apps || []).some(a => a.name === '[DEFAULT]')) firebase.initializeApp(CONFIG);
+        // niente cache su disco, come in Bilancio: una cache condivisa fra più schede dello stesso sito può bloccare l'avvio su Safari
         this.db = firebase.firestore();
-        try { await this.db.enablePersistence({ synchronizeTabs: true }); } catch (e) {} // cache offline (cifrata come su server)
         // primo stato dell'accesso (la sessione salvata viene letta in modo asincrono)
         this.user = await new Promise(ok => { let off = null, fatto = false; off = firebase.auth().onAuthStateChanged(u => { if (fatto) return; fatto = true; ok(u); setTimeout(() => off && off(), 0); }); });
       })();
@@ -85,7 +85,7 @@
     ref() { return this.db.collection('bilancio').doc(this.user.uid); },
     // 'login' | 'nuova' (da creare in Bilancio) | 'sblocca' | 'pronta' | 'negato' | 'errore'
     async stato() {
-      await this.avvia();
+      try { await this.avvia(); } catch (e) { this._avvio = null; this.errore = 'impossibile caricare Firebase (' + (e.message || e) + ')'; return 'errore'; }
       this.user = firebase.auth().currentUser;
       if (!this.user) return 'login';
       try { const s = await this.ref().get(); this.meta = s.exists ? s.data() : null; }
@@ -170,11 +170,30 @@
       return { box, corpo: box.querySelector('.cf-corpo'), err: m => { box.querySelector('.cf-err').textContent = m || ''; }, chiudi: () => box.remove() };
     },
 
+    // accesso unico: si va alla Dashboard (cartella sopra) con ?torna=bilancio/ o giornale/. Se la Dashboard ha appena
+    // rimandato qui e la cassaforte non è aperta (passphrase non ricordata), l'app chiede da sé per non girare in tondo
+    allaDashboard(torna) {
+      try {
+        const t = +sessionStorage.getItem('dg:tornato') || 0;
+        sessionStorage.removeItem('dg:tornato');
+        if (Date.now() - t < 20000) return false;
+      } catch (e) {}
+      location.replace(new URL('../?torna=' + encodeURIComponent(torna), location.href).href);
+      return true;
+    },
+
     // --- porta d'ingresso: accesso e sblocco con lo stile di vetro scuro; si risolve quando la cassaforte è aperta
     async porta(opz = {}) {
       const nome = opz.nome || 'la tua app';
-      let st = await this.stato();
+      // se il collegamento tarda si vede una finestra di attesa, e dopo 15 secondi il motivo possibile
+      let attesa = null;
+      const t1 = setTimeout(() => { attesa = this.finestra('Collegamento…', `Apro la cassaforte per ${nome}.`); }, 1200);
+      const t2 = setTimeout(() => { if (attesa) attesa.err('Firebase non risponde da 15 secondi: controlla la connessione e gli eventuali blocchi della pubblicità per questo sito, poi ricarica la pagina.'); }, 15000);
+      let st;
+      try { st = await this.stato(); } finally { clearTimeout(t1); clearTimeout(t2); if (attesa) attesa.chiudi(); }
       if (st === 'pronta') return;
+      // le app non hanno un accesso proprio: accesso e sblocco si fanno dalla Dashboard, che poi rimanda qui
+      if (opz.torna && (st === 'login' || st === 'sblocca') && this.allaDashboard(opz.torna)) return new Promise(() => {});
       stilePorta();
       const box = document.createElement('div');
       box.className = 'cf-porta';
@@ -187,7 +206,7 @@
           if (st === 'pronta') { box.remove(); return fine(); }
           const corpo = $('.cf-corpo');
           if (st === 'login') {
-            $('#cf-tit').textContent = 'Accedi'; $('.cf-sub').textContent = `Lo stesso account per Dashboard, Bilancio e Giornale di Bordo.`;
+            $('#cf-tit').textContent = 'Accedi'; $('.cf-sub').textContent = `L'account di Giordano: Dashboard, Bilancio, Giornale di Bordo e quello che aggiungeremo.`;
             corpo.innerHTML = `<form><label>Email<input id="cf-e" type="email" autocomplete="username" required></label>
               <label>Password<input id="cf-pw" type="password" autocomplete="current-password" required></label>
               <button class="cf-btn" type="submit">Accedi</button></form><button class="cf-link" type="button" id="cf-reset">Password dimenticata?</button>`;

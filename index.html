@@ -15,7 +15,9 @@
 <!--
   Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Giornale di Bordo, in futuro altre).
   Nessun dato proprio: apre Bilancio (bilancio/, stesso indirizzo) in un riquadro nascosto e ne legge i numeri,
-  compresi quelli che Bilancio legge dal Giornale di Bordo. Se Bilancio è bloccato mostra la sua schermata di sblocco.
+  compresi quelli che Bilancio legge dal Giornale di Bordo.
+  Accesso unico: account e passphrase si chiedono qui (comune/cassaforte.js); Bilancio e Giornale, se aperti senza accesso,
+  rimandano qui con ?torna=… e poi si riaprono da soli.
 -->
 <style>
 :root{
@@ -42,13 +44,13 @@ button{font:inherit;color:inherit}
 .wrap{max-width:1440px;margin:0 auto;padding:calc(20px + var(--sat)) 20px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
 
 /* barra delle sezioni */
-nav{border-radius:26px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto;align-self:flex-start;position:sticky;top:20px}
+nav{border-radius:26px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto;align-self:flex-start;position:sticky;top:20px;z-index:10} /* sopra i riquadri: i nomi dei pulsanti non finiscono sotto */
 .brand{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--acc);font-weight:800;font-size:16px}
 .navbtn{width:44px;height:44px;border-radius:14px;border:0;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;position:relative}
 .navbtn:hover{background:rgba(255,255,255,.08);color:#fff}
 .navbtn.on{background:var(--acc);color:#fff;box-shadow:0 8px 20px rgba(242,113,28,.45)}
 .navbtn[disabled]{opacity:.35;cursor:default}
-.navbtn .tip{position:absolute;left:54px;white-space:nowrap;background:rgba(0,0,0,.75);color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .15s}
+.navbtn .tip{position:absolute;left:54px;z-index:11;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap;background:rgba(0,0,0,.75);color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .15s}
 .navbtn:hover .tip{opacity:1}
 .nav-spazio{flex:1 1 auto;min-height:24px}
 
@@ -105,6 +107,8 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .mezzo.acc .tot{background:rgba(255,255,255,.22)}
 
 .profilo{display:flex;align-items:center;gap:12px}
+.blocca{width:36px;height:36px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--ink2);display:grid;place-items:center;cursor:pointer;flex:none}
+.blocca:hover{color:var(--ink)}
 .avatar{width:40px;height:40px;border-radius:99px;background:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:800}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
 .stats div{background:rgba(255,255,255,.07);border-radius:14px;padding:10px 6px}
@@ -226,6 +230,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <div class="profilo">
     <div class="avatar" aria-hidden="true">G</div>
     <div style="flex:1 1 auto"><div style="font-size:14px;font-weight:800">Giordano</div><div style="font-size:11.5px;color:var(--ink2)" id="aggiornato">Dashboard personale</div></div>
+    <button class="blocca" type="button" onclick="bloccaTutto()" aria-label="Blocca l'account" title="Blocca"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
   </div>
   <div class="stats" id="stats"></div>
   <div class="cal">
@@ -244,14 +249,15 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 </div>
 
 <div class="stato glass" id="stato" role="status">Apro Bilancio…</div>
-<div class="sblocco" id="sblocco" role="dialog" aria-modal="true" aria-label="Sblocca Bilancio">
+<div class="sblocco" id="sblocco" role="dialog" aria-modal="true" aria-label="Bilancio">
   <div class="box glass">
-    <header><span>Sblocca Bilancio per vedere i numeri</span><button aria-label="Chiudi" onclick="chiudiSblocco()">✕</button></header>
+    <header><span>Bilancio</span><button aria-label="Chiudi" onclick="chiudiSblocco()">✕</button></header>
     <div class="slot" id="slot"></div>
   </div>
 </div>
-<iframe id="bil" src="bilancio/index.html" title="Bilancio (in background)" aria-hidden="true" tabindex="-1"></iframe>
+<iframe id="bil" title="Bilancio (in background)" aria-hidden="true" tabindex="-1"></iframe>
 
+<script src="comune/cassaforte.js"></script>
 <script>
 // indirizzo del Giornale di Bordo (repo App-Gommone su GitHub Pages)
 const GIORNALE_URL = 'giornale/';
@@ -329,8 +335,9 @@ const W = () => bil.contentWindow;
 function bilancioPronto(){
   try { return W().eval('(!CLOUD || !!cloud.key) && !!(S && S.carte)'); } catch(e){ return false; }
 }
+// Bilancio chiede accesso o passphrase (o si è fermato su un errore); mentre carica si aspetta, fino a 20 secondi
 function bloccato(){
-  try { const g = W().document.getElementById('gate'); return !!g && g.classList.contains('on') && !bilancioPronto(); } catch(e){ return false; }
+  try { const g = W().document.getElementById('gate'); return !!g && g.classList.contains('on') && (g.dataset.st !== 'loading' || attese > 20) && !bilancioPronto(); } catch(e){ return false; }
 }
 function leggi(){
   try { D = W().eval('(' + estrai.toString() + ')()'); disegna(); } catch(e){ console.error(e); }
@@ -416,18 +423,36 @@ document.addEventListener('click', e => { if(!e.target.closest('.cerca')) $('ris
 /* ---- Bilancio in background: attesa, sblocco, aggiornamenti ---- */
 function mostraSblocco(){ bil.classList.add('mostra'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; $('sblocco').classList.add('on'); $('stato').classList.remove('on'); }
 function chiudiSblocco(){ $('sblocco').classList.remove('on'); bil.classList.remove('mostra'); bil.setAttribute('aria-hidden','true'); bil.tabIndex = -1; }
-let attese = 0;
-const giro = setInterval(() => {
+let attese = 0, passata = false, giro = null;
+function controlla(){
   attese++;
+  // Bilancio aperto qui sotto chiede la passphrase (non ricordata su questo dispositivo): gli passo la chiave appena sbloccata
+  if(!passata && Cassaforte.key){
+    try { const g = W().document.getElementById('gate'); if(g && g.dataset.st==='unlock' && W().eval('!!cloud.meta')){ passata = true; W().openVault(Cassaforte.key); return; } } catch(e){}
+  }
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on'); }
     leggi();
     // il Giornale arriva qualche secondo dopo: poi basta ogni 30 secondi
-    if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); setInterval(leggi, 30000); }
+    if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
   } else if(bloccato() && !$('sblocco').classList.contains('on')) mostraSblocco();
   else if(!pronto) $('stato').classList.add('on');
-}, 1000);
+}
 document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && pronto) setTimeout(leggi, 1500); });
+async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
+
+/* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Giornale si aprono senza chiedere ---- */
+(async () => {
+  await Cassaforte.porta({ nome: 'il tuo account', bilancio: 'bilancio/' });
+  // arrivato da Bilancio o dal Giornale (?torna=…): ci si torna subito
+  const torna = new URLSearchParams(location.search).get('torna');
+  if(torna === 'bilancio/' || torna === 'giornale/'){
+    try { sessionStorage.setItem('dg:tornato', String(Date.now())); } catch(e){}
+    return location.replace(torna);
+  }
+  bil.src = 'bilancio/index.html';
+  giro = setInterval(controlla, 1000);
+})();
 </script>
 </body>
 </html>
