@@ -143,7 +143,12 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .ese-ed .x{width:36px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.08);cursor:pointer;color:var(--ink2)}
 .ese-tit{display:grid;grid-template-columns:minmax(0,1fr) 54px 64px 60px 36px;gap:6px;font-size:10.5px;color:var(--ink3);margin-top:10px}
 .ese-ed.mu,.ese-tit.mu{grid-template-columns:minmax(0,1fr) 66px 52px 36px}
-.ese-ed .uso{display:grid;place-items:center;height:42px} .ese-ed .uso input{width:22px;height:22px;accent-color:var(--acc)}
+.ese-ed .uso{display:grid;place-items:center;height:42px;cursor:pointer}
+/* casella disegnata a mano: su iPhone quella di sistema prendeva lo stile dei campi (pallino nero) */
+.ese-ed .uso input{-webkit-appearance:none;appearance:none;width:26px;height:26px;min-width:0;padding:0;margin:0;border-radius:8px;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.06);display:grid;place-items:center;cursor:pointer}
+.ese-ed .uso input:checked{background:var(--acc);border-color:var(--acc)}
+.ese-ed .uso input:checked::after{content:'';width:6px;height:12px;border:solid #fff;border-width:0 3px 3px 0;transform:translateY(-1px) rotate(45deg)}
+.ese-ed .uso input:focus-visible{outline:2px solid var(--acc-soft);outline-offset:2px}
 .ese-ed .info{grid-column:1/-1;font-size:11.5px;color:var(--ink3);margin-top:-2px}
 .azioni{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .azioni .btn{flex:1 1 140px}
@@ -328,10 +333,19 @@ function cardOggiProgramma(){
   }
   return `<section class="card glass">${testa}<div class="dett" style="margin-top:12px">${settimana}</div></section>`;
 }
+// gli esercizi in uso dei muscoli del giorno, pronti per l'allenamento (4 serie col peso suggerito)
+const eserciziDelGiorno = g => g.ordine.flatMap(id => inUso(muscoli().find(m => m.id === id) || {esercizi: []}).map(e => ({ id: nuovoId(), nome: e.nome, muscolo: id,
+  obiettivo: {serie: String(METODO.rip.length), rip: METODO.rip.join('-'), rec: e.rec || '', note: e.note || '', pesi: pesiSerie(e)}, serie: METODO.rip.map(() => ({kg: '', rip: '', fatto: false})) })));
+// allenamento già aperto oggi: gli esercizi in uso che non ci sono ancora (per esempio importati dopo averlo aperto)
+function mancantiDiOggi(){
+  const c = P.inCorso; if (!c || c.d !== oggiISO()) return [];
+  const g = PR.giorno(prog(), c.d); if (!g) return [];
+  return eserciziDelGiorno(g).filter(e => !c.esercizi.some(x => chiave(x.nome) === chiave(e.nome)));
+}
+function aggiungiMancanti(){ const m = mancantiDiOggi(); if (!m.length) return; P.inCorso.esercizi.push(...m); salva('inCorso'); disegna(); }
 function iniziaProgramma(){
   const g = PR.giorno(prog(), oggiISO()); if (!g) return;
-  const esercizi = g.ordine.flatMap(id => inUso(muscoli().find(m => m.id === id) || {esercizi: []}).map(e => ({ id: nuovoId(), nome: e.nome, muscolo: id,
-    obiettivo: {serie: String(METODO.rip.length), rip: METODO.rip.join('-'), rec: e.rec || '', note: e.note || '', pesi: pesiSerie(e)}, serie: METODO.rip.map(() => ({kg: '', rip: '', fatto: false})) })));
+  const esercizi = eserciziDelGiorno(g);
   P.inCorso = { id: nuovoId(), d: oggiISO(), inizio: new Date().toISOString(), schedaId: 'prog:' + g.ordine.join(''), nome: g.ordine.map(nomeM).join(' + '), note: '', esercizi };
   salva('inCorso'); tab = 'oggi'; disegna();
   if (!esercizi.length) toast('Aggiungi gli esercizi dei muscoli in Programma, o qui con "+ Esercizio"');
@@ -420,8 +434,11 @@ function inizia(schedaId){
 }
 function vistaInCorso(){
   const c = P.inCorso, min = Math.max(0, Math.round((Date.now() - new Date(c.inizio)) / 60000));
+  let manca = mancantiDiOggi();
+  if (manca.length && !c.esercizi.length) { c.esercizi.push(...manca); salva('inCorso'); manca = []; }
   return `<p class="nota" style="margin:-8px 2px 12px">Iniziato ${fmtD(c.d)} alle ${new Date(c.inizio).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'})} · ${min} min</p>
     ${c.esercizi.map((es, i) => cardEsercizio(es, i)).join('') || '<p class="vuoto">Nessun esercizio: aggiungine uno.</p>'}
+    ${manca.length ? `<button class="btn pieno" type="button" style="margin-bottom:8px" onclick="aggiungiMancanti()">+ Esercizi in uso di oggi (${manca.length}): ${esc(manca.map(e => e.nome).join(', '))}</button>` : ''}
     <button class="btn ghost pieno" type="button" onclick="aggiungiEsercizio()">+ Esercizio</button>
     <div class="campi" style="margin-top:12px"><label class="tutta">Note<textarea id="ic-note" placeholder="Come è andata" oninput="P.inCorso.note=this.value;salva('inCorso')">${esc(c.note)}</textarea></label></div>
     <div class="azioni"><button class="btn rosso" type="button" onclick="annulla()">Annulla</button><button class="btn" type="button" onclick="termina()">Termina allenamento</button></div>`;
