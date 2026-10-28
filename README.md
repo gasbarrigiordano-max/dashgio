@@ -36,8 +36,8 @@ bilancio/{uid}/palestra/{voce}    kid, iv, ct         (Palestra: schede, session
 
 Dopo ogni modifica a `firestore.rules`: copiarle in console (Firestore → Regole), sostituire `IL_TUO_UID` con l'UID dell'utente e pubblicare.
 
-## Trasloco dal vecchia app dei mezzi
+## Trasloco dalla vecchia app dei mezzi
 
-Il vecchia app dei mezzi salvava in chiaro sul progetto `app-gommone`. Alla prima apertura di `/giornale/` dopo lo sblocco, la pagina chiede l'accesso al vecchio account, copia tutte le voci nella cassaforte, le rilegge per controllarle e scrive la voce `trasloco`. Da lì in poi il vecchio progetto non viene più usato.
+La vecchia app dei mezzi (Giornale di Bordo) salvava in chiaro sul progetto `app-gommone`. Alla prima apertura di `/giornale/` dopo lo sblocco, la pagina chiede l'accesso al vecchio account, copia tutte le voci nella cassaforte, le rilegge per controllarle e scrive la voce `trasloco`. Da lì in poi il vecchio progetto non viene più usato.
 
 Bilancio legge Mezzi dalla stessa cassaforte (spese importate in Mezzi, scadenze in Da pagare) e gli scrive l'elenco di conti e carte per il campo "Pagato con".

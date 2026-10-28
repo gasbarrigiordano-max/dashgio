@@ -502,68 +502,96 @@ function disegnaCal(){
   }
   $('cal').innerHTML = h;
 }
-function calSposta(k){ calOff += k; if(D) disegnaCal(); disegnaCalGrande(); if(GC.token) gcalLeggi(); }
+function calSposta(k){ calOff += k; if(D) disegnaCal(); disegnaCalGrande(); if(gcalAttivi().length) gcalLeggi(); }
 
-/* ---- Google Calendar: leggere gli eventi e aggiungere scadenze e rate ----
-   Accesso con Google Identity Services (permesso calendar.events). Il token resta solo in memoria per un'ora,
-   gli eventi di Google non vengono salvati da nessuna parte. Si scrive solo quando si preme "+" su una voce,
-   con titolo e data (niente importi); la voce aggiunta porta un codice (dgid) per non crearla due volte. */
-const GC = { token: null, scade: 0, eventi: [], collegate: new Set(), err: '', client: null, calendari: [], nomeLavoro: '' };
-const GCAL_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
-const apiEventi = id => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`;
-// quale calendario Google è quello del lavoro (preferenza di questo dispositivo, non un dato)
-const calLavoro = () => { try { return localStorage.getItem('dg:gcalLavoro') || 'primary'; } catch(e){ return 'primary'; } };
-function scegliLavoro(id){ try { localStorage.setItem('dg:gcalLavoro', id); } catch(e){} gcalLeggi(); }
-const gcalUsato = () => { try { return localStorage.getItem('dg:gcal') === '1'; } catch(e){ return false; } };
+/* ---- Google Calendar: uno o più account Google ----
+   Accesso con Google Identity Services (permessi calendar.events e calendarlist.readonly), un permesso per account.
+   I permessi restano solo in memoria per un'ora; gli eventi di Google non vengono salvati da nessuna parte.
+   Su questo dispositivo si ricordano solo gli indirizzi degli account collegati e i calendari scelti (preferenze, non dati).
+   Si scrive su Google solo quando lo chiedi: "+" su una scadenza (titolo e data, niente importi, con un codice dgid per
+   non crearla due volte) o un evento creato o modificato dal calendario. */
+const GC = { conti: [], eventi: [], collegate: new Set(), err: '', client: null, inAttesa: null, nomeLavoro: '' };
+const API_G = 'https://www.googleapis.com/calendar/v3';
+const apiEventi = id => `${API_G}/calendars/${encodeURIComponent(id)}/events`;
+const pref = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } };
+const salvaPref = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+const contiRicordati = () => pref('dg:gcalConti', []);
+const vistiDi = email => pref('dg:gcalVisti', {})[email] || ['primary'];
+// calendario di lavoro: 'indirizzo|id' scelto nelle impostazioni, '' = il principale del primo account
+const calLavoro = () => pref('dg:gcalLavoro2', '');
+const attivo = c => !!c.token && Date.now() < c.scade;
+const gcalAttivi = () => GC.conti.filter(attivo);
+function contoDi(email){ let c = GC.conti.find(x => x.email === email); if(!c){ c = { email, token: null, scade: 0, calendari: [] }; GC.conti.push(c); } return c; }
+contiRicordati().forEach(contoDi);
+const breve = email => String(email || '').split('@')[0];
 function caricaGis(){
   if(window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
   return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.onload = ok; sc.onerror = () => ko(new Error('Google non raggiungibile')); document.head.appendChild(sc); });
 }
-async function gcalCollega(){
+// email: ricollega quell'account; senza: Google fa scegliere l'account (per aggiungerne uno)
+async function gcalCollega(email){
   if(!GCAL_CLIENT_ID) return;
   try { await caricaGis(); } catch(e){ GC.err = e.message; return disegnaGoogle(); }
   if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-    callback: r => {
-      if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
-      GC.token = r.access_token; GC.scade = Date.now() + (r.expires_in || 3600) * 1000 - 60000; GC.err = '';
-      try { localStorage.setItem('dg:gcal', '1'); } catch(e){}
-      gcalLeggi();
-    },
+    callback: r => gcalToken(r),
     error_callback: e => { GC.err = e && e.type === 'popup_closed' ? 'finestra di Google chiusa' : (e && (e.message || e.type)) || 'accesso non riuscito'; disegnaGoogle(); } });
-  GC.client.requestAccessToken({ prompt: gcalUsato() ? '' : 'consent' });
+  GC.inAttesa = email || null;
+  GC.client.requestAccessToken(email ? { prompt: '', login_hint: email } : { prompt: 'select_account consent' });
 }
-function gcalScollega(){
-  if(GC.token && window.google) google.accounts.oauth2.revoke(GC.token, () => {});
-  Object.assign(GC, { token: null, eventi: [], collegate: new Set(), err: '', calendari: [], nomeLavoro: '' });
-  try { localStorage.removeItem('dg:gcal'); } catch(e){}
-  if(D) disegna(); else disegnaGoogle();
-}
-async function gcalFetch(url, opz = {}){
-  if(!GC.token || Date.now() > GC.scade){ GC.token = null; disegnaGoogle(); throw new Error('scaduto'); }
-  const r = await fetch(url, { ...opz, headers: { Authorization: 'Bearer ' + GC.token, 'Content-Type': 'application/json' } });
-  if(r.status === 401){ GC.token = null; GC.err = 'accesso a Google scaduto'; disegnaGoogle(); throw new Error('401'); }
+function gcalCollegaPrimo(){ const c = GC.conti.find(x => !attivo(x)); gcalCollega(c ? c.email : undefined); }
+async function chiamaGoogle(token, url, opz = {}){
+  const r = await fetch(url, { ...opz, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } });
+  if(r.status === 401){ const e = new Error('401'); e.code = 401; throw e; }
   if(!r.ok) throw new Error('Google Calendar ' + r.status);
   return r.status === 204 ? {} : r.json();
 }
+async function gcalToken(r){
+  if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
+  try {
+    // quale account è: il calendario principale ha come id l'indirizzo
+    const l = await chiamaGoogle(r.access_token, `${API_G}/users/me/calendarList?minAccessRole=reader`);
+    const prim = (l.items || []).find(c => c.primary), email = prim ? prim.id : (GC.inAttesa || 'Google');
+    Object.assign(contoDi(email), { token: r.access_token, scade: Date.now() + (r.expires_in || 3600) * 1000 - 60000,
+      calendari: (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.primary ? 'Principale' : (c.summaryOverride || c.summary || c.id), primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary })) });
+    const ric = contiRicordati(); if(!ric.includes(email)) salvaPref('dg:gcalConti', [...ric, email]);
+    GC.err = '';
+  } catch(e){ GC.err = 'accesso a Google non riuscito: ' + e.message; }
+  gcalLeggi();
+}
+function gcalScollega(email){
+  const c = GC.conti.find(x => x.email === email); if(!c) return;
+  if(c.token && window.google) google.accounts.oauth2.revoke(c.token, () => {});
+  GC.conti = GC.conti.filter(x => x !== c);
+  salvaPref('dg:gcalConti', contiRicordati().filter(x => x !== email));
+  const v = pref('dg:gcalVisti', {}); delete v[email]; salvaPref('dg:gcalVisti', v);
+  if(calLavoro().startsWith(email + '|')) salvaPref('dg:gcalLavoro2', null);
+  gcalLeggi();
+}
+async function gcalFetch(c, url, opz = {}){
+  if(!attivo(c)){ c.token = null; disegnaGoogle(); throw new Error('scaduto'); }
+  try { return await chiamaGoogle(c.token, url, opz); }
+  catch(e){ if(e.code === 401){ c.token = null; GC.err = 'accesso a Google scaduto'; disegnaGoogle(); } throw e; }
+}
 const isoLocale = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-async function leggiEventi(id, da, a, lavoro){
-  const out = []; let pagina = '';
+// lavoro: conta per il riquadro "Lavoro"; comeLavoro: si chiama "Lavoro" (calendario scelto apposta)
+async function leggiEventi(c, id, da, a, lavoro, comeLavoro){
+  const out = [], piuConti = GC.conti.length > 1, cal = c.calendari.find(x => x.id === id);
+  const nomeCal = comeLavoro ? 'Lavoro' : id === 'primary' ? (piuConti ? 'Google · ' + breve(c.email) : 'Google Calendar') : (cal ? cal.nome : 'Google');
+  let pagina = '';
   do {
     const q = new URLSearchParams({ timeMin: da.toISOString(), timeMax: a.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
     if(pagina) q.set('pageToken', pagina);
-    const r = await gcalFetch(apiEventi(id) + '?' + q);
+    const r = await gcalFetch(c, apiEventi(id) + '?' + q);
     (r.items || []).forEach(e => {
       if(e.status === 'cancelled' || !e.start) return;
       const dgid = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.dgid;
       const tutto = !!e.start.date, inizio = tutto ? new Date(e.start.date + 'T00:00') : new Date(e.start.dateTime);
       const fine = e.end ? (e.end.date ? new Date(e.end.date + 'T00:00') : new Date(e.end.dateTime)) : new Date(inizio.getTime() + 36e5);
       const ora = tutto ? '' : inizio.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-      // "Lavoro" solo per gli eventi di un calendario di lavoro a parte; quelli del principale restano "Google Calendar"
-      const dalLavoro = lavoro && id !== 'primary';
-      out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: e.summary || '(senza titolo)', app: (dalLavoro ? 'Lavoro' : 'Google Calendar') + (ora ? ' · ' + ora : ''),
-        gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
+      out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: e.summary || '(senza titolo)', app: nomeCal + (ora ? ' · ' + ora : ''),
+        conto: c.email, gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
         descr: e.description || '', luogo: e.location || '',
-        tag: dalLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid });
+        tag: comeLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid });
     });
     pagina = r.nextPageToken || '';
   } while(pagina);
@@ -573,37 +601,44 @@ async function gcalLeggi(){
   // dal mese mostrato nel calendario (o da oggi) ai 30 giorni dopo
   const oggi = new Date(), base = new Date(oggi.getFullYear(), oggi.getMonth() + calOff, 1);
   const da = new Date(Math.min(base, new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate()))), a = new Date(Math.max(new Date(base.getFullYear(), base.getMonth() + 1, 1), new Date(oggi.getTime() + 31 * 864e5)));
-  try {
-    if(!GC.calendari.length){
-      const l = await gcalFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader').catch(() => ({items: []}));
-      GC.calendari = (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.summaryOverride || c.summary || c.id, primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary }));
+  const lav = calLavoro(), [lavConto, lavId] = lav ? lav.split('|') : [null, null], attivi = gcalAttivi();
+  const eventi = [], collegate = new Set(); let errore = '';
+  for(const c of attivi){
+    const ids = new Set(vistiDi(c.email)); if(lavConto === c.email) ids.add(lavId);
+    for(const id of ids){
+      const scelto = lavConto === c.email && lavId === id, predefinito = !lav && c === attivi[0] && id === 'primary';
+      try {
+        const l = await leggiEventi(c, id, da, a, scelto || predefinito, scelto);
+        l.forEach(e => { if(e.dgid) collegate.add(e.dgid); });
+        // le voci aggiunte da qui si vedono già come rata o scadenza: non le ripeto
+        eventi.push(...l.filter(e => !e.dgid));
+      } catch(e){ if(e.code !== 401 && e.message !== 'scaduto') errore = e.message; }
     }
-    const lav = calLavoro(), principale = await leggiEventi('primary', da, a, lav === 'primary');
-    const lavoro = lav !== 'primary' ? await leggiEventi(lav, da, a, true).catch(() => []) : [];
-    GC.nomeLavoro = lav === 'primary' ? 'Google' : (GC.calendari.find(c => c.id === lav) || {}).nome || 'Lavoro';
-    GC.collegate = new Set(principale.filter(e => e.dgid).map(e => e.dgid));
-    // le voci aggiunte da qui si vedono già come rata o scadenza: non le ripeto
-    GC.eventi = [...principale.filter(e => !e.dgid), ...lavoro.filter(e => !e.dgid)]; GC.err = '';
-  } catch(e){ if(e.message !== '401' && e.message !== 'scaduto') GC.err = e.message; }
+  }
+  const cl = lavConto && (GC.conti.find(c => c.email === lavConto) || {calendari: []}).calendari.find(x => x.id === lavId);
+  Object.assign(GC, { eventi, collegate, nomeLavoro: cl ? cl.nome : 'Google' });
+  if(attivi.length) GC.err = errore;
   if(D) disegna(); else disegnaGoogle();
 }
 const dgid = a => ('dg' + [...(a.app + '|' + a.titolo + '|' + a.d)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + a.d.replace(/-/g, '')).slice(0, 60);
+// le scadenze vanno nel calendario principale del primo account collegato
+const contoScadenze = () => gcalAttivi()[0];
 function pulsanteGoogle(a){
-  if(!GC.token) return '';
+  if(!contoScadenze()) return '';
   const id = dgid(a);
   return GC.collegate.has(id) ? `<span class="agg fatto" title="Già in Google Calendar" aria-label="Già in Google Calendar">✓</span>`
     : `<button class="agg" type="button" title="Aggiungi a Google Calendar" aria-label="Aggiungi ${esc(a.titolo)} a Google Calendar" onclick="event.preventDefault();event.stopPropagation();gcalAggiungi('${id}',this)">+</button>`;
 }
 async function gcalAggiungi(id, btn){
-  const a = tuttaAgenda().find(x => !x.google && dgid(x) === id); if(!a) return;
+  const a = tuttaAgenda().find(x => !x.google && dgid(x) === id), c = contoScadenze(); if(!a || !c) return;
   btn.disabled = true;
   try {
     // controllo su Google: se c'è già (aggiunta da un altro dispositivo) non la ricreo
     const q = new URLSearchParams({ privateExtendedProperty: 'dgid=' + id, singleEvents: 'true' });
-    const gia = await gcalFetch(GCAL_API + '?' + q);
+    const gia = await gcalFetch(c, apiEventi('primary') + '?' + q);
     if(!(gia.items || []).some(e => e.status !== 'cancelled')){
       const fine = new Date(a.d + 'T12:00'); fine.setDate(fine.getDate() + 1);
-      await gcalFetch(GCAL_API, { method: 'POST', body: JSON.stringify({ summary: a.titolo, description: `Da Dashboard di Giordano · ${a.app}`,
+      await gcalFetch(c, apiEventi('primary'), { method: 'POST', body: JSON.stringify({ summary: a.titolo, description: `Da Dashboard di Giordano · ${a.app}`,
         start: { date: a.d }, end: { date: isoLocale(fine) }, transparency: 'transparent',
         reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 9 * 60 }] }, extendedProperties: { private: { dgid: id } } }) });
     }
@@ -611,22 +646,39 @@ async function gcalAggiungi(id, btn){
   } catch(e){ btn.disabled = false; GC.err = 'non aggiunta: ' + e.message; disegnaGoogle(); }
 }
 function disegnaGoogle(){
-  const b2 = $('goo-imp'); if(b2 && $('p-imp').classList.contains('on')) disegnaGoogleIn(b2);
+  if($('p-imp').classList.contains('on')) disegnaGoogleImp();
   disegnaCalGrande();
-  const box = $('goo'); if(box) disegnaGoogleIn(box);
-}
-function disegnaGoogleIn(box){
-  const lav = $('lav-imp'); if(lav && box.id === 'goo-imp') lav.innerHTML = GC.token && GC.calendari.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2);margin-top:10px">Calendario di lavoro (per il riquadro "Lavoro")
-    <select onchange="scegliLavoro(this.value)" style="height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 10px;font:600 13px Manrope,sans-serif">${GC.calendari.map(c => `<option value="${esc(c.id)}"${c.id === calLavoro() ? ' selected' : ''}>${esc(c.primario ? c.nome + ' (principale)' : c.nome)}</option>`).join('')}</select></label>` : '';
+  const box = $('goo'); if(!box) return;
   if(!GCAL_CLIENT_ID){ box.innerHTML = '<span>Google Calendar: da configurare</span>'; return; }
-  if(GC.token && Date.now() < GC.scade){
-    box.innerHTML = `<span>Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${GC.err ? ' · ' + esc(GC.err) : ''}</span><span style="display:flex;gap:6px"><button type="button" onclick="gcalLeggi()">Aggiorna</button><button type="button" onclick="gcalScollega()">Scollega</button></span>`;
-  } else box.innerHTML = `<span>${GC.err ? esc(GC.err) : gcalUsato() ? 'Google Calendar collegato' : 'Google Calendar'}</span><button type="button" onclick="gcalCollega()">${gcalUsato() ? 'Mostra eventi' : 'Collega'}</button>`;
+  const attivi = gcalAttivi(), spenti = GC.conti.filter(c => !attivo(c));
+  const testo = attivi.length ? `Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${attivi.length > 1 ? ` · ${attivi.length} account` : ''}` : 'Google Calendar';
+  box.innerHTML = `<span>${esc(GC.err || testo)}</span><span style="display:flex;gap:6px">${spenti.length ? `<button type="button" onclick="gcalCollegaPrimo()">Mostra eventi${GC.conti.length > 1 ? ` (${breve(spenti[0].email)})` : ''}</button>` : attivi.length ? '<button type="button" onclick="gcalLeggi()">Aggiorna</button>' : '<button type="button" onclick="gcalCollega()">Collega</button>'}</span>`;
 }
+// impostazioni: gli account, i calendari da vedere per ciascuno, il calendario di lavoro
+function disegnaGoogleImp(){
+  const box = $('gcal-imp'); if(!box) return;
+  if(!GCAL_CLIENT_ID){ box.innerHTML = '<p>Da configurare (ID client).</p>'; return; }
+  const sel = 'height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 10px;font:600 13px Manrope,sans-serif;width:100%';
+  const conti = GC.conti.map(c => `<div style="border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:13px;word-break:break-all">${esc(c.email)}</b>
+        <span class="imp-az">${attivo(c) ? '' : `<button type="button" onclick="gcalCollega(${esc(JSON.stringify(c.email))})">Mostra eventi</button>`}<button type="button" class="rosso" onclick="gcalScollega(${esc(JSON.stringify(c.email))})">Scollega</button></span></div>
+      ${attivo(c) ? `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12.5px">${c.calendari.map(k => `<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${vistiDi(c.email).includes(k.id) ? 'checked' : ''} onchange="mostraCalendario(${esc(JSON.stringify(c.email))},${esc(JSON.stringify(k.id))},this.checked)" style="accent-color:var(--acc)">${esc(k.nome)}</label>`).join('')}</div>` : '<p style="margin:6px 0 0;font-size:12px">non collegato in questa sessione</p>'}</div>`).join('');
+  const opzioni = gcalAttivi().flatMap(c => c.calendari.map(k => [`${c.email}|${k.id}`, `${k.nome}${GC.conti.length > 1 ? ' — ' + c.email : ''}`]));
+  box.innerHTML = `${conti || '<p>Nessun account collegato.</p>'}
+    <div class="imp-az" style="margin:4px 0 10px"><button type="button" onclick="gcalCollega()">+ ${GC.conti.length ? 'Aggiungi un account Google' : 'Collega Google Calendar'}</button></div>
+    ${opzioni.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)">Calendario di lavoro (riquadro "Lavoro")
+      <select id="lav-sel" onchange="scegliLavoro(this.value)" style="${sel}"><option value="">Principale del primo account</option>${opzioni.map(([v, n]) => `<option value="${esc(v)}"${v === calLavoro() ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
+    ${GC.err ? `<p style="color:#ffb3a1;margin:8px 0 0">${esc(GC.err)}</p>` : ''}`;
+}
+function mostraCalendario(email, id, si){
+  const v = pref('dg:gcalVisti', {}), l = new Set(v[email] || ['primary']);
+  si ? l.add(id) : l.delete(id); v[email] = [...l]; salvaPref('dg:gcalVisti', v); gcalLeggi();
+}
+function scegliLavoro(v){ salvaPref('dg:gcalLavoro2', v || null); gcalLeggi(); }
 
 /* ---- Calendario grande: tutte le app nello stesso mese ---- */
 let giornoSel = null;
-function apriCalendario(){ $('p-cal').classList.add('on'); disegnaCalGrande(); document.body.style.overflow = 'hidden'; if(GC.token) gcalLeggi(); }
+function apriCalendario(){ $('p-cal').classList.add('on'); disegnaCalGrande(); document.body.style.overflow = 'hidden'; if(gcalAttivi().length) gcalLeggi(); }
 function apriImpostazioni(){ $('p-imp').classList.add('on'); disegnaImpostazioni(); document.body.style.overflow = 'hidden'; }
 function chiudiPannello(){ document.querySelectorAll('.pannello').forEach(p => p.classList.remove('on')); document.body.style.overflow = ''; }
 document.addEventListener('keydown', e => { if(e.key !== 'Escape') return; if($('p-ev').classList.contains('on')) chiudiEvento(); else chiudiPannello(); });
@@ -668,16 +720,17 @@ function apriEvento(ev){
   const nuovo = !ev.gid, box = $('ev-corpo');
   $('ev-tit').textContent = nuovo ? 'Nuovo evento' : 'Evento';
   if(!GCAL_CLIENT_ID){ box.innerHTML = `<p class="nota-ev">Gli eventi si salvano nel tuo Google Calendar: prima va configurato (ID client) e collegato. Trovi i passaggi in Impostazioni → Google Calendar.</p>`; return; }
-  if(!GC.token){ box.innerHTML = `<p class="nota-ev">Per ${nuovo ? 'aggiungere' : 'modificare'} eventi collega Google Calendar.</p><div class="imp-az"><button type="button" onclick="chiudiEvento();gcalCollega()">${gcalUsato() ? 'Mostra eventi' : 'Collega Google Calendar'}</button></div>`; return; }
+  if(!gcalAttivi().length || (ev.conto && !attivo(contoDi(ev.conto)))){ box.innerHTML = `<p class="nota-ev">Per ${nuovo ? 'aggiungere' : 'modificare'} eventi collega Google Calendar${ev.conto ? ' (' + esc(ev.conto) + ')' : ''}.</p><div class="imp-az"><button type="button" onclick="chiudiEvento();${ev.conto ? `gcalCollega(${esc(JSON.stringify(ev.conto))})` : 'gcalCollegaPrimo()'}">${GC.conti.length ? 'Mostra eventi' : 'Collega Google Calendar'}</button></div>`; return; }
   const [di, oi] = (ev.inizioL || (ev.d + 'T09:00')).split('T'), [df, of] = (ev.fineL || (ev.d + 'T10:00')).split('T');
   const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
-  const cal = GC.calendari.filter(c => c.scrivibile), scelto = ev.cal || 'primary';
+  const cal = gcalAttivi().flatMap(c => c.calendari.filter(k => k.scrivibile).map(k => ({ v: c.email + '|' + k.id, nome: k.nome + (GC.conti.length > 1 ? ' — ' + c.email : '') })));
+  const scelto = ev.conto ? ev.conto + '|' + ev.cal : gcalAttivi()[0].email + '|primary';
   box.innerHTML = `<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
     <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
     <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
     <label>Dal<input type="date" id="ev-di" value="${esc(di)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-oi" value="${esc(oi || '09:00')}"></label>
     <label>Al<input type="date" id="ev-df" value="${esc(fineGiorno)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-of" value="${esc(of || '10:00')}"></label>
-    <label class="tutta">Calendario<select id="ev-cal" ${nuovo ? '' : 'disabled'}>${(cal.length ? cal : [{id:'primary', nome:'Principale'}]).map(c => `<option value="${esc(c.id)}"${c.id === scelto ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
+    <label class="tutta">Calendario<select id="ev-cal" ${nuovo ? '' : 'disabled'}>${cal.map(c => `<option value="${esc(c.v)}"${c.v === scelto ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
     <label class="tutta">Luogo<input id="ev-l" value="${esc(ev.luogo || '')}"></label>
     <label class="tutta">Note<textarea id="ev-n" rows="3">${esc(ev.descr || '')}</textarea></label>
     <p class="nota-ev tutta" id="ev-err" role="alert"></p>
@@ -697,14 +750,14 @@ async function salvaEvento(){
   // modificando, il campo dell'altro tipo (data / data e ora) va svuotato esplicitamente
   if(ev.gid){ if(tutto){ corpo.start.dateTime = null; corpo.end.dateTime = null; } else { corpo.start.date = null; corpo.end.date = null; } }
   try {
-    if(ev.gid) await gcalFetch(apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'PATCH', body: JSON.stringify(corpo) });
-    else await gcalFetch(apiEventi($('ev-cal').value), { method: 'POST', body: JSON.stringify(corpo) });
+    if(ev.gid) await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'PATCH', body: JSON.stringify(corpo) });
+    else { const [email, ...id] = $('ev-cal').value.split('|'); await gcalFetch(contoDi(email), apiEventi(id.join('|')), { method: 'POST', body: JSON.stringify(corpo) }); }
     chiudiEvento(); giornoSel = di; await gcalLeggi();
   } catch(e){ err('Non salvato: ' + e.message); }
 }
 async function eliminaEvento(){
   const ev = evAperto; if(!ev || !ev.gid || !confirm('Eliminare "' + ev.titolo + '" da Google Calendar?')) return;
-  try { await gcalFetch(apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' }); chiudiEvento(); await gcalLeggi(); }
+  try { await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' }); chiudiEvento(); await gcalLeggi(); }
   catch(e){ $('ev-err').textContent = 'Non eliminato: ' + e.message; }
 }
 
@@ -715,8 +768,8 @@ function disegnaImpostazioni(){
       <div class="imp-az"><button type="button" onclick="bloccaTutto()">Blocca</button><button type="button" class="rosso" onclick="esciTutto()">Esci dall'account</button></div></section>
     <section class="imp-sez"><h3>Passphrase</h3><p>Cifra tutti i dati prima che arrivino su Firebase. Cambiandola si ricifrano Bilancio, Mezzi e Palestra in un colpo solo.</p>
       <div class="imp-az"><a href="bilancio/#passphrase">Cambia passphrase</a></div></section>
-    <section class="imp-sez"><h3>Google Calendar</h3><p>Eventi di Google nel calendario e "+" per aggiungere scadenze e rate (solo titolo e data). Il permesso resta in memoria per un'ora.</p>
-      <div class="goo-bar" id="goo-imp" style="margin-top:0"></div><div id="lav-imp"></div></section>
+    <section class="imp-sez"><h3>Google Calendar</h3><p>Uno o più account Google: i loro eventi nel calendario, "+" per aggiungere scadenze e rate (solo titolo e data) al primo account. Il permesso resta in memoria per un'ora.</p>
+      <div id="gcal-imp"></div></section>
     <section class="imp-sez"><h3>Impostazioni delle app</h3><p>Conti, carte, categorie e importazioni stanno in Bilancio; veicoli e preferenze in Mezzi; muscoli, giorni e blocchi nel Programma della Palestra.</p>
       <div class="imp-az"><a href="bilancio/#impostazioni">Bilancio</a><a href="giornale/">Mezzi</a><a href="palestra/?t=schede">Palestra</a></div></section>
     <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
@@ -774,7 +827,7 @@ function tilePalestra(){
 function tileLavoro(){
   const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
   if(!GCAL_CLIENT_ID) return {...t, v:'Da configurare', s:'Google Calendar non ancora collegato', on:'apriImpostazioni()'};
-  if(!GC.token) return {...t, v:gcalUsato() ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollega()'};
+  if(!gcalAttivi().length) return {...t, v:GC.conti.length ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollegaPrimo()'};
   const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
   return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:ev.href, blank:true};
