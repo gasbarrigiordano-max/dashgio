@@ -26,7 +26,7 @@
   --acc:#F2711C; --acc-soft:#ffb07a; --acc-ink:#a04a0c;
   --glass:rgba(40,32,28,.55); --line:rgba(255,255,255,.10);
   --tile:rgba(255,255,255,.94); --tile-ink:#1d1a18; --tile-ink2:#5e5650;
-  --ok:#7fd3a8;
+  --ok:#7fd3a8; --goo:#8ab4f8;
   --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
 }
 *{box-sizing:border-box}
@@ -124,6 +124,14 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .cal-g .d.oggi{background:var(--acc);color:#fff;font-weight:800}
 .cal-g .d.ev::after{content:'';position:absolute;bottom:2px;width:5px;height:5px;border-radius:99px;background:var(--ok)}
 .cal-g .d.oggi.ev::after{background:#fff}
+.cal-g .d.gev::before{content:'';position:absolute;bottom:2px;left:calc(50% + 4px);width:5px;height:5px;border-radius:99px;background:var(--goo)}
+.cal-g .d.ev.gev::after{transform:translateX(-4px)}
+.goo-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:11.5px;color:var(--ink2)}
+.goo-bar button,.goo-bar a{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 12px;min-height:34px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.item{position:relative}
+.item .agg{width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:var(--goo);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;font-weight:800}
+.item .agg.fatto{color:var(--ok);cursor:default}
+.item .tag.goo{background:rgba(138,180,248,.18);color:var(--goo)}
 .cal-leg{display:flex;gap:12px;margin-top:10px;font-size:10.5px;color:var(--ink2)}
 .agenda{display:flex;flex-direction:column;gap:8px}
 .item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.06);text-decoration:none;color:#fff}
@@ -244,7 +252,8 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
     <div class="cal-h"><b style="font-size:13px" id="cal-tit"></b>
       <div style="display:flex;gap:6px"><button aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button aria-label="Mese successivo" onclick="calSposta(1)">›</button></div></div>
     <div class="cal-g" id="cal"></div>
-    <div class="cal-leg"><span><b style="color:var(--acc)">●</b> oggi</span><span><b style="color:var(--ok)">●</b> rate e scadenze</span></div>
+    <div class="cal-leg"><span><b style="color:var(--acc)">●</b> oggi</span><span><b style="color:var(--ok)">●</b> rate e scadenze</span><span><b style="color:var(--goo)">●</b> Google</span></div>
+    <div class="goo-bar" id="goo"></div>
   </div>
   <div class="sez" id="agenda"><h2>In programma</h2></div>
   <div class="agenda" id="lista"></div>
@@ -266,8 +275,10 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 
 <script src="comune/cassaforte.js"></script>
 <script>
-// indirizzo del Giornale di Bordo (repo App-Gommone su GitHub Pages)
 const GIORNALE_URL = 'giornale/';
+// Google Calendar: ID client OAuth "Applicazione web" del progetto Google Cloud contabilit-1a500, con origine
+// https://gasbarrigiordano-max.github.io (non è un segreto). Vuoto = Google Calendar non ancora configurato.
+const GCAL_CLIENT_ID = '';
 document.querySelectorAll('.giornale-link').forEach(a => a.href = GIORNALE_URL);
 
 const $ = id => document.getElementById(id);
@@ -383,7 +394,7 @@ function disegna(){
     <circle cx="${x(D.mese)}" cy="${y(D.serieU[D.mese])}" r="5" fill="#F2711C" stroke="#fff" stroke-width="2"/>`;
   // Giornale di Bordo
   $('gb-tot').textContent = eur0(D.spesaMezzi);
-  $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo il Giornale…' : ' · collega il Giornale in Bilancio → Impostazioni');
+  $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo il Giornale…' : ' · il Giornale non si legge ancora: aprilo una volta');
   $('gb-chips').innerHTML = D.mezzi.map(m => `<span class="chip">${esc(m.nome)} · ${eur0(m.tot)}</span>`).join('');
   $('mezzi').innerHTML = D.mezzi.map((m, i) => `<a class="mezzo${i===1?' acc':''}" href="${GIORNALE_URL}">
     <div style="flex:1 1 auto;min-width:0"><b>${esc(m.nome)}</b>
@@ -395,9 +406,10 @@ function disegna(){
   $('stats').innerHTML = [[D.nConti,'Conti'],[D.mezzi.length,'Mezzi'],[D.nRate,'Rate attive']].map(([v,l]) => `<div><b class="mono">${v}</b><small>${l}</small></div>`).join('');
   $('aggiornato').textContent = 'Aggiornata alle ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   disegnaCal();
-  $('lista').innerHTML = agenda.length ? agenda.map(a => `<a class="item" href="${hrefAgenda(a)}"><div class="tag">${esc(a.tag)}</div>
+  $('lista').innerHTML = agenda.length ? agenda.map(a => `<a class="item" href="${hrefAgenda(a)}"${a.google ? ' target="_blank" rel="noopener"' : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag)}</div>
     <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div><small>${fmtD(a.d)} · ${giorniA(a.d)===0?'oggi':giorniA(a.d)===1?'domani':'tra '+giorniA(a.d)+' giorni'}</small></div>
-    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div></a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
+    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div>${a.google ? '' : pulsanteGoogle(a)}</a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
+  disegnaGoogle();
   const set7 = agenda.filter(a => giorniA(a.d) <= 7).length;
   disegnaPalestra();
   $('nbadge').hidden = !set7; $('nbadge').textContent = set7;
@@ -406,17 +418,113 @@ function disegnaCal(){
   const base = new Date(D.anno, D.mese + calOff, 1), y = base.getFullYear(), m = base.getMonth();
   $('cal-tit').textContent = base.toLocaleDateString('it-IT', {month:'long', year:'numeric'}).replace(/^./, c => c.toUpperCase());
   const primo = (new Date(y, m, 1).getDay() + 6) % 7, ngiorni = new Date(y, m+1, 0).getDate();
+  const gev = new Set(GC.eventi.filter(e => +e.d.slice(0,4)===y && +e.d.slice(5,7)===m+1).map(e => +e.d.slice(8,10)));
   const ev = new Set([...D.eventi, ...altriEventi().map(a => a.d)].filter(d => +d.slice(0,4)===y && +d.slice(5,7)===m+1).map(d => +d.slice(8,10)));
   const oggi = new Date(D.oggi + 'T12:00');
   let h = ['L','M','M','G','V','S','D'].map(w => `<div class="wd" aria-hidden="true">${w}</div>`).join('');
   for(let i = 0; i < primo; i++) h += '<div></div>';
   for(let d = 1; d <= ngiorni; d++){
     const isOggi = oggi.getFullYear()===y && oggi.getMonth()===m && oggi.getDate()===d;
-    h += `<div class="d${isOggi?' oggi':''}${ev.has(d)?' ev':''}"${ev.has(d)?' title="Rate o scadenze"':''}>${d}</div>`;
+    const tit = [ev.has(d) && 'Rate o scadenze', gev.has(d) && 'Google Calendar'].filter(Boolean).join(' · ');
+    h += `<div class="d${isOggi?' oggi':''}${ev.has(d)?' ev':''}${gev.has(d)?' gev':''}"${tit?` title="${tit}"`:''}>${d}</div>`;
   }
   $('cal').innerHTML = h;
 }
-function calSposta(k){ calOff += k; if(D) disegnaCal(); }
+function calSposta(k){ calOff += k; if(D) disegnaCal(); if(GC.token) gcalLeggi(); }
+
+/* ---- Google Calendar: leggere gli eventi e aggiungere scadenze e rate ----
+   Accesso con Google Identity Services (permesso calendar.events). Il token resta solo in memoria per un'ora,
+   gli eventi di Google non vengono salvati da nessuna parte. Si scrive solo quando si preme "+" su una voce,
+   con titolo e data (niente importi); la voce aggiunta porta un codice (dgid) per non crearla due volte. */
+const GC = { token: null, scade: 0, eventi: [], collegate: new Set(), err: '', client: null };
+const GCAL_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+const gcalUsato = () => { try { return localStorage.getItem('dg:gcal') === '1'; } catch(e){ return false; } };
+function caricaGis(){
+  if(window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.onload = ok; sc.onerror = () => ko(new Error('Google non raggiungibile')); document.head.appendChild(sc); });
+}
+async function gcalCollega(){
+  if(!GCAL_CLIENT_ID) return;
+  try { await caricaGis(); } catch(e){ GC.err = e.message; return disegnaGoogle(); }
+  if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events',
+    callback: r => {
+      if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
+      GC.token = r.access_token; GC.scade = Date.now() + (r.expires_in || 3600) * 1000 - 60000; GC.err = '';
+      try { localStorage.setItem('dg:gcal', '1'); } catch(e){}
+      gcalLeggi();
+    },
+    error_callback: e => { GC.err = e && e.type === 'popup_closed' ? 'finestra di Google chiusa' : (e && (e.message || e.type)) || 'accesso non riuscito'; disegnaGoogle(); } });
+  GC.client.requestAccessToken({ prompt: gcalUsato() ? '' : 'consent' });
+}
+function gcalScollega(){
+  if(GC.token && window.google) google.accounts.oauth2.revoke(GC.token, () => {});
+  Object.assign(GC, { token: null, eventi: [], collegate: new Set(), err: '' });
+  try { localStorage.removeItem('dg:gcal'); } catch(e){}
+  if(D) disegna(); else disegnaGoogle();
+}
+async function gcalFetch(url, opz = {}){
+  if(!GC.token || Date.now() > GC.scade){ GC.token = null; disegnaGoogle(); throw new Error('scaduto'); }
+  const r = await fetch(url, { ...opz, headers: { Authorization: 'Bearer ' + GC.token, 'Content-Type': 'application/json' } });
+  if(r.status === 401){ GC.token = null; GC.err = 'accesso a Google scaduto'; disegnaGoogle(); throw new Error('401'); }
+  if(!r.ok) throw new Error('Google Calendar ' + r.status);
+  return r.json();
+}
+const isoLocale = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+async function gcalLeggi(){
+  // dal mese mostrato nel calendario (o da oggi) ai 60 giorni dopo
+  const oggi = new Date(), base = D ? new Date(D.anno, D.mese + calOff, 1) : new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+  const da = new Date(Math.min(base, new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate()))), a = new Date(Math.max(new Date(base.getFullYear(), base.getMonth() + 1, 1), new Date(oggi.getTime() + 31 * 864e5)));
+  try {
+    const out = [], collegate = new Set(); let pagina = '';
+    do {
+      const q = new URLSearchParams({ timeMin: da.toISOString(), timeMax: a.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
+      if(pagina) q.set('pageToken', pagina);
+      const r = await gcalFetch(GCAL_API + '?' + q);
+      (r.items || []).forEach(e => {
+        if(e.status === 'cancelled') return;
+        const dgid = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.dgid;
+        if(dgid) collegate.add(dgid);
+        const tutto = !!(e.start && e.start.date), inizio = tutto ? e.start.date : isoLocale(new Date(e.start.dateTime));
+        out.push({ d: inizio, titolo: e.summary || '(senza titolo)', app: 'Google Calendar' + (tutto ? '' : ' · ' + new Date(e.start.dateTime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})),
+          tag: 'GOO', amt: null, senzaImporto: true, google: true, href: e.htmlLink || 'https://calendar.google.com/', dgid });
+      });
+      pagina = r.nextPageToken || '';
+    } while(pagina);
+    // le voci aggiunte da qui si vedono già come rata o scadenza: non le ripeto
+    GC.eventi = out.filter(e => !e.dgid); GC.collegate = collegate; GC.err = '';
+  } catch(e){ if(e.message !== '401' && e.message !== 'scaduto') GC.err = e.message; }
+  if(D) disegna(); else disegnaGoogle();
+}
+const dgid = a => ('dg' + [...(a.app + '|' + a.titolo + '|' + a.d)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + a.d.replace(/-/g, '')).slice(0, 60);
+function pulsanteGoogle(a){
+  if(!GC.token) return '';
+  const id = dgid(a);
+  return GC.collegate.has(id) ? `<span class="agg fatto" title="Già in Google Calendar" aria-label="Già in Google Calendar">✓</span>`
+    : `<button class="agg" type="button" title="Aggiungi a Google Calendar" aria-label="Aggiungi ${esc(a.titolo)} a Google Calendar" onclick="event.preventDefault();event.stopPropagation();gcalAggiungi('${id}',this)">+</button>`;
+}
+async function gcalAggiungi(id, btn){
+  const a = tuttaAgenda().find(x => !x.google && dgid(x) === id); if(!a) return;
+  btn.disabled = true;
+  try {
+    // controllo su Google: se c'è già (aggiunta da un altro dispositivo) non la ricreo
+    const q = new URLSearchParams({ privateExtendedProperty: 'dgid=' + id, singleEvents: 'true' });
+    const gia = await gcalFetch(GCAL_API + '?' + q);
+    if(!(gia.items || []).some(e => e.status !== 'cancelled')){
+      const fine = new Date(a.d + 'T12:00'); fine.setDate(fine.getDate() + 1);
+      await gcalFetch(GCAL_API, { method: 'POST', body: JSON.stringify({ summary: a.titolo, description: `Da Dashboard di Giordano · ${a.app}`,
+        start: { date: a.d }, end: { date: isoLocale(fine) }, transparency: 'transparent',
+        reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 9 * 60 }] }, extendedProperties: { private: { dgid: id } } }) });
+    }
+    GC.collegate.add(id); if(D) disegna();
+  } catch(e){ btn.disabled = false; GC.err = 'non aggiunta: ' + e.message; disegnaGoogle(); }
+}
+function disegnaGoogle(){
+  const box = $('goo'); if(!box) return;
+  if(!GCAL_CLIENT_ID){ box.innerHTML = '<span>Google Calendar: da configurare</span>'; return; }
+  if(GC.token && Date.now() < GC.scade){
+    box.innerHTML = `<span>Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${GC.err ? ' · ' + esc(GC.err) : ''}</span><span style="display:flex;gap:6px"><button type="button" onclick="gcalLeggi()">Aggiorna</button><button type="button" onclick="gcalScollega()">Scollega</button></span>`;
+  } else box.innerHTML = `<span>${GC.err ? esc(GC.err) : gcalUsato() ? 'Google Calendar collegato' : 'Google Calendar'}</span><button type="button" onclick="gcalCollega()">${gcalUsato() ? 'Mostra eventi' : 'Collega'}</button>`;
+}
 
 /* ---- Altre app nella cassaforte: Palestra ---- */
 let PAL = null;
@@ -435,7 +543,7 @@ function altriEventi(){
     out.push({d:a.scadenza, titolo:`Abbonamento ${a.nome || 'palestra'}`, app:'Palestra · abbonamento', tag:'PAL', amt:null, senzaImporto:true, href:'palestra/?t=abbo'});
   return out;
 }
-function tuttaAgenda(){ return [...D.agenda, ...altriEventi()].sort((x, y) => x.d.localeCompare(y.d)); }
+function tuttaAgenda(){ return [...D.agenda, ...altriEventi(), ...GC.eventi.filter(e => giorniA(e.d) >= 0 && giorniA(e.d) <= 30)].sort((x, y) => x.d.localeCompare(y.d)); }
 function hrefAgenda(a){ return a.href || (a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'); }
 function disegnaPalestra(){
   const box = $('palestra'); if(!box) return;
@@ -498,6 +606,7 @@ async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
   bil.src = 'bilancio/index.html';
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);
+  disegnaGoogle();
 })();
 </script>
 </body>
