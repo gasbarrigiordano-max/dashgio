@@ -59,7 +59,7 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .cresce{flex:1 1 auto;min-width:0}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border:0;border-radius:99px;background:var(--acc);color:#1a1411;font-weight:800;font-size:14px;cursor:pointer;text-decoration:none}
 .btn.ghost{background:rgba(255,255,255,.1);color:#fff}
-.btn.rosso{background:rgba(255,122,92,.18);color:var(--ko)}
+.btn.rosso{background:rgba(110,28,18,.45);color:#ffd3c8;border:1px solid rgba(255,140,110,.35)}
 .btn.pieno{width:100%}
 .btn[disabled]{opacity:.5}
 .link{background:none;border:0;color:var(--acc-soft);font-weight:700;font-size:13px;cursor:pointer;min-height:44px;padding:0 4px}
@@ -336,11 +336,13 @@ function cardOggiProgramma(){
 // gli esercizi in uso dei muscoli del giorno, pronti per l'allenamento (4 serie col peso suggerito)
 const eserciziDelGiorno = g => g.ordine.flatMap(id => inUso(muscoli().find(m => m.id === id) || {esercizi: []}).map(e => ({ id: nuovoId(), nome: e.nome, muscolo: id,
   obiettivo: {serie: String(METODO.rip.length), rip: METODO.rip.join('-'), rec: e.rec || '', note: e.note || '', pesi: pesiSerie(e)}, serie: METODO.rip.map(() => ({kg: '', rip: '', fatto: false})) })));
-// allenamento già aperto oggi: gli esercizi in uso che non ci sono ancora (per esempio importati dopo averlo aperto)
+// allenamento aperto: gli esercizi in uso che non ci sono ancora (per esempio importati dopo averlo aperto).
+// I muscoli sono quelli dell'allenamento stesso ('prog:BD'), anche se intanto è passata la mezzanotte
 function mancantiDiOggi(){
-  const c = P.inCorso; if (!c || c.d !== oggiISO()) return [];
-  const g = PR.giorno(prog(), c.d); if (!g) return [];
-  return eserciziDelGiorno(g).filter(e => !c.esercizi.some(x => chiave(x.nome) === chiave(e.nome)));
+  const c = P.inCorso; if (!c) return [];
+  const ids = String(c.schedaId || '').startsWith('prog:') ? c.schedaId.slice(5).split('') : ((PR.giorno(prog(), c.d) || {}).ordine || []);
+  if (!ids.length) return [];
+  return eserciziDelGiorno({ordine: ids}).filter(e => !c.esercizi.some(x => chiave(x.nome) === chiave(e.nome)));
 }
 function aggiungiMancanti(){ const m = mancantiDiOggi(); if (!m.length) return; P.inCorso.esercizi.push(...m); salva('inCorso'); disegna(); }
 function iniziaProgramma(){
