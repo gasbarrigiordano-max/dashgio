@@ -583,7 +583,7 @@ const cloud = {
       const b=this.db.batch(), last={};
       b.set(this.ref(), {...meta, updated:ts()}, {merge:true});
       for(const k of SEZ){ last[k]=JSON.stringify(S[k]??[]); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await encrypt(key,last[k],k), updated:ts()}); }
-      // Giornale di Bordo e Palestra stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
+      // Mezzi e Palestra stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
       Cassaforte.adotta({db:this.db, user:this.user, meta:this.meta, key:this.key});
       for(const app of ['giornale','palestra']){
         const voci = await Cassaforte.tutti(app);
@@ -1752,9 +1752,9 @@ function renderAbbo(){
     <div class="note" style="margin:10px 2px 0">${MESI[now.getMonth()]}: ${pagati.length?`pagati ${eur(sum(pagati.map(t=>t.amt)))}`:'nessun pagamento ancora'}${delMese.length?` · da pagare ${eur(sum(delMese.map(a=>a.costo)))} (${delMese.map(a=>esc(a.n)).join(', ')})`:''}</div>
     <h2 class="sec">Attivi · ${att.length}</h2>${att.map(card).join('') || '<div class="empty">Nessun abbonamento. Aggiungi SIM, palestra, Apple Music, iCloud…</div>'}
     ${sosp.length?`<h2 class="sec">Sospesi · ${sosp.length}</h2>${sosp.map(card).join('')}`:''}
-    ${bordo.stato==='ok' ? (()=>{ const v = bordo.voci.filter(x=>!x.paid); return `<h2 class="sec">Dal Giornale di Bordo · ${v.length}</h2>${v.map(x=>`<div class="tx" style="cursor:default"><div class="mid"><b>${esc(x.n)}</b><small>${esc([x.chi, 'scadenza '+fmtD(x.d)+' · '+quando(x.d)].filter(Boolean).join(' · '))}</small></div>
-      <b class="mono">${x.amt!=null?eur(x.amt):'–'}</b></div>`).join('') || '<div class="empty">Nessuna scadenza nel Giornale.</div>'}
-      <p class="note" style="margin-top:6px">Importo = l'ultimo pagato. Si aggiornano quando rinnovi nel Giornale.</p>`; })() : ''}
+    ${bordo.stato==='ok' ? (()=>{ const v = bordo.voci.filter(x=>!x.paid); return `<h2 class="sec">Da Mezzi · ${v.length}</h2>${v.map(x=>`<div class="tx" style="cursor:default"><div class="mid"><b>${esc(x.n)}</b><small>${esc([x.chi, 'scadenza '+fmtD(x.d)+' · '+quando(x.d)].filter(Boolean).join(' · '))}</small></div>
+      <b class="mono">${x.amt!=null?eur(x.amt):'–'}</b></div>`).join('') || '<div class="empty">Nessuna scadenza in Mezzi.</div>'}
+      <p class="note" style="margin-top:6px">Importo = l'ultimo pagato. Si aggiornano quando rinnovi in Mezzi.</p>`; })() : ''}
     <p class="note" style="margin-top:12px">Il giorno della scadenza (o alla prima apertura dell'app dopo) l'abbonamento viene registrato tra le uscite e pagato con il metodo scelto: con carta di credito finisce nell'estratto conto, con carta di debito o conto esce subito dal saldo. Poi la scadenza passa al periodo successivo.</p>`;
 }
 function openAbbo(id){
@@ -2013,7 +2013,7 @@ function openTx(id, carta, pre){
       <div class="f"><label>Voce (sottocategoria)</label><input id="t-s" list="t-sl" value="${esc(t.sub)}" placeholder="es. Auto" oninput="detChange()"><datalist id="t-sl"></datalist></div>
       <div class="f"><label>Dettaglio</label><input id="t-dt" list="t-dl" value="${esc(t.det||'')}" placeholder="es. Gasolio"><datalist id="t-dl"></datalist></div>
     </div>
-    <p class="note" id="t-mezzi" style="display:none;margin:-4px 0 12px">Le spese dei mezzi registrale nel Giornale di Bordo: arrivano qui da sole, con lo stesso dettaglio e il conto scelto lì.</p>
+    <p class="note" id="t-mezzi" style="display:none;margin:-4px 0 12px">Le spese dei mezzi registrale in Mezzi: arrivano qui da sole, con lo stesso dettaglio e il conto scelto lì.</p>
     <div class="f"><label>Nota</label><input id="t-n" value="${esc(t.note.startsWith('Totale mensile')?t.note:t.note)}" placeholder="facoltativa"></div>
     <div class="f" id="t-k-w" style="display:${t.t==='u'?'block':'none'}"><label id="t-k-l">${rp?'Rate pagate con':'Pagato con'}</label><select id="t-k" ${t.rid||t.pf?'disabled':''}>${pagOptions(rp ? (rp.carta ? 'k:'+rp.carta : rp.conto ? 'c:'+rp.conto : '') : id ? pagValue(t) : carta ? 'k:'+carta : ui.lastPag||'')}</select>
       ${t.pf?'<p class="note" style="margin:4px 0 0">Spesa rateizzata con la carta: per cambiarla annulla prima la rateizzazione nella sezione Carte.</p>':''}</div>
@@ -2194,11 +2194,11 @@ function delRimb(gid, id){
   S.tx = S.tx.filter(y=>y.id!==id); save(); render(); gruppo(gid).torna();
 }
 
-/* ============ GIORNALE DI BORDO: scadenze e spese di auto, scooter, moto, gommone e carrello ============
-   Il Giornale sta nella stessa cassaforte (../comune/cassaforte.js): bilancio/{uid}/giornale/{chiave}, cifrato con la stessa
+/* ============ MEZZI: scadenze e spese di auto, scooter, moto, gommone e carrello ============
+   Mezzi sta nella stessa cassaforte (../comune/cassaforte.js): bilancio/{uid}/giornale/{chiave}, cifrato con la stessa
    chiave; si legge appena Bilancio è sbloccato, senza un altro accesso. Ogni voce di scadenza è un periodo pagato
    {scadenza, premio|importo}: la scadenza della più recente è il prossimo pagamento (importo stimato = l'ultimo pagato),
-   quelle già rinnovate risultano pagate. Bilancio scrive nel Giornale solo l'elenco dei metodi di pagamento. */
+   quelle già rinnovate risultano pagate. Bilancio scrive in Mezzi solo l'elenco dei metodi di pagamento. */
 const BORDO_FONTI = [ // [chiave, mezzo, cosa]
   ...['auto','scooter','moto'].flatMap(v=>[[v+'_insurances',v,'Assicurazione'],[v+'_bollo',v,'Bollo'],[v+'_revisioni',v,'Revisione']]),
   ['insurances','gommone','Assicurazione'], ['carrelloInsurances','carrello','Assicurazione'], ['carrelloBollo','carrello','Bollo'], ['carrelloRevisioni','carrello','Revisione']];
@@ -2206,11 +2206,11 @@ const BORDO_FONTI = [ // [chiave, mezzo, cosa]
    indicato in "Importa dal" (all'attivazione: 1° gennaio dell'anno). S.opz.bordoImp = {on, dal, pag, pagDal, fatti:[id]}: movimento id 'bf_<chiave>:<id>', con bf/bfAmt/bfD.
    Solo spese già fatte (data fino a oggi): le scadenze future restano promemoria in Da pagare, non uscite.
    Quelli con data prima di pagDal (il passato, già nei saldi) non toccano i conti; dopo, si pagano con `pag`.
-   Cambiati o eliminati nel Giornale si aggiornano qui finché non li modifichi in Bilancio; eliminati qui non tornano (fatti). */
-// per mezzo: elenco spese (dove il Giornale fa i suoi totali e tiene la spunta "da non conteggiare / fatta da altri"),
+   Cambiati o eliminati in Mezzi si aggiornano qui finché non li modifichi in Bilancio; eliminati qui non tornano (fatti). */
+// per mezzo: elenco spese (dove Mezzi fa i suoi totali e tiene la spunta "da non conteggiare / fatta da altri"),
 // voce in Bilancio (Mezzi › Auto / SH / Moto / Gommone), le schede collegate via expenseId (rifornimenti, bolli, assicurazioni,
-// revisioni) col loro mezzo, e da categoria del Giornale a dettaglio (Mezzi › Auto › Gasolio). Le categorie che non si scelgono
-// più nel Giornale vanno nel dettaglio più vicino.
+// revisioni) col loro mezzo, e da categoria di Mezzi a dettaglio (Mezzi › Auto › Gasolio). Le categorie che non si scelgono
+// più in Mezzi vanno nel dettaglio più vicino.
 const DET_SH = {carburante:'Benzina', manutenzione:'Manutenzione ordinaria', manutenzione_str:'Manutenzione straordinaria', tagliando:'Tagliando',
   revisione:'Revisione', assicurazione:'Assicurazione', bollo:'Bollo', ricambi:'Manutenzione ordinaria', acquisto:'Acquisti', documenti:'Spese varie', altro:'Spese varie'};
 const BORDO_IMP = [
@@ -2225,7 +2225,7 @@ const BORDO_IMP = [
 const BORDO_CHIAVI = [...new Set([...BORDO_FONTI.map(x=>x[0]), ...BORDO_IMP.flatMap(x=>[x.ek, ...Object.keys(x.link)]), 'bilancioPagamenti'])];
 const bordo = {stato:'off', voci:[], imp:[], err:'', email:'', agg:0};
 let bordoBoxH = '';
-// dalle liste del Giornale alle scadenze {n:'Bollo auto', chi, d, amt (null = importo mai inserito), paid}
+// dalle liste di Mezzi alle scadenze {n:'Bollo auto', chi, d, amt (null = importo mai inserito), paid}
 function bordoVoci(dati){
   const out = [], imp = x => x.premio ?? x.importo ?? null;
   BORDO_FONTI.forEach(([k, mezzo, cosa])=>{
@@ -2250,7 +2250,7 @@ function bordoImpVoci(dati){
     else if(e.category==='assicurazione') note = [`Assicurazione ${m}`, r && r.compagnia, scad];
     else if(e.category==='revisione') note = [`Revisione ${m}`, r && r.compagnia, scad];
     else note = [e.note || (e.category==='acquisto' ? 'Acquisto' : 'Spesa'), m];
-    // metodo scelto nel Giornale (id dei conti/carte di Bilancio) e pagamento a rate
+    // metodo scelto in Mezzi (id dei conti/carte di Bilancio) e pagamento a rate
     const rate = e.installments && e.installmentCount>1 ? {n:e.installmentCount, rata:e.installmentAmount || round2(e.amount/e.installmentCount), tipo:e.installmentService || 'Rate'} : null;
     out.push({id:`bf_${ek}:${e.id}`, old: r ? `bf_${lk}:${r.id}` : null, sub:voce, det: det[e.category] || e.category.charAt(0).toUpperCase()+e.category.slice(1).replace(/_/g,' '),
       d:e.date, amt:round2(e.amount), note:note.filter(Boolean).join(' · '), pagId: e.pagId && e.pagId.includes(':') ? e.pagId : null, rate});
@@ -2274,17 +2274,17 @@ function bordoImporta(){
     const t = S.tx.find(x=>x.id===v.old); if(t && !S.tx.some(x=>x.id===v.id)){ t.id = v.id; rinomina++; }
     if(o.fatti.includes(v.old)){ o.fatti = o.fatti.map(f=>f===v.old ? v.id : f); rinomina++; } });
   const mio = t => t.amt===t.bfAmt && t.d===t.bfD && !estrattoChiuso(t); // non toccato in Bilancio
-  // da dove escono i soldi: spese passate (prima di pagDal) già nei saldi; nuove col metodo scelto nel Giornale, o quello predefinito
+  // da dove escono i soldi: spese passate (prima di pagDal) già nei saldi; nuove col metodo scelto in Mezzi, o quello predefinito
   const pagDi = v => pagParse(v.d >= o.pagDal ? v.pagId || o.pag || '' : '');
   let nuovi = 0, cambi = 0, piani = 0;
-  // solo le spese già fatte: una con data futura nel Giornale arriva il giorno della sua data
+  // solo le spese già fatte: una con data futura in Mezzi arriva il giorno della sua data
   const oggi = today(), fatte = bordo.imp.filter(v=>v.d >= o.dal && v.d <= oggi);
   fatte.forEach(v=>{
     const t = S.tx.find(x=>x.id===v.id);
     if(!t){
       if(o.fatti.includes(v.id)) return;
       const n = {id:v.id, d:v.d, t:'u', cat:'Mezzi', sub:v.sub, det:v.det, amt:v.amt, note:v.note, bf:1, bfAmt:v.amt, bfD:v.d, ...pagDi(v)};
-      // nuova e a rate nel Giornale: l'acquisto non muove soldi, li muovono le rate dal conto/carta di "Pagato con"
+      // nuova e a rate in Mezzi: l'acquisto non muove soldi, li muovono le rate dal conto/carta di "Pagato con"
       if(v.rate && v.d >= o.pagDal){
         const pr = pagDi(v), rid = uid();
         S.rate.push({id:rid, tipo:v.rate.tipo, prod:[v.sub, v.det].join(' · '), acq:v.d, n:v.rate.n, rata:v.rate.rata, tot:round2(v.rate.rata*v.rate.n), imp:v.amt,
@@ -2293,7 +2293,7 @@ function bordoImporta(){
       }
       S.tx.push(n); applyPag(n); o.fatti.push(v.id); nuovi++;
     } else {
-      // struttura sempre allineata al Giornale (voce, dettaglio, nota); importo, data e conto finché non li cambi qui
+      // struttura sempre allineata a Mezzi (voce, dettaglio, nota); importo, data e conto finché non li cambi qui
       if(t.cat!=='Mezzi' || t.sub!==v.sub || t.det!==v.det || t.note!==v.note){ Object.assign(t, {cat:'Mezzi', sub:v.sub, det:v.det, note:v.note}); cambi++; }
       const pg = pagDi(v);
       if(mio(t) && (t.amt!==v.amt || t.d!==v.d || (!t.rata && (t.carta!==pg.carta || t.pag!==pg.pag || t.conto!==pg.conto)))){
@@ -2302,19 +2302,19 @@ function bordoImporta(){
     }
   });
   if(piani) payDueRate();
-  // eliminati (o esclusi) nel Giornale: via anche qui, se non li hai modificati
+  // eliminati (o esclusi) in Mezzi: via anche qui, se non li hai modificati
   const vivi = new Set(fatte.map(v=>v.id));
   // a rate con rate già pagate: resta (si sistema dalla sezione Rate)
   const via = S.tx.filter(t=>t.bf && !vivi.has(t.id) && mio(t) && !(t.rata && (S.rate.find(r=>r.id===t.rata)||{}).done));
   via.forEach(t=>{ applyPag(t,-1); if(t.rata) S.rate = S.rate.filter(r=>r.id!==t.rata); });
-  // tolte per il Giornale (non da te): se ricompaiono, si importano di nuovo
+  // tolte per Mezzi (non da te): se ricompaiono, si importano di nuovo
   if(via.length){ S.tx = S.tx.filter(t=>!via.includes(t)); o.fatti = o.fatti.filter(id=>!via.some(t=>t.id===id)); }
-  if(nuovi || cambi || via.length || rinomina || prima.length){ save(); if(nuovi) toast(nuovi===1 ? '1 spesa importata dal Giornale di Bordo' : `${nuovi} spese importate dal Giornale di Bordo`); }
+  if(nuovi || cambi || via.length || rinomina || prima.length){ save(); if(nuovi) toast(nuovi===1 ? '1 spesa importata da Mezzi' : `${nuovi} spese importate da Mezzi`); }
   return nuovi + cambi + via.length;
 }
 // spese dei mezzi registrate a mano (o da Numbers) nello stesso periodo: si conterebbero due volte
 const bordoDoppi = () => { const o = S.opz.bordoImp; return o ? S.tx.filter(t=>t.t==='u' && !t.bf && !t.rid && t.d>=o.dal && /^mezzi$/i.test(t.cat)) : []; };
-// i metodi di pagamento di Bilancio, per il "Pagato con" del Giornale: solo i nomi, mai saldi
+// i metodi di pagamento di Bilancio, per il "Pagato con" di Mezzi: solo i nomi, mai saldi
 function bordoPagamenti(){
   const banche = S.conti.filter(c=>c.g==='Banche'), cash = S.conti.filter(c=>c.g==='Cash');
   return {pagamenti:[
@@ -2346,7 +2346,7 @@ async function bordoLeggi(){
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
     bordoImporta();
-    // l'elenco dei conti e delle carte per il "Pagato con" del Giornale, se è cambiato
+    // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))
       Cassaforte.scrivi('giornale', 'bilancioPagamenti', JSON.stringify(pg)).then(()=>{ bordo.pagErr=''; }).catch(e=>{ console.warn(e); bordo.pagErr = e.code||e.message; bordoAggiorna(); });
@@ -2355,22 +2355,22 @@ async function bordoLeggi(){
 }
 function bordoBox(){
   const prossime = bordo.voci.filter(v=>!v.paid).slice(0,4);
-  if(bordo.stato==='ok') return `<p class="note">${bordo.vuoto ? 'Il Giornale è ancora vuoto: aprilo una volta per portare qui i dati del vecchio Giornale.' : 'Nella stessa cassaforte: assicurazioni, bolli e revisioni compaiono in Panoramica (Da pagare) e in Abbonamenti.'} <a href="../giornale/">Apri il Giornale</a></p>
-    ${prossime.map(v=>`<div class="row" style="font-size:13px;margin:4px 0"><span>${esc(v.n)} · ${fmtD(v.d)}</span><b class="mono">${v.amt!=null?eur(v.amt):'–'}</b></div>`).join('') || '<p class="note">Nessuna scadenza trovata nel Giornale.</p>'}
+  if(bordo.stato==='ok') return `<p class="note">${bordo.vuoto ? 'Mezzi è ancora vuota: aprila una volta per portare qui i dati della vecchia app (Giornale di Bordo).' : 'Nella stessa cassaforte: assicurazioni, bolli e revisioni compaiono in Panoramica (Da pagare) e in Abbonamenti.'} <a href="../giornale/">Apri Mezzi</a></p>
+    ${prossime.map(v=>`<div class="row" style="font-size:13px;margin:4px 0"><span>${esc(v.n)} · ${fmtD(v.d)}</span><b class="mono">${v.amt!=null?eur(v.amt):'–'}</b></div>`).join('') || '<p class="note">Nessuna scadenza trovata in Mezzi.</p>'}
     ${(()=>{ const o = (S.opz||{}).bordoImp; if(!o) return '';
       const imp = S.tx.filter(t=>t.bf), doppi = bordoDoppi();
       return `<label class="chk" style="justify-content:flex-start;margin:12px 0 8px"><input type="checkbox" id="bd-io" ${o.on?'checked':''} onchange="bordoImpOpz()"> Importa le spese dei mezzi in Mezzi</label>
       <div style="display:${o.on?'block':'none'}">
-        <p class="note" style="margin:0 0 8px">Mezzi › Auto, SH, Gommone con il loro dettaglio (Gasolio, Benzina, Manutenzione, Tagliando…), non quelle fatte da altri; le scadenze future restano promemoria. Nel Giornale "Pagato con" ha i tuoi conti e le tue carte. ${imp.length} spese importate (${eur(sum(imp.map(t=>t.amt)))}).</p>
+        <p class="note" style="margin:0 0 8px">Mezzi › Auto, SH, Gommone con il loro dettaglio (Gasolio, Benzina, Manutenzione, Tagliando…), non quelle fatte da altri; le scadenze future restano promemoria. Nel Mezzi "Pagato con" ha i tuoi conti e le tue carte. ${imp.length} spese importate (${eur(sum(imp.map(t=>t.amt)))}).</p>
         <div class="grid2"><div class="f"><label>Importa dal</label><input type="date" id="bd-id" value="${o.dal}" onchange="bordoImpOpz()"></div>
-        <div class="f"><label>Senza metodo nel Giornale</label><select id="bd-ip" onchange="bordoImpOpz()">${pagOptions(o.pag||'')}</select></div></div>
+        <div class="f"><label>Senza metodo in Mezzi</label><select id="bd-ip" onchange="bordoImpOpz()">${pagOptions(o.pag||'')}</select></div></div>
         <p class="note" style="margin:-4px 0 0">Quelle prima del ${fmtD(o.pagDal)} non toccano i conti (sono già nei saldi).</p>
         ${doppi.length ? `<p class="note neg" style="margin:8px 0 0">Attenzione: in Mezzi ci sono ${doppi.length} spese registrate a mano dal ${fmtD(o.dal)} (${eur(sum(doppi.map(t=>t.amt)))}): si contano due volte. Eliminale dal Mensile (Mezzi › la voce › Elimina).</p>` : ''}
       </div>`; })()}
     <button class="btn ghost" style="margin-top:10px" onclick="bordoLeggi()">Aggiorna</button>`;
-  if(bordo.stato==='carico') return `<p class="note">Leggo le scadenze dal Giornale di Bordo…</p>`;
+  if(bordo.stato==='carico') return `<p class="note">Leggo le scadenze da Mezzi…</p>`;
   if(bordo.stato==='err') return `<p class="note neg">Lettura non riuscita: ${esc(bordo.err)}</p><button class="btn ghost" onclick="bordoLeggi()">Riprova</button>`;
-  return `<p class="note">${CLOUD ? 'Il Giornale di Bordo si legge da solo appena la cassaforte è sbloccata.' : 'Il Giornale di Bordo si collega solo con la cassaforte (Firebase).'} <a href="../giornale/">Apri il Giornale</a></p>`;
+  return `<p class="note">${CLOUD ? 'Mezzi si legge da solo appena la cassaforte è sbloccata.' : 'Mezzi si collega solo con la cassaforte (Firebase).'} <a href="../giornale/">Apri Mezzi</a></p>`;
 }
 
 /* ============ IMPOSTAZIONI ============ */
@@ -2386,7 +2386,7 @@ function openSettings(){
     <p class="note" style="margin:0 0 4px">Il tema vale per questo dispositivo.</p>
     <h2 class="sec">Dati e backup</h2>
     ${acct}
-    <h2 class="sec" style="margin-top:16px">Giornale di Bordo</h2>
+    <h2 class="sec" style="margin-top:16px">Mezzi</h2>
     <div id="bordo-box">${bordoBoxH = bordoBox()}</div>
     <h2 class="sec" style="margin-top:16px">Importa da CSV</h2>
     <div class="f"><label>Che dati sono?</label><select id="csv-k">
@@ -2551,7 +2551,7 @@ async function boot(){
   try{ for(const f of ['app','auth','firestore']) await loadScript(`${FIREBASE_SDK}firebase-${f}-compat.js`); }
   catch(e){ return gate('error','Impossibile caricare Firebase. Controlla la connessione e riprova.'); }
   firebase.initializeApp(FIREBASE_CONFIG);
-  // niente cache di Firestore su disco: Bilancio, Giornale e Dashboard stanno sullo stesso indirizzo e una cache condivisa
+  // niente cache di Firestore su disco: Bilancio, Mezzi e Dashboard stanno sullo stesso indirizzo e una cache condivisa
   // fra più schede (e il riquadro della Dashboard) su Safari può bloccare l'avvio; i dati si leggono sempre dal server
   cloud.db = firebase.firestore();
   firebase.auth().onAuthStateChanged(onUser);
@@ -2627,7 +2627,7 @@ async function openVault(key){
   }
   afterLoad();
   $('gate').classList.remove('on'); setSync(cloud.timer?'saving':'ok'); render();
-  bordoLeggi(); // il Giornale, dalla stessa cassaforte
+  bordoLeggi(); // Mezzi, dalla stessa cassaforte
   // dalla Dashboard: bilancio/#passphrase o #impostazioni
   if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
 }
@@ -2640,7 +2640,7 @@ function resetVault(){
 }
 async function lockVault(msg){
   if(!msg && cloud.dirty().length && !confirm('Ci sono modifiche non ancora salvate. Bloccare comunque?')) return;
-  // passphrase cambiata altrove: se un'altra scheda di questo sito (Giornale, Dashboard) ha già ricordato la chiave nuova, si riapre con quella
+  // passphrase cambiata altrove: se un'altra scheda di questo sito (Mezzi, Dashboard) ha già ricordato la chiave nuova, si riapre con quella
   const saved = msg ? await kdb.get(cloud.user.uid) : null;
   if(saved && saved.salt===cloud.meta.salt && await keyOk(saved.key, cloud.meta)){ resetVault(); toast('Passphrase cambiata: riaperto con quella nuova. Le ultime modifiche fatte qui non sono state salvate.'); return openVault(saved.key); }
   await kdb.set(cloud.user.uid, null);

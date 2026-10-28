@@ -1,12 +1,12 @@
-/* Cassaforte comune di Dashboard, Bilancio e Giornale di Bordo.
+/* Cassaforte comune di Dashboard, Bilancio e Mezzi.
    Stesso progetto Firebase, stesso account e stessa cifratura di Bilancio (bilancio/index.html, sezione CIFRATURA):
    - accesso con email e password (gli account si creano dalla console Firebase);
    - documento bilancio/{uid} = {salt, iter, check}: la passphrase non lascia mai il dispositivo;
    - chiave AES-GCM 256 ricavata con PBKDF2-SHA256; "ricorda su questo dispositivo" = chiave non esportabile
      in IndexedDB (bilancio-keys), la stessa che usa Bilancio: sbloccata una volta, si aprono tutte le app;
-   - i dati del Giornale stanno in bilancio/{uid}/giornale/{voce} = {kid, iv, ct}, cifrati con aad "giornale/{voce}";
+   - i dati di Mezzi stanno in bilancio/{uid}/giornale/{voce} = {kid, iv, ct}, cifrati con aad "giornale/{voce}";
      kid = sale attuale, come per le sezioni di Bilancio (lo controllano le regole Firestore).
-   La cassaforte si crea e la passphrase si cambia da Bilancio (che ricifra anche il Giornale). */
+   La cassaforte si crea e la passphrase si cambia da Bilancio (che ricifra anche Mezzi). */
 (function () {
   const CONFIG = {
     apiKey: 'AIzaSyCiItrJc1Waa0q07JPYdPqF0ke-pFLLufA',
@@ -159,7 +159,7 @@
       }
     },
 
-    // finestra a tutto schermo con lo stile della porta (per esempio il trasloco del Giornale)
+    // finestra a tutto schermo con lo stile della porta (per esempio il trasloco di Mezzi)
     finestra(titolo, sotto) {
       stilePorta();
       const box = document.createElement('div');
@@ -206,7 +206,7 @@
           if (st === 'pronta') { box.remove(); return fine(); }
           const corpo = $('.cf-corpo');
           if (st === 'login') {
-            $('#cf-tit').textContent = 'Accedi'; $('.cf-sub').textContent = `L'account di Giordano: Dashboard, Bilancio, Giornale di Bordo e quello che aggiungeremo.`;
+            $('#cf-tit').textContent = 'Accedi'; $('.cf-sub').textContent = `L'account di Giordano: Dashboard, Bilancio, Mezzi e quello che aggiungeremo.`;
             corpo.innerHTML = `<form><label>Email<input id="cf-e" type="email" autocomplete="username" required></label>
               <label>Password<input id="cf-pw" type="password" autocomplete="current-password" required></label>
               <button class="cf-btn" type="submit">Accedi</button></form><button class="cf-link" type="button" id="cf-reset">Password dimenticata?</button>`;

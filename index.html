@@ -13,11 +13,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <!--
-  Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Giornale di Bordo, Palestra, in futuro altre).
+  Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Mezzi, Palestra, in futuro altre).
   La Palestra si legge direttamente dalla cassaforte (Cassaforte.tutti('palestra')).
   Nessun dato proprio: apre Bilancio (bilancio/, stesso indirizzo) in un riquadro nascosto e ne legge i numeri,
-  compresi quelli che Bilancio legge dal Giornale di Bordo.
-  Accesso unico: account e passphrase si chiedono qui (comune/cassaforte.js); Bilancio e Giornale, se aperti senza accesso,
+  compresi quelli che Bilancio legge da Mezzi.
+  Accesso unico: account e passphrase si chiedono qui (comune/cassaforte.js); Bilancio e Mezzi, se aperti senza accesso,
   rimandano qui con ?torna=… e poi si riaprono da soli.
 -->
 <style>
@@ -82,6 +82,11 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .bars i{width:5px;border-radius:3px;background:var(--acc);opacity:.85;min-height:3px}
 .tile .v{font-size:20px;font-weight:700;color:var(--acc-ink)}
 .tile .s{font-size:11.5px;color:var(--tile-ink2)}
+.tile .s .pos{color:#1b8752;font-weight:700} .tile .s .neg{color:#c43c29;font-weight:700}
+.tile.grande .v{font-size:32px;margin-top:auto;letter-spacing:-.02em}
+.tile.grande .s{font-size:12.5px}
+.tile.testo .v{font-family:Manrope,system-ui,sans-serif;font-size:17px;font-weight:800;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tile .ico{height:34px;display:flex;align-items:center;color:var(--acc)}
 
 .riga2{display:flex;flex-wrap:wrap;gap:14px}
 .grafico{flex:2 1 380px}
@@ -179,6 +184,17 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .imp-az{display:flex;flex-wrap:wrap;gap:8px}
 .imp-az a,.imp-az button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 14px;min-height:40px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
 .imp-az .rosso{color:#ffb3a1}
+.ev-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ev-form .tutta{grid-column:1/-1}
+.ev-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
+.ev-form input,.ev-form select,.ev-form textarea{height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 12px;font:500 14px Manrope,sans-serif;outline:0;min-width:0;width:100%}
+.ev-form textarea{height:auto;padding:10px 12px;resize:vertical}
+.ev-form input:focus,.ev-form select:focus,.ev-form textarea:focus{border-color:var(--acc)}
+.ev-form select option{background:#2a211c}
+.ev-form .riga-chk{flex-direction:row;align-items:center;gap:8px}
+.ev-form .riga-chk input{width:18px;height:18px;accent-color:var(--acc)}
+.nota-ev{font-size:13px;color:var(--ink2);margin:0 0 12px;line-height:1.45}
+#ev-err{color:#ffb3a1;margin:0}
 @media (max-width:700px){ .calv{gap:3px} .calv .g{min-height:58px;padding:4px;border-radius:10px} .ev-c{font-size:0;height:6px;padding:0;border-radius:3px} .ev-piu{display:none} .pannello .box{padding:16px;border-radius:22px} }
 
 /* attesa e sblocco di Bilancio */
@@ -217,7 +233,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
   <div class="brand" aria-hidden="true">G</div>
   <a class="navbtn on" href="#" aria-label="Panoramica" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="tip">Panoramica</span></a>
   <a class="navbtn" href="bilancio/" aria-label="Bilancio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M5 6l9-3 2 3"/></svg><span class="tip">Bilancio</span></a>
-  <a class="navbtn giornale-link" href="#" aria-label="Giornale di Bordo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Giornale di Bordo</span></a>
+  <a class="navbtn giornale-link" href="#" aria-label="Mezzi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Mezzi</span></a>
   <a class="navbtn" href="palestra/" aria-label="Palestra"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg><span class="tip">Palestra</span></a>
   <button class="navbtn" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Calendario</span></button>
   <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
@@ -250,27 +266,23 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
     </a>
     <div class="giornale">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <div><div style="font-size:15px;font-weight:800">Giornale di Bordo</div><div style="font-size:11.5px;color:var(--ink2);margin-top:3px">Spese, lavori e manutenzioni</div></div>
+        <div><div style="font-size:15px;font-weight:800">Mezzi</div><div style="font-size:11.5px;color:var(--ink2);margin-top:3px">Spese, lavori e manutenzioni</div></div>
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffb07a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <div class="mono" style="font-size:24px;font-weight:700" id="gb-tot">–</div>
         <div style="font-size:11.5px;color:var(--ink2)" id="gb-sub">spese dei mezzi</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px" id="gb-chips"></div>
-        <a class="pill giornale-link" href="#" style="margin-top:10px">Apri il Giornale</a>
+        <a class="pill giornale-link" href="#" style="margin-top:10px">Apri Mezzi</a>
       </div>
     </div>
   </div>
 
   <section>
-    <div class="sez"><h2>I miei mezzi</h2><a class="giornale-link" href="#" style="font-size:12px">apri il Giornale</a></div>
+    <div class="sez"><h2>I miei mezzi</h2><a class="giornale-link" href="#" style="font-size:12px">apri Mezzi</a></div>
     <div class="mezzi" id="mezzi"></div>
   </section>
 
-  <section>
-    <div class="sez"><h2>Palestra</h2><a href="palestra/" style="font-size:12px">apri la Palestra</a></div>
-    <div class="mezzi" id="palestra"></div>
-  </section>
 </main>
 
 <aside class="glass" aria-label="Agenda">
@@ -293,14 +305,18 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 
 </div>
 <div class="seg glass" role="navigation" aria-label="App">
-  <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Giornale di Bordo</a><a href="palestra/">Palestra</a>
+  <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Mezzi</a><a href="palestra/">Palestra</a>
 </div>
 
 <div class="pannello" id="p-cal" onclick="if(event.target===this) chiudiPannello()"><div class="box glass" role="dialog" aria-modal="true" aria-labelledby="calv-tit">
   <div class="pann-h"><h2 id="calv-tit">Calendario</h2><div style="display:flex;gap:6px"><button type="button" aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button type="button" aria-label="Questo mese" onclick="calSposta(-calOff)" style="width:auto;padding:0 12px;font-size:12px;font-weight:700">Oggi</button><button type="button" aria-label="Mese successivo" onclick="calSposta(1)">›</button><button type="button" aria-label="Chiudi" onclick="chiudiPannello()">✕</button></div></div>
   <div class="calv" id="calv"></div>
-  <div class="leg-c"><span><i style="background:rgba(242,113,28,.6)"></i>Bilancio</span><span><i style="background:rgba(70,160,190,.7)"></i>Giornale</span><span><i style="background:rgba(160,120,230,.7)"></i>Palestra</span><span><i style="background:var(--goo)"></i>Google</span></div>
+  <div class="leg-c"><span><i style="background:rgba(242,113,28,.6)"></i>Bilancio</span><span><i style="background:rgba(70,160,190,.7)"></i>Mezzi</span><span><i style="background:rgba(160,120,230,.7)"></i>Palestra</span><span><i style="background:var(--goo)"></i>Google</span></div>
   <div class="giorno-sel" id="calv-giorno"></div>
+</div></div>
+ <div class="pannello" id="p-ev" style="z-index:45" onclick="if(event.target===this) chiudiEvento()"><div class="box glass stretto" role="dialog" aria-modal="true" aria-labelledby="ev-tit">
+  <div class="pann-h"><h2 id="ev-tit">Evento</h2><button type="button" aria-label="Chiudi" onclick="chiudiEvento()">✕</button></div>
+  <div id="ev-corpo"></div>
 </div></div>
 <div class="pannello" id="p-imp" onclick="if(event.target===this) chiudiPannello()"><div class="box glass stretto" role="dialog" aria-modal="true" aria-labelledby="imp-tit">
   <div class="pann-h"><h2 id="imp-tit">Impostazioni</h2><button type="button" aria-label="Chiudi" onclick="chiudiPannello()">✕</button></div>
@@ -342,13 +358,13 @@ function estrai(){
   const mesi = Array.from({length:12}, (_, i) => `${y}-${String(i+1).padStart(2,'0')}`);
   const serieU = mesi.map(m => sumA(S.tx.filter(t => t.t==='u' && nelMese(t,m)), spesa));
   const serieE = mesi.map(m => sumA(S.tx.filter(t => t.t==='e' && nelMese(t,m)), t => t.amt));
-  // da pagare nel mese, come la card di Bilancio: rate, abbonamenti e spese fisse, scadenze del Giornale
+  // da pagare nel mese, come la card di Bilancio: rate, abbonamenti e spese fisse, scadenze di Mezzi
   const daPagare = [
     ...rateDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
     ...abboDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
     ...bordoDelMese(ym).map(x => ({amt:x.amt || 0, paid:x.paid}))];
   const patr = sumA(S.conti, c => c.v), liq = sumA(S.conti.filter(c => c.g!=='Investimenti'), c => c.v);
-  // mezzi: le spese dell'anno in Mezzi › Auto / SH / Moto / Gommone (anche quelle arrivate dal Giornale)
+  // mezzi: le spese dell'anno in Mezzi › Auto / SH / Moto / Gommone (anche quelle arrivate da Mezzi)
   const mz = S.tx.filter(t => t.t==='u' && /^mezzi$/i.test(t.cat||'') && txYear(t)===y);
   const nomeMezzo = n => ({auto:'Auto', scooter:'SH', moto:'Moto', gommone:'Gommone', carrello:'Gommone'})[(n.split(' ').pop()||'').toLowerCase()];
   const scad = bordo.voci.filter(v => !v.paid && v.d >= oggi);
@@ -360,9 +376,9 @@ function estrai(){
     return {nome, tot:sumA(l, spesa), voci:Object.entries(per).sort((a,b) => b[1]-a[1]).slice(0,3).map(x => x[0]),
       prossima: prossima ? {n:prossima.n, d:prossima.d, amt:prossima.amt} : null, ultima: ultima ? {d:ultima.d, det:ultima.det||ultima.sub, amt:spesa(ultima)} : null};
   }).filter(m => m.tot || m.prossima || ['Auto','SH','Gommone'].includes(m.nome));
-  // in programma: scadenze del Giornale, prossima rata di ogni piano, rinnovi degli abbonamenti
+  // in programma: scadenze di Mezzi, prossima rata di ogni piano, rinnovi degli abbonamenti
   const agenda = [
-    ...scad.map(v => ({d:v.d, titolo:v.n, app:'Giornale di Bordo', amt:v.amt, tag:(nomeMezzo(v.n)||'').slice(0,4).toUpperCase() || 'MEZZO'})),
+    ...scad.map(v => ({d:v.d, titolo:v.n, app:'Mezzi', amt:v.amt, tag:(nomeMezzo(v.n)||'').slice(0,4).toUpperCase() || 'MEZZO'})),
     ...S.rate.filter(r => r.first && residue(r) > 0).map(r => ({d:dueDate(r, pagate(r)), titolo:(r.prod||r.tipo||'Rata') + (r.tipo && r.prod ? ' · '+r.tipo : ''), app:'Bilancio · rate', amt:quota(r, pagate(r)), tag:'RATA'})),
     ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => ({d:a.next, titolo:a.n, app:'Bilancio · abbonamenti', amt:a.costo, tag:'ABB'}))
   ].filter(x => x.d && x.d >= oggi).sort((a,b) => a.d.localeCompare(b.d));
@@ -373,7 +389,7 @@ function estrai(){
     ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => a.next),
     ...S.tx.filter(t => t.abid).map(t => t.d)])].filter(Boolean);
   const eventiDett = [
-    ...bordo.voci.map(v => ({d:v.d, titolo:v.n, app:'Giornale di Bordo', amt:v.amt, paid:!!v.paid})),
+    ...bordo.voci.map(v => ({d:v.d, titolo:v.n, app:'Mezzi', amt:v.amt, paid:!!v.paid})),
     ...S.rate.flatMap(r => r.first ? Array.from({length:r.n - r.fi}, (_, i) => ({d:dueDate(r, r.fi + i), titolo:(r.prod||r.tipo||'Rata') + (r.tipo && r.prod ? ' · '+r.tipo : ''), app:'Bilancio · rate', amt:quota(r, r.fi + i), paid: r.fi + i < pagate(r)})) : []),
     ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => ({d:a.next, titolo:a.n, app:'Bilancio · abbonamenti', amt:a.costo, paid:false})),
     ...S.tx.filter(t => t.abid).map(t => ({d:t.d, titolo:(S.abbo||[]).find(a => a.id===t.abid)?.n || t.sub || 'Abbonamento', app:'Bilancio · abbonamenti', amt:spesa(t), paid:true}))
@@ -422,16 +438,13 @@ function disegna(){
   $('sotto').textContent = `${D.nomeMese} ${D.anno}: ecco come stanno le tue finanze, i tuoi mezzi e la palestra`;
   const saldo = D.entrate - D.uscite, ultimi = (a) => a.slice(Math.max(0, D.mese-8), D.mese+1);
   const saldi = ultimi(D.serieE.map((e, i) => e - D.serieU[i]));
-  const agenda = tuttaAgenda(), prossima = agenda[0];
+  const agenda = tuttaAgenda();
   const tiles = [
-    {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), s:`entrate ${eur0(D.entrate)} · uscite ${eur0(D.uscite)}`},
-    {href:'bilancio/', lab:'Da pagare', app:'Bilancio', bars:barre(ultimi(D.serieU)), v:D.daPagare ? eur0(D.daPagare) : 'Tutto pagato', s:D.nDaPagare ? `${D.nDaPagare} ${D.nDaPagare===1?'voce':'voci'} questo mese${D.pagato?' · già pagato '+eur0(D.pagato):''}` : (D.pagato ? 'già pagato '+eur0(D.pagato) : 'niente questo mese')},
-    {href:'bilancio/', lab:'Patrimonio', app:'Bilancio', bars:barre(D.storico), v:eur0(D.patr), s:`liquidità ${eur0(D.liq)}`},
-    prossima ? {href: hrefAgenda(prossima), lab:'Prossima scadenza', app:prossima.app.split(' · ')[0].replace('Giornale di Bordo','Giornale'),
-      bars:'', v: giorniA(prossima.d)===0 ? 'Oggi' : giorniA(prossima.d)===1 ? 'Domani' : `tra ${giorniA(prossima.d)} giorni`, s:`${prossima.titolo} · ${fmtD(prossima.d)}${prossima.amt!=null?' · '+eur2(prossima.amt):''}`}
-      : {href:'bilancio/', lab:'Prossima scadenza', app:'', bars:'', v:'Nessuna', s:'niente in programma'}
+    {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), sHtml:`<span class="pos">entrate ${eur0(D.entrate)}</span> · <span class="neg">uscite ${eur0(D.uscite)}</span>`},
+    {href:'bilancio/', lab:'Patrimonio', app:'Bilancio', cl:'grande', v:eur0(D.patr), s:`liquidità ${eur0(D.liq)}`},
+    tilePalestra(), tileLavoro()
   ];
-  $('tiles').innerHTML = tiles.map(t => `<a class="tile" href="${t.href}"><div class="tile-h"><small>${esc(t.lab)}</small><span>${esc(t.app)}</span></div>${t.bars || '<div style="height:34px;display:flex;align-items:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F2711C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>'}<div class="v mono">${esc(t.v)}</div><div class="s">${esc(t.s)}</div></a>`).join('');
+  $('tiles').innerHTML = tiles.map(t => `<a class="tile${t.cl ? ' ' + t.cl : ''}" href="${esc(t.href)}"${t.blank ? ' target="_blank" rel="noopener"' : ''}${t.on ? ` onclick="event.preventDefault();${t.on}"` : ''}><div class="tile-h"><small>${esc(t.lab)}</small><span>${esc(t.app)}</span></div>${t.bars || (t.ico ? `<div class="ico">${t.ico}</div>` : '')}<div class="v${t.cl === 'testo' ? '' : ' mono'}">${esc(t.v)}</div><div class="s">${t.sHtml || esc(t.s)}</div></a>`).join('');
   // grafico: uscite (arancione) ed entrate (tratteggio) dell'anno
   $('g-tit').textContent = `Entrate vs uscite · ${D.anno}`;
   const mx = Math.max(1, ...D.serieU, ...D.serieE), x = i => 25 + i*(550/11), y = v => 165 - v/mx*145;
@@ -441,9 +454,9 @@ function disegna(){
     <path d="${linea(D.serieU)}" fill="none" stroke="#F2711C" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
     <path d="${linea(D.serieE)}" fill="none" stroke="#8a7f77" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
     <circle cx="${x(D.mese)}" cy="${y(D.serieU[D.mese])}" r="5" fill="#F2711C" stroke="#fff" stroke-width="2"/>`;
-  // Giornale di Bordo
+  // Mezzi
   $('gb-tot').textContent = eur0(D.spesaMezzi);
-  $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo il Giornale…' : ' · il Giornale non si legge ancora: aprilo una volta');
+  $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo Mezzi…' : ' · Mezzi non si legge ancora: aprilo una volta');
   $('gb-chips').innerHTML = D.mezzi.map(m => `<span class="chip">${esc(m.nome)} · ${eur0(m.tot)}</span>`).join('');
   $('mezzi').innerHTML = D.mezzi.map((m, i) => `<a class="mezzo${i===1?' acc':''}" href="${GIORNALE_URL}">
     <div style="flex:1 1 auto;min-width:0"><b>${esc(m.nome)}</b>
@@ -460,7 +473,6 @@ function disegna(){
     <div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div>${a.google ? '' : pulsanteGoogle(a)}</a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
   disegnaGoogle();
   const set7 = agenda.filter(a => giorniA(a.d) <= 7).length;
-  disegnaPalestra();
   $('nbadge').hidden = !set7; $('nbadge').textContent = set7;
 }
 function disegnaCal(){
@@ -485,8 +497,12 @@ function calSposta(k){ calOff += k; if(D) disegnaCal(); disegnaCalGrande(); if(G
    Accesso con Google Identity Services (permesso calendar.events). Il token resta solo in memoria per un'ora,
    gli eventi di Google non vengono salvati da nessuna parte. Si scrive solo quando si preme "+" su una voce,
    con titolo e data (niente importi); la voce aggiunta porta un codice (dgid) per non crearla due volte. */
-const GC = { token: null, scade: 0, eventi: [], collegate: new Set(), err: '', client: null };
+const GC = { token: null, scade: 0, eventi: [], collegate: new Set(), err: '', client: null, calendari: [], nomeLavoro: '' };
 const GCAL_API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+const apiEventi = id => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`;
+// quale calendario Google è quello del lavoro (preferenza di questo dispositivo, non un dato)
+const calLavoro = () => { try { return localStorage.getItem('dg:gcalLavoro') || 'primary'; } catch(e){ return 'primary'; } };
+function scegliLavoro(id){ try { localStorage.setItem('dg:gcalLavoro', id); } catch(e){} gcalLeggi(); }
 const gcalUsato = () => { try { return localStorage.getItem('dg:gcal') === '1'; } catch(e){ return false; } };
 function caricaGis(){
   if(window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
@@ -495,7 +511,7 @@ function caricaGis(){
 async function gcalCollega(){
   if(!GCAL_CLIENT_ID) return;
   try { await caricaGis(); } catch(e){ GC.err = e.message; return disegnaGoogle(); }
-  if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events',
+  if(!GC.client) GC.client = google.accounts.oauth2.initTokenClient({ client_id: GCAL_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly',
     callback: r => {
       if(r.error){ GC.err = r.error_description || r.error; return disegnaGoogle(); }
       GC.token = r.access_token; GC.scade = Date.now() + (r.expires_in || 3600) * 1000 - 60000; GC.err = '';
@@ -507,7 +523,7 @@ async function gcalCollega(){
 }
 function gcalScollega(){
   if(GC.token && window.google) google.accounts.oauth2.revoke(GC.token, () => {});
-  Object.assign(GC, { token: null, eventi: [], collegate: new Set(), err: '' });
+  Object.assign(GC, { token: null, eventi: [], collegate: new Set(), err: '', calendari: [], nomeLavoro: '' });
   try { localStorage.removeItem('dg:gcal'); } catch(e){}
   if(D) disegna(); else disegnaGoogle();
 }
@@ -516,31 +532,47 @@ async function gcalFetch(url, opz = {}){
   const r = await fetch(url, { ...opz, headers: { Authorization: 'Bearer ' + GC.token, 'Content-Type': 'application/json' } });
   if(r.status === 401){ GC.token = null; GC.err = 'accesso a Google scaduto'; disegnaGoogle(); throw new Error('401'); }
   if(!r.ok) throw new Error('Google Calendar ' + r.status);
-  return r.json();
+  return r.status === 204 ? {} : r.json();
 }
 const isoLocale = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+async function leggiEventi(id, da, a, lavoro){
+  const out = []; let pagina = '';
+  do {
+    const q = new URLSearchParams({ timeMin: da.toISOString(), timeMax: a.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
+    if(pagina) q.set('pageToken', pagina);
+    const r = await gcalFetch(apiEventi(id) + '?' + q);
+    (r.items || []).forEach(e => {
+      if(e.status === 'cancelled' || !e.start) return;
+      const dgid = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.dgid;
+      const tutto = !!e.start.date, inizio = tutto ? new Date(e.start.date + 'T00:00') : new Date(e.start.dateTime);
+      const fine = e.end ? (e.end.date ? new Date(e.end.date + 'T00:00') : new Date(e.end.dateTime)) : new Date(inizio.getTime() + 36e5);
+      const ora = tutto ? '' : inizio.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      // "Lavoro" solo per gli eventi di un calendario di lavoro a parte; quelli del principale restano "Google Calendar"
+      const dalLavoro = lavoro && id !== 'primary';
+      out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: e.summary || '(senza titolo)', app: (dalLavoro ? 'Lavoro' : 'Google Calendar') + (ora ? ' · ' + ora : ''),
+        gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
+        descr: e.description || '', luogo: e.location || '',
+        tag: dalLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid });
+    });
+    pagina = r.nextPageToken || '';
+  } while(pagina);
+  return out;
+}
 async function gcalLeggi(){
-  // dal mese mostrato nel calendario (o da oggi) ai 60 giorni dopo
-  const oggi = new Date(), base = D ? new Date(D.anno, D.mese + calOff, 1) : new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+  // dal mese mostrato nel calendario (o da oggi) ai 30 giorni dopo
+  const oggi = new Date(), base = new Date(oggi.getFullYear(), oggi.getMonth() + calOff, 1);
   const da = new Date(Math.min(base, new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate()))), a = new Date(Math.max(new Date(base.getFullYear(), base.getMonth() + 1, 1), new Date(oggi.getTime() + 31 * 864e5)));
   try {
-    const out = [], collegate = new Set(); let pagina = '';
-    do {
-      const q = new URLSearchParams({ timeMin: da.toISOString(), timeMax: a.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
-      if(pagina) q.set('pageToken', pagina);
-      const r = await gcalFetch(GCAL_API + '?' + q);
-      (r.items || []).forEach(e => {
-        if(e.status === 'cancelled') return;
-        const dgid = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.dgid;
-        if(dgid) collegate.add(dgid);
-        const tutto = !!(e.start && e.start.date), inizio = tutto ? e.start.date : isoLocale(new Date(e.start.dateTime));
-        out.push({ d: inizio, titolo: e.summary || '(senza titolo)', app: 'Google Calendar' + (tutto ? '' : ' · ' + new Date(e.start.dateTime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})),
-          tag: 'GOO', amt: null, senzaImporto: true, google: true, href: e.htmlLink || 'https://calendar.google.com/', dgid });
-      });
-      pagina = r.nextPageToken || '';
-    } while(pagina);
+    if(!GC.calendari.length){
+      const l = await gcalFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader').catch(() => ({items: []}));
+      GC.calendari = (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.summaryOverride || c.summary || c.id, primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary }));
+    }
+    const lav = calLavoro(), principale = await leggiEventi('primary', da, a, lav === 'primary');
+    const lavoro = lav !== 'primary' ? await leggiEventi(lav, da, a, true).catch(() => []) : [];
+    GC.nomeLavoro = lav === 'primary' ? 'Google' : (GC.calendari.find(c => c.id === lav) || {}).nome || 'Lavoro';
+    GC.collegate = new Set(principale.filter(e => e.dgid).map(e => e.dgid));
     // le voci aggiunte da qui si vedono già come rata o scadenza: non le ripeto
-    GC.eventi = out.filter(e => !e.dgid); GC.collegate = collegate; GC.err = '';
+    GC.eventi = [...principale.filter(e => !e.dgid), ...lavoro.filter(e => !e.dgid)]; GC.err = '';
   } catch(e){ if(e.message !== '401' && e.message !== 'scaduto') GC.err = e.message; }
   if(D) disegna(); else disegnaGoogle();
 }
@@ -573,6 +605,8 @@ function disegnaGoogle(){
   const box = $('goo'); if(box) disegnaGoogleIn(box);
 }
 function disegnaGoogleIn(box){
+  const lav = $('lav-imp'); if(lav && box.id === 'goo-imp') lav.innerHTML = GC.token && GC.calendari.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2);margin-top:10px">Calendario di lavoro (per il riquadro "Lavoro")
+    <select onchange="scegliLavoro(this.value)" style="height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 10px;font:600 13px Manrope,sans-serif">${GC.calendari.map(c => `<option value="${esc(c.id)}"${c.id === calLavoro() ? ' selected' : ''}>${esc(c.primario ? c.nome + ' (principale)' : c.nome)}</option>`).join('')}</select></label>` : '';
   if(!GCAL_CLIENT_ID){ box.innerHTML = '<span>Google Calendar: da configurare</span>'; return; }
   if(GC.token && Date.now() < GC.scade){
     box.innerHTML = `<span>Google: ${GC.eventi.length} ${GC.eventi.length === 1 ? 'evento' : 'eventi'}${GC.err ? ' · ' + esc(GC.err) : ''}</span><span style="display:flex;gap:6px"><button type="button" onclick="gcalLeggi()">Aggiorna</button><button type="button" onclick="gcalScollega()">Scollega</button></span>`;
@@ -584,10 +618,10 @@ let giornoSel = null;
 function apriCalendario(){ $('p-cal').classList.add('on'); disegnaCalGrande(); document.body.style.overflow = 'hidden'; if(GC.token) gcalLeggi(); }
 function apriImpostazioni(){ $('p-imp').classList.add('on'); disegnaImpostazioni(); document.body.style.overflow = 'hidden'; }
 function chiudiPannello(){ document.querySelectorAll('.pannello').forEach(p => p.classList.remove('on')); document.body.style.overflow = ''; }
-document.addEventListener('keydown', e => { if(e.key === 'Escape') chiudiPannello(); });
+document.addEventListener('keydown', e => { if(e.key !== 'Escape') return; if($('p-ev').classList.contains('on')) chiudiEvento(); else chiudiPannello(); });
 function eventiDelGiorno(iso){
   const out = [];
-  if(D) D.eventiDett.filter(e => e.d === iso).forEach(e => out.push({...e, cl: e.app.startsWith('Giornale') ? 'gio' : 'bil', href: e.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'}));
+  if(D) D.eventiDett.filter(e => e.d === iso).forEach(e => out.push({...e, cl: e.app.startsWith('Mezzi') ? 'gio' : 'bil', href: e.app.startsWith('Mezzi') ? GIORNALE_URL : 'bilancio/'}));
   altriEventi().filter(e => e.d === iso).forEach(e => out.push({...e, cl:'pal'}));
   const al = allenamento(iso); if(al) out.push({...al, cl:'pal'});
   GC.eventi.filter(e => e.d === iso).forEach(e => out.push({...e, cl:'goo'}));
@@ -607,23 +641,73 @@ function disegnaCalGrande(){
   }
   $('calv').innerHTML = h;
   const sel = giornoSel || oggiIso, ev = eventiDelGiorno(sel);
-  $('calv-giorno').innerHTML = `<div class="sez"><h2>${esc(new Date(sel + 'T12:00').toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'}).replace(/^./, c => c.toUpperCase()))}</h2></div>
-    <div class="agenda">${ev.length ? ev.map(a => `<a class="item" href="${a.href || 'bilancio/'}"${a.google ? ' target="_blank" rel="noopener"' : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag || (a.cl === 'gio' ? 'MEZZO' : a.app.includes('rate') ? 'RATA' : 'ABB'))}</div>
+  evGiorno = ev;
+  $('calv-giorno').innerHTML = `<div class="sez"><h2>${esc(new Date(sel + 'T12:00').toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'}).replace(/^./, c => c.toUpperCase()))}</h2><button class="pill" type="button" style="border:0;cursor:pointer;padding:10px 14px" onclick="apriEvento({d:'${sel}'})">+ Evento</button></div>
+    <div class="agenda">${ev.length ? ev.map((a, i) => `<a class="item" href="${a.href || 'bilancio/'}"${a.google ? ` onclick="event.preventDefault();apriEvento(evGiorno[${i}])"` : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag || (a.cl === 'gio' ? 'MEZZO' : a.app.includes('rate') ? 'RATA' : 'ABB'))}</div>
       <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div>${a.paid ? '<small>pagato</small>' : ''}</div><div class="amt mono">${a.amt != null ? eur2(a.amt) : ''}</div></a>`).join('') : '<div class="vuoto">Niente in questo giorno.</div>'}</div>`;
 }
 function scegliGiorno(iso){ giornoSel = iso; disegnaCalGrande(); }
+let evGiorno = [], evAperto = null;
+
+/* ---- Eventi di Google Calendar: aggiungere, modificare, eliminare ---- */
+const piuGiorno = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n); return isoLocale(d); };
+function apriEvento(ev){
+  evAperto = ev;
+  $('p-ev').classList.add('on');
+  const nuovo = !ev.gid, box = $('ev-corpo');
+  $('ev-tit').textContent = nuovo ? 'Nuovo evento' : 'Evento';
+  if(!GCAL_CLIENT_ID){ box.innerHTML = `<p class="nota-ev">Gli eventi si salvano nel tuo Google Calendar: prima va configurato (ID client) e collegato. Trovi i passaggi in Impostazioni → Google Calendar.</p>`; return; }
+  if(!GC.token){ box.innerHTML = `<p class="nota-ev">Per ${nuovo ? 'aggiungere' : 'modificare'} eventi collega Google Calendar.</p><div class="imp-az"><button type="button" onclick="chiudiEvento();gcalCollega()">${gcalUsato() ? 'Mostra eventi' : 'Collega Google Calendar'}</button></div>`; return; }
+  const [di, oi] = (ev.inizioL || (ev.d + 'T09:00')).split('T'), [df, of] = (ev.fineL || (ev.d + 'T10:00')).split('T');
+  const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
+  const cal = GC.calendari.filter(c => c.scrivibile), scelto = ev.cal || 'primary';
+  box.innerHTML = `<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
+    <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
+    <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
+    <label>Dal<input type="date" id="ev-di" value="${esc(di)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-oi" value="${esc(oi || '09:00')}"></label>
+    <label>Al<input type="date" id="ev-df" value="${esc(fineGiorno)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-of" value="${esc(of || '10:00')}"></label>
+    <label class="tutta">Calendario<select id="ev-cal" ${nuovo ? '' : 'disabled'}>${(cal.length ? cal : [{id:'primary', nome:'Principale'}]).map(c => `<option value="${esc(c.id)}"${c.id === scelto ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
+    <label class="tutta">Luogo<input id="ev-l" value="${esc(ev.luogo || '')}"></label>
+    <label class="tutta">Note<textarea id="ev-n" rows="3">${esc(ev.descr || '')}</textarea></label>
+    <p class="nota-ev tutta" id="ev-err" role="alert"></p>
+    <div class="imp-az tutta">${nuovo ? '' : `<button type="button" class="rosso" onclick="eliminaEvento()">Elimina</button><a href="${esc(ev.href)}" target="_blank" rel="noopener">Apri in Google</a>`}<button type="submit" style="margin-left:auto;background:var(--acc);border-color:var(--acc)">Salva</button></div></form>`;
+  setTimeout(() => $('ev-t') && $('ev-t').focus(), 50);
+}
+function chiudiEvento(){ $('p-ev').classList.remove('on'); evAperto = null; }
+async function salvaEvento(){
+  const ev = evAperto, tutto = $('ev-tutto').checked, di = $('ev-di').value, df = $('ev-df').value || di, oi = $('ev-oi').value, of = $('ev-of').value;
+  const err = m => { $('ev-err').textContent = m; };
+  if(!$('ev-t').value.trim()) return err('Scrivi il titolo');
+  if(df < di || (!tutto && df === di && of <= oi)) return err('La fine è prima dell\'inizio');
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome';
+  const corpo = { summary: $('ev-t').value.trim(), location: $('ev-l').value.trim(), description: $('ev-n').value.trim(),
+    start: tutto ? { date: di } : { dateTime: `${di}T${oi}:00`, timeZone: tz },
+    end: tutto ? { date: piuGiorno(df, 1) } : { dateTime: `${df}T${of}:00`, timeZone: tz } };
+  // modificando, il campo dell'altro tipo (data / data e ora) va svuotato esplicitamente
+  if(ev.gid){ if(tutto){ corpo.start.dateTime = null; corpo.end.dateTime = null; } else { corpo.start.date = null; corpo.end.date = null; } }
+  try {
+    if(ev.gid) await gcalFetch(apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'PATCH', body: JSON.stringify(corpo) });
+    else await gcalFetch(apiEventi($('ev-cal').value), { method: 'POST', body: JSON.stringify(corpo) });
+    chiudiEvento(); giornoSel = di; await gcalLeggi();
+  } catch(e){ err('Non salvato: ' + e.message); }
+}
+async function eliminaEvento(){
+  const ev = evAperto; if(!ev || !ev.gid || !confirm('Eliminare "' + ev.titolo + '" da Google Calendar?')) return;
+  try { await gcalFetch(apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' }); chiudiEvento(); await gcalLeggi(); }
+  catch(e){ $('ev-err').textContent = 'Non eliminato: ' + e.message; }
+}
 
 function disegnaImpostazioni(){
   const u = Cassaforte.user;
   $('imp-corpo').innerHTML = `
-    <section class="imp-sez"><h3>Account</h3><p>${u ? 'Accesso come <b>' + esc(u.email || '') + '</b>. Lo stesso account e la stessa passphrase aprono Bilancio, Giornale e Palestra.' : 'Non hai fatto l\'accesso.'}</p>
+    <section class="imp-sez"><h3>Account</h3><p>${u ? 'Accesso come <b>' + esc(u.email || '') + '</b>. Lo stesso account e la stessa passphrase aprono Bilancio, Mezzi e Palestra.' : 'Non hai fatto l\'accesso.'}</p>
       <div class="imp-az"><button type="button" onclick="bloccaTutto()">Blocca</button><button type="button" class="rosso" onclick="esciTutto()">Esci dall'account</button></div></section>
-    <section class="imp-sez"><h3>Passphrase</h3><p>Cifra tutti i dati prima che arrivino su Firebase. Cambiandola si ricifrano Bilancio, Giornale e Palestra in un colpo solo.</p>
+    <section class="imp-sez"><h3>Passphrase</h3><p>Cifra tutti i dati prima che arrivino su Firebase. Cambiandola si ricifrano Bilancio, Mezzi e Palestra in un colpo solo.</p>
       <div class="imp-az"><a href="bilancio/#passphrase">Cambia passphrase</a></div></section>
     <section class="imp-sez"><h3>Google Calendar</h3><p>Eventi di Google nel calendario e "+" per aggiungere scadenze e rate (solo titolo e data). Il permesso resta in memoria per un'ora.</p>
-      <div class="goo-bar" id="goo-imp" style="margin-top:0"></div></section>
-    <section class="imp-sez"><h3>Impostazioni delle app</h3><p>Conti, carte, categorie e importazioni stanno in Bilancio; veicoli e preferenze nel Giornale; muscoli, giorni e blocchi nel Programma della Palestra.</p>
-      <div class="imp-az"><a href="bilancio/#impostazioni">Bilancio</a><a href="giornale/">Giornale di Bordo</a><a href="palestra/?t=schede">Palestra</a></div></section>
+      <div class="goo-bar" id="goo-imp" style="margin-top:0"></div><div id="lav-imp"></div></section>
+    <section class="imp-sez"><h3>Impostazioni delle app</h3><p>Conti, carte, categorie e importazioni stanno in Bilancio; veicoli e preferenze in Mezzi; muscoli, giorni e blocchi nel Programma della Palestra.</p>
+      <div class="imp-az"><a href="bilancio/#impostazioni">Bilancio</a><a href="giornale/">Mezzi</a><a href="palestra/?t=schede">Palestra</a></div></section>
     <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
   disegnaGoogle();
 }
@@ -637,7 +721,7 @@ async function leggiPalestra(){
     ['sessioni', 'corpo', 'abbonamento', 'programma', 'muscoli'].forEach(k => { try { o[k] = t[k] != null ? JSON.parse(t[k]) : null; } catch(e){} });
     PAL = o;
   } catch(e){ console.warn('Palestra', e); PAL = PAL || {errore: e.code || e.message}; }
-  disegnaPalestra(); if(D) disegna();
+  if(D) disegna();
 }
 // scadenza dell'abbonamento (fino a 30 giorni prima) tra le cose in programma
 function altriEventi(){
@@ -657,23 +741,36 @@ function prossimoAllenamento(){
   return null;
 }
 function tuttaAgenda(){ const al = prossimoAllenamento(); return [...D.agenda, ...altriEventi(), ...(al ? [al] : []), ...GC.eventi.filter(e => giorniA(e.d) >= 0 && giorniA(e.d) <= 30)].sort((x, y) => x.d.localeCompare(y.d)); }
-function hrefAgenda(a){ return a.href || (a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'); }
-function disegnaPalestra(){
-  const box = $('palestra'); if(!box) return;
-  if(!PAL){ box.innerHTML = '<div class="vuoto">Leggo la Palestra…</div>'; return; }
-  if(PAL.errore){ box.innerHTML = `<div class="vuoto">Palestra non leggibile (${esc(PAL.errore)}): se dice permission-denied, pubblica le regole Firestore aggiornate.</div>`; return; }
-  const ses = (PAL.sessioni || []).slice().sort((a, b) => b.d.localeCompare(a.d)), oggi = new Date(), mese = `${oggi.getFullYear()}-${String(oggi.getMonth()+1).padStart(2,'0')}`;
-  const delMese = ses.filter(s => s.d.startsWith(mese)).length, ult = ses[0], a = PAL.abbonamento;
-  const pesi = (PAL.corpo || []).filter(c => typeof c.peso === 'number').sort((x, y) => x.d.localeCompare(y.d));
-  const kgFmt = n => (Math.round(n*10)/10).toLocaleString('it-IT');
-  const ga = a && a.scadenza ? giorniA(a.scadenza) : null;
-  const card = (titolo, r1, r2, chip, v, sv, acc) => `<a class="mezzo${acc?' acc':''}" href="palestra/${chip[1]}"><div style="flex:1 1 auto;min-width:0"><b>${esc(titolo)}</b><div class="s">${r1}</div><div class="s">${r2}</div><div class="p">${esc(chip[0])}</div></div>
-    <div class="tot"><span class="mono">${esc(v)}</span><span style="font-weight:600;opacity:.75">${esc(sv)}</span></div></a>`;
-  box.innerHTML = [
-    card('Allenamenti', ult ? `Ultimo: ${esc(ult.nome)} · ${fmtD(ult.d)}` : 'Nessun allenamento ancora', ult && ult.durata ? `${ult.durata} min` : 'Inizia dalla Palestra', ['registro', ''], delMese, 'questo mese'),
-    card('Abbonamento', a ? esc(a.nome || 'Palestra') : 'Nessun abbonamento', ga == null ? (a ? 'Senza scadenza' : 'Segnalo nella Palestra') : ga < 0 ? `Scaduto il ${fmtD(a.scadenza)}` : `Scade il ${fmtD(a.scadenza)}`, ['abbonamento', '?t=abbo'], ga == null ? '–' : ga < 0 ? '!' : ga, ga == null ? '' : ga < 0 ? 'scaduto' : 'giorni', ga != null && ga <= 10),
-    card('Peso', pesi.length ? `Ultima misura: ${fmtD(pesi.at(-1).d)}` : 'Nessuna misura', pesi.length > 1 ? `${pesi.at(-1).peso - pesi[0].peso > 0 ? '+' : ''}${kgFmt(pesi.at(-1).peso - pesi[0].peso)} kg dal ${fmtD(pesi[0].d)}` : 'Aggiungi le misure', ['corpo', '?t=corpo'], pesi.length ? kgFmt(pesi.at(-1).peso) : '–', 'kg')
-  ].join('');
+function hrefAgenda(a){ return a.href || (a.app.startsWith('Mezzi') ? GIORNALE_URL : 'bilancio/'); }
+const ICO_PESI = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>';
+const ICO_LAVORO = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg>';
+// riquadro Palestra: la coppia di oggi (o il prossimo allenamento)
+function tilePalestra(){
+  const t = {href:'palestra/', lab:'Palestra', app:'oggi', cl:'testo', ico:ICO_PESI};
+  if(!PAL) return {...t, v:'…', s:'leggo il programma'};
+  if(PAL.errore) return {...t, v:'Non leggibile', s:PAL.errore};
+  if(!PAL.programma || !(PAL.programma.blocchi || []).length) return {...t, app:'', v:'Nessun programma', s:'imposta i blocchi nella Palestra'};
+  const mu = PAL.muscoli && PAL.muscoli.length ? PAL.muscoli : Programma.MUSCOLI_BASE, nome = id => (mu.find(m => m.id === id) || {nome:id}).nome;
+  const oggi = new Date(), g = Programma.giorno(PAL.programma, isoLocale(oggi));
+  if(g) return {...t, v:g.ordine.map(nome).join(' → '), s: g.ordine.length > 1 ? `${g.secondoGiorno ? 'secondo' : 'primo'} giorno della coppia · priorità ${nome(g.ordine[0]).toLowerCase()}` : 'un muscolo solo'};
+  for(let i = 1; i < 8; i++){
+    const d = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + i), n = Programma.giorno(PAL.programma, isoLocale(d));
+    if(n) return {...t, v:'Riposo', s:`${i === 1 ? 'domani' : d.toLocaleDateString('it-IT', {weekday:'long'})}: ${n.ordine.map(nome).join(' → ')}`};
+  }
+  return {...t, v:'Riposo', s:'nessun allenamento in programma'};
+}
+// riquadro Lavoro: il prossimo evento del calendario di lavoro scelto nelle impostazioni
+function tileLavoro(){
+  const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
+  if(!GCAL_CLIENT_ID) return {...t, v:'Da configurare', s:'Google Calendar non ancora collegato', on:'apriImpostazioni()'};
+  if(!GC.token) return {...t, v:gcalUsato() ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollega()'};
+  const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
+  if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
+  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:ev.href, blank:true};
+}
+function quando(ev){
+  const g = giorniA(ev.d), giorno = g === 0 ? 'oggi' : g === 1 ? 'domani' : new Date(ev.d + 'T12:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short'});
+  return ev.ora ? `${giorno} alle ${ev.ora}${ev.ts < Date.now() ? ' · in corso' : ''}` : `${giorno} · tutto il giorno`;
 }
 
 /* ---- Ricerca tra i movimenti di Bilancio ---- */
@@ -699,7 +796,7 @@ function controlla(){
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on'); }
     leggi();
-    // il Giornale arriva qualche secondo dopo: poi basta ogni 30 secondi
+    // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
   } else if(bloccato() && !$('sblocco').classList.contains('on')) mostraSblocco();
   else if(!pronto) $('stato').classList.add('on');
@@ -707,10 +804,10 @@ function controlla(){
 document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && pronto) setTimeout(leggi, 1500); });
 async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 
-/* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Giornale si aprono senza chiedere ---- */
+/* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Mezzi si aprono senza chiedere ---- */
 (async () => {
   await Cassaforte.porta({ nome: 'il tuo account', bilancio: 'bilancio/' });
-  // arrivato da Bilancio o dal Giornale (?torna=…): ci si torna subito
+  // arrivato da Bilancio o da Mezzi (?torna=…): ci si torna subito
   const torna = new URLSearchParams(location.search).get('torna');
   if(['bilancio/', 'giornale/', 'palestra/'].includes(torna)){
     try { sessionStorage.setItem('dg:tornato', String(Date.now())); } catch(e){}
