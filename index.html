@@ -288,6 +288,26 @@ a.p{text-decoration:none}
 .v5top .p.on:hover{background:#fff}
 .v5top .brand5{font-weight:800;color:#fff;font-size:15px;margin-left:4px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
 @media (max-width:700px){ .v5top .brand5{display:none} .tile.grande .v{font-size:24px} }
+
+/* rifiniture dal controllo a 1440 / 1024 / 768 / 390 px */
+main{container-type:inline-size}
+@container (max-width:810px){ .tiles{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.tile .s .sep{opacity:.7}
+@media (max-width:1180px) and (min-width:701px){ .v5top .p{padding:0 11px} }
+@media (max-width:1040px) and (min-width:701px){
+  .v5top .p{width:38px;padding:0;justify-content:center;font-size:0;gap:0}
+  .v5top .brand5{display:none}
+}
+.tile .tile-h small,.tile .tile-h span,.tile .s,.head p,.mesi,.leg,.item .t span,.item .t small,.sez h2{text-shadow:0 1px 3px rgba(40,20,5,.4)}
+@media (max-width:700px){
+  .tile .s .pos,.tile .s .neg{display:block} .tile .s .sep{display:none}
+  .giornale{min-height:0}
+  /* dentro un'app: niente dock in basso (l'app ha già la sua barra); si cambia app dalle icone in alto */
+  body.in-app nav{display:none !important}
+  body.in-app .v5top .centro{display:flex;gap:6px}
+  body.in-app .v5top .centro .p{width:38px;padding:0;justify-content:center;font-size:0;gap:0}
+  body.in-app .v5top .grp:last-child{display:none}
+}
 </style>
 </head>
 <body>
@@ -521,7 +541,7 @@ function disegna(){
   const saldi = ultimi(D.serieE.map((e, i) => e - D.serieU[i]));
   const agenda = tuttaAgenda();
   const tiles = [
-    {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), sHtml:`<span class="pos">entrate ${eur0(D.entrate)}</span> · <span class="neg">uscite ${eur0(D.uscite)}</span>`},
+    {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), sHtml:`<span class="pos">entrate ${eur0(D.entrate)}</span><span class="sep"> · </span><span class="neg">uscite ${eur0(D.uscite)}</span>`},
     {href:'bilancio/', lab:'Patrimonio', app:'Bilancio', cl:'grande', v:eur0(D.patr), s:`liquidità ${eur0(D.liq)}`},
     tilePalestra(), tileLavoro()
   ];
@@ -539,7 +559,9 @@ function disegna(){
   $('gb-tot').textContent = eur0(D.spesaMezzi);
   $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo Mezzi…' : ' · Mezzi non si legge ancora: aprilo una volta');
   $('gb-chips').innerHTML = D.mezzi.map(m => `<span class="chip">${esc(m.nome)} · ${eur0(m.tot)}</span>`).join('');
-  $('mezzi').innerHTML = D.mezzi.map((m, i) => `<a class="mezzo${i===1?' acc':''}" href="${GIORNALE_URL}">
+  const tra30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+  const urgente = D.mezzi.filter(m => m.prossima && m.prossima.d <= tra30).sort((a, b) => a.prossima.d.localeCompare(b.prossima.d))[0];
+  $('mezzi').innerHTML = D.mezzi.map(m => `<a class="mezzo${m === urgente ? ' acc' : ''}" href="${GIORNALE_URL}">
     <div style="flex:1 1 auto;min-width:0"><b>${esc(m.nome)}</b>
       <div class="s">${m.prossima ? `Prossima: ${esc(m.prossima.n)} · ${fmtD(m.prossima.d)}` : 'Nessuna scadenza in arrivo'}</div>
       <div class="s">${m.ultima ? `Ultima spesa: ${esc(m.ultima.det)} · ${fmtD(m.ultima.d)}` : 'Nessuna spesa quest\'anno'}</div>
@@ -954,7 +976,7 @@ function frameDi(v, extra){
 }
 function dimensiona(){
   const box = $('app-vista'); if(!document.body.classList.contains('in-app')) return;
-  const sotto = innerWidth <= 700 ? 92 : 18; // sul telefono la barra delle app sta in basso
+  const sotto = innerWidth <= 700 ? 12 : 18; // sul telefono, dentro un'app, il dock in basso si nasconde
   box.style.height = Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
   if(vista === 'bilancio'){ const r = box.getBoundingClientRect(); bil.style.inset = 'auto'; Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px'}); }
 }

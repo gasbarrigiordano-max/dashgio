@@ -26,7 +26,7 @@
   <g fill="#1d1510"><rect x="90" y="0" width="26" height="764"/><rect x="520" y="0" width="18" height="764"/><rect x="1000" y="0" width="18" height="764"/><rect x="1470" y="0" width="26" height="764"/></g>
   <rect width="1600" height="1000" fill="url(#luce)"/>
   <!-- divano e tavolino -->
-  <rect x="300" y="800" width="560" height="90" rx="30" fill="#d9cbb9" opacity=".9"/><rect x="300" y="770" width="560" height="50" rx="22" fill="#e7dccd" opacity=".9"/>
+  <rect x="300" y="800" width="560" height="90" rx="30" fill="#6f5a4b" opacity=".9"/><rect x="300" y="770" width="560" height="50" rx="22" fill="#7d6655" opacity=".9"/>
   <ellipse cx="1000" cy="880" rx="170" ry="30" fill="#5b4334"/><rect x="990" y="880" width="20" height="60" fill="#4a3628"/>
-  <rect x="1240" y="790" width="300" height="120" rx="34" fill="#cfc0ad" opacity=".85"/>
+  <rect x="1240" y="790" width="300" height="120" rx="34" fill="#6a5545" opacity=".85"/>
 </svg>

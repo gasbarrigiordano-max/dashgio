@@ -393,7 +393,7 @@ nav button.on{color:var(--acc)}
 /* vetro chiaro quasi trasparente sullo sfondo panoramico, come la Dashboard */
 :root[data-theme="notte"]{--panel:rgba(255,255,255,.10);--panel2:rgba(255,255,255,.08);--line:rgba(255,255,255,.20);--ink2:rgba(255,255,255,.82);--ink3:rgba(255,255,255,.66);--glass:rgba(30,20,14,.35)}
 :root[data-theme="notte"] .card{background:linear-gradient(rgba(40,24,12,.16),rgba(40,24,12,.16)),rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
-:root[data-theme="notte"] .card,:root[data-theme="notte"] .tx,:root[data-theme="notte"] .sec,:root[data-theme="notte"] .note{text-shadow:0 1px 10px rgba(40,20,5,.45)}
+:root[data-theme="notte"] .card,:root[data-theme="notte"] .tx,:root[data-theme="notte"] .sec,:root[data-theme="notte"] .note{text-shadow:0 1px 3px rgba(40,20,5,.45)}
 :root[data-theme="notte"]{--neg:#ffb4a3;--solid:rgba(30,21,15,.9);--solid2:rgba(40,29,21,.9)}
 :root[data-theme="notte"] .mx-wrap{background:rgba(30,20,14,.45)}
 /* dentro la Dashboard: niente sfondo proprio, si vede quello della Dashboard attraverso il vetro */
@@ -406,7 +406,7 @@ nav button.on{color:var(--acc)}
 :root[data-theme="notte"] .mx-wrap,
 :root[data-theme="notte"] .ptip{-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28)}
 :root[data-theme="notte"] .tx{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.16);border-radius:16px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
-:root[data-theme="notte"] .mast{background:rgba(30,23,19,.6);border-bottom-color:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
+:root[data-theme="notte"] .mast{background:rgba(30,20,14,.38);border-bottom-color:rgba(255,255,255,.08);border-radius:0 0 22px 22px;-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
 :root[data-theme="notte"] input,:root[data-theme="notte"] select,:root[data-theme="notte"] textarea{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.12);color:#fff}
 :root[data-theme="notte"] select option{background:#2a211c}
 :root[data-theme="notte"] .seg button.on{background:var(--acc);color:var(--on-acc)}
@@ -1110,7 +1110,7 @@ function rateCard(){
   const lines = groups.slice(0,MAX).map(([k,g])=>`<div><span>${esc(k)}</span>${amt(g.due, g.ign)}</div>`).join('')
     + (groups.length>MAX ? `<div><span>+ altri ${groups.length-MAX}</span>${amt(sum(groups.slice(MAX).map(([k,g])=>g.due)))}</div>` : '');
   return `<div class="card kpi rc" onclick="showTab('rate')"><small>Da pagare · ${M3[+ym.slice(5)-1]}${ym.slice(0,4)!=now.getFullYear()?' '+ym.slice(0,4):''}</small>
-    ${list.length ? `<b class="mono ${due?'neg':'pos'}">${due?eur(due):'Tutto pagato'}</b><div class="rl">${lines}</div>
+    ${list.length ? `<b class="${due?'mono neg':'pos'}">${due?eur(due):'Tutto pagato'}</b><div class="rl">${lines}</div>
       ${paid?`<div class="note">Già pagato ${eur(paid)}</div>`:''}` : `<div class="empty" style="padding:18px 0 0">Niente da pagare a ${MESI[+ym.slice(5)-1].toLowerCase()}</div>`}</div>`;
 }
 

@@ -36,7 +36,9 @@ html.incorporata body{background:transparent} html.incorporata body::before{disp
 a{color:var(--acc-soft)}
 button,input,select,textarea{font:inherit;color:inherit}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
-.glass{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--line);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 10px rgba(40,20,5,.45)}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--line);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 3px rgba(40,20,5,.45)}
+.tabs.glass{background:rgba(30,20,14,.55)}
+html.incorporata .tabs.glass{background:rgba(30,20,14,.85);-webkit-backdrop-filter:none;backdrop-filter:none}
 .wrap{max-width:760px;margin:0 auto;padding:calc(14px + var(--sat)) 16px calc(110px + var(--sab))}
 
 header.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
