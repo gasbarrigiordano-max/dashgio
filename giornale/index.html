@@ -5592,7 +5592,13 @@ async function trasloco() {
         f.corpo.querySelector('button').onclick = () => { f.chiudi(); fine(); };
       } catch (e) {
         console.error(e);
-        f.err('Trasloco non riuscito mentre ' + fase + ': ' + (e.code || e.message) + '.'
+        // regole pubblicate: la cassaforte del Giornale si può almeno leggere?
+        let diag = '';
+        if (e.code === 'permission-denied' && fase.includes('cassaforte')) {
+          try { await Cassaforte.ref().collection('giornale').get(); diag = ' Le regole permettono di leggere il Giornale ma non di scrivere questa voce.'; }
+          catch (x) { diag = x.code === 'permission-denied' ? ' Le regole pubblicate non hanno ancora il blocco per giornale e palestra (match /{app}/{voce}).' : ''; }
+        }
+        f.err('Trasloco non riuscito mentre ' + fase + ': ' + (e.code || e.message) + '.' + diag
           + (e.code === 'permission-denied' && fase.includes('cassaforte') ? ' Pubblica le regole aggiornate (firestore.rules) nella console di contabilit-1a500.' : '')
           + ' Non è stato cancellato niente: riprova.');
         modulo();
