@@ -288,6 +288,34 @@ a.p{text-decoration:none}
 .v5top .p.on:hover{background:#fff}
 .v5top .brand5{font-weight:800;color:#fff;font-size:15px;margin-left:4px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
 @media (max-width:700px){ .v5top .brand5{display:none} .tile.grande .v{font-size:24px} }
+/* telefono: riquadri tutti uguali (titolo, cifra, dettaglio), niente decorazioni, barra in alto sotto la Dynamic Island */
+@media (max-width:700px){
+  .v5top{height:calc(56px + var(--sat));padding:var(--sat) 14px 0}
+  .v5top .av,.v5top .t{width:36px;height:36px}
+  .wrap{padding:calc(66px + var(--sat)) 12px calc(92px + var(--sab)) !important}
+  nav{bottom:calc(12px + var(--sab)) !important}
+  main{padding:16px 14px !important;gap:14px}
+  .head h1{font-size:20px}
+  .head p{font-size:12.5px;margin-top:2px}
+  .cerca label{height:42px}
+  .tiles{gap:8px !important}
+  .tile{padding:12px 13px !important;gap:4px !important;border-radius:16px !important}
+  .tile .tile-h span,.tile .bars,.tile .ico{display:none}
+  .tile .tile-h small{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tile .v,.tile.grande .v{font-size:21px !important;margin-top:6px !important;letter-spacing:-.02em}
+  .tile.testo .v{font-size:15px !important;line-height:1.25}
+  .tile .s,.tile.grande .s{font-size:11.5px;line-height:1.35}
+  .tile .molo-t{height:auto;margin-top:4px}
+  .tile .molo-t b{font-size:26px}
+  .grafico svg{height:120px}
+  .mesi{font-size:9.5px}
+  nav.glass{background:rgba(30,20,14,.62) !important}
+  .mezzo{padding:12px 13px;gap:10px}
+  .mezzo .tot{width:52px;height:52px;font-size:10px}
+  .mezzo .s{font-size:11.5px}
+  .giornale svg{width:26px;height:26px}
+  aside{padding:16px 14px !important}
+}
 /* molo delle navi: numero grande nel riquadro Lavoro, etichetta arancione in agenda */
 .molo-t{height:34px;display:flex;align-items:baseline;gap:8px}
 .molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}

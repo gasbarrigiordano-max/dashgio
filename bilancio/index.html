@@ -265,6 +265,7 @@ nav{position:fixed;bottom:max(12px, calc(var(--sab) - 6px));left:50%;transform:t
   display:flex;padding:6px}
 nav button{flex:1;background:none;border:none;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:7px 0 6px;border-radius:26px;cursor:pointer;transition:background .2s}
 nav button.on{background:var(--nav-on)}
+@media (max-width:420px){ nav button{min-width:0;font-size:9.5px;letter-spacing:-.01em} }
 nav button svg{width:21px;height:21px}
 nav button.wide-only{display:none}
 /* ordine della barra del telefono: Panoramica, Movimenti, Carte, Rate, Patrimonio, Altro */
@@ -381,7 +382,7 @@ nav button.on{color:var(--acc)}
   --acc:#F2711C; --acc-dim:rgba(242,113,28,.18); --on-acc:#1a1411; --acc-shadow:rgba(242,113,28,.40); --pos:#7fd3a8;
   --neg:#ff8a73; --neg-line:rgba(255,138,115,.35); --warn:#f5c46b; --blue:#8ab4f8;
   --glass:rgba(30,23,19,.72); --sheet:#2a211c; --overlay:rgba(10,8,6,.62); --track:rgba(0,0,0,.30); --sub-bg:rgba(255,255,255,.03);
-  --hero-bg:rgba(40,32,28,.55); --hero-line:rgba(255,255,255,.10); --hero-ink:#ffb07a; --gate-glow:transparent;
+  --hero-bg:rgba(40,32,28,.55); --hero-line:rgba(255,255,255,.10); --hero-ink:rgba(255,255,255,.82); --gate-glow:transparent;
   --solid:#2a211c; --solid2:#33281f;
   --brand-bg:#F2711C; --brand-fg:#1a1411; --brand-cl:#7a3606; --brand-dot:#F2711C;
   --nav-glass:rgba(40,32,28,.62); --nav-line:rgba(255,255,255,.10); --nav-on:rgba(255,255,255,.10);
@@ -1342,7 +1343,7 @@ function renderPat(){
   GRP.forEach(([g,col])=>{
     const items = S.conti.filter(c=>c.g===g);
     html += `<div class="pg-${g.toLowerCase()}"><div class="gh"><b><i class="dot" style="background:${col}"></i>${g}</b><span class="mono">${eur(tot(g),0)}</span></div><div class="card" style="padding:4px 14px">
-      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${pct(c.v)} del patrimonio</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty">—</div>'}</div></div>`;
+      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${pct(c.v)} del patrimonio</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty" style="padding:12px 0;font-size:12.5px">Nessun conto</div>'}</div></div>`;
   });
   html += `</div><button class="btn ghost pat-add" onclick="openConto()">+ Aggiungi conto</button>`;
   html += storicoHTML();
