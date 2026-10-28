@@ -5552,12 +5552,17 @@ const VECCHIO_GIORNALE = {
 const VOCI_GIORNALE = ['launcherPrefs', 'bilancioPagamenti',
   'settings', 'expenses', 'trips', 'refuels', 'fuel', 'oil', 'oilRefuels', 'insurances', 'equipment', 'carrelloInsurances', 'carrelloRevisioni', 'carrelloBollo', 'carrelloLavori', 'rpmHoursLog', 'engineParts',
   ...['auto_', 'scooter_', 'moto_'].flatMap(p => ['settings', 'expenses', 'refuels', 'insurances', 'revisioni', 'bollo', 'manutenzione', 'parts', 'plannedTrips'].map(k => p + k))];
+const VOCE_GIORNALE = /^[A-Za-z0-9_]{1,60}$/;
 async function vecchieVoci(app, uid) {
+  vecchieVoci.altre = [];
   const data = app.firestore().collection('users').doc(uid).collection('data');
   try {
     const snap = await data.get();
-    // _notifiedDeadlines e simili: stato delle vecchie notifiche push, non serve più
-    return snap.docs.map(d => [d.id, d.data().value]).filter(([k, v]) => typeof v === 'string' && !k.startsWith('_'));
+    // _notifiedDeadlines e simili: stato delle vecchie notifiche push, non serve più.
+    // Voci di altre app nello stesso progetto (es. "libri:books"): restano lì, il Giornale usa solo lettere, cifre e _
+    const tutte = snap.docs.map(d => [d.id, d.data().value]).filter(([k, v]) => typeof v === 'string' && !k.startsWith('_'));
+    vecchieVoci.altre = tutte.filter(([k]) => !VOCE_GIORNALE.test(k)).map(([k]) => k);
+    return tutte.filter(([k]) => VOCE_GIORNALE.test(k));
   } catch (e) {
     if (e.code !== 'permission-denied') throw e;
     // elenco non permesso: una voce alla volta (quelle che non esistono si saltano)
@@ -5588,7 +5593,8 @@ async function trasloco() {
         const diverse = voci.filter(([k, v]) => letti[k] !== v).map(([k]) => k);
         if (diverse.length) throw new Error('voci diverse dopo la copia: ' + diverse.join(', '));
         await Cassaforte.scrivi('giornale', 'trasloco', JSON.stringify({ da: 'app-gommone', voci: voci.length, il: new Date().toISOString() }));
-        f.corpo.innerHTML = `<p class="cf-sub">Fatto: ${voci.length} voci copiate e ricontrollate.</p><button class="cf-btn" type="button">Apri il Giornale</button>`;
+        const altre = vecchieVoci.altre || [];
+        f.corpo.innerHTML = `<p class="cf-sub">Fatto: ${voci.length} voci copiate e ricontrollate.</p>${altre.length ? `<p class="cf-sub">Lasciate nel vecchio progetto perché non sono del Giornale: ${altre.map(escapeHtml).join(', ')}.</p>` : ''}<button class="cf-btn" type="button">Apri il Giornale</button>`;
         f.corpo.querySelector('button').onclick = () => { f.chiudi(); fine(); };
       } catch (e) {
         console.error(e);
