@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Dashboard di Giordano (Bilancio + Giornale di Bordo): un solo utente legge e scrive solo bilancio/{proprio uid}/...
+// Tutto è cifrato nel browser con la passphrase: su Firestore ci sono solo sale, iv e testo cifrato.
+// Sostituisci IL_TUO_UID con l'UID del tuo utente (Authentication → Utenti, colonna "UID utente").
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && uid == 'IL_TUO_UID';
+    }
+
+    // documento "cassaforte": sale, iterazioni e verifica della passphrase (niente dati in chiaro)
+    match /bilancio/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // sezioni cifrate (tx, conti, rate, carte…: qualsiasi nome in minuscolo); kid deve corrispondere al sale attuale, così un dispositivo con la
+      // passphrase vecchia non può sovrascrivere dati già ricifrati con quella nuova
+      match /sez/{sez} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && sez.matches('^[a-z]{2,16}$')
+          && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
+      }
+
+      // Giornale di Bordo: una voce cifrata per chiave (trips, auto_expenses…; le voci grandi in parti voce__p1, __p2…),
+      // stessa chiave e stesso controllo sul sale delle sezioni del Bilancio
+      match /giornale/{voce} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && voce.matches('^[A-Za-z0-9_]{1,60}$')
+          && request.resource.data.kid == getAfter(/databases/$(database)/documents/bilancio/$(uid)).data.salt;
+        allow delete: if isOwner(uid);
+      }
+    }
+  }
+}

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1411">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dashboard">
+<link rel="icon" type="image/png" href="dashboard-favicon.png">
+<link rel="apple-touch-icon" href="dashboard-180.png">
+<title>Dashboard di Giordano</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!--
+  Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Giornale di Bordo, in futuro altre).
+  Nessun dato proprio: apre Bilancio (bilancio/, stesso indirizzo) in un riquadro nascosto e ne legge i numeri,
+  compresi quelli che Bilancio legge dal Giornale di Bordo. Se Bilancio è bloccato mostra la sua schermata di sblocco.
+-->
+<style>
+:root{
+  --ink:#fff; --ink2:rgba(255,255,255,.74); --ink3:rgba(255,255,255,.6);
+  --acc:#F2711C; --acc-soft:#ffb07a; --acc-ink:#a04a0c;
+  --glass:rgba(40,32,28,.55); --line:rgba(255,255,255,.10);
+  --tile:rgba(255,255,255,.94); --tile-ink:#1d1a18; --tile-ink2:#5e5650;
+  --ok:#7fd3a8;
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{min-height:100vh;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#17120f;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(40% 35% at 18% 12%, rgba(255,196,140,.35), transparent 70%),
+  radial-gradient(35% 40% at 85% 20%, rgba(120,90,70,.55), transparent 70%),
+  radial-gradient(45% 40% at 70% 85%, rgba(242,113,28,.18), transparent 70%),
+  radial-gradient(40% 45% at 10% 90%, rgba(90,70,60,.6), transparent 70%),
+  linear-gradient(160deg,#3a2d25 0%,#241b16 55%,#15100d 100%)}
+a{color:var(--acc-soft)}a:hover{color:#ffd2b0}
+button{font:inherit;color:inherit}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08)}
+.wrap{max-width:1440px;margin:0 auto;padding:calc(20px + var(--sat)) 20px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
+
+/* barra delle sezioni */
+nav{border-radius:26px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto;align-self:flex-start;position:sticky;top:20px}
+.brand{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--acc);font-weight:800;font-size:16px}
+.navbtn{width:44px;height:44px;border-radius:14px;border:0;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;position:relative}
+.navbtn:hover{background:rgba(255,255,255,.08);color:#fff}
+.navbtn.on{background:var(--acc);color:#fff;box-shadow:0 8px 20px rgba(242,113,28,.45)}
+.navbtn[disabled]{opacity:.35;cursor:default}
+.navbtn .tip{position:absolute;left:54px;white-space:nowrap;background:rgba(0,0,0,.75);color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .15s}
+.navbtn:hover .tip{opacity:1}
+.nav-spazio{flex:1 1 auto;min-height:24px}
+
+main{border-radius:28px;padding:24px;flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px}
+aside{border-radius:28px;padding:20px;flex:1 1 280px;max-width:380px;display:flex;flex-direction:column;gap:16px}
+.head{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.head h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em}
+.head p{margin:4px 0 0;font-size:13px;color:var(--ink2)}
+.cerca{position:relative;flex:0 1 320px;min-width:0}
+.cerca label{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:99px;padding:0 14px;height:44px}
+.cerca input{background:transparent;border:0;outline:0;color:#fff;font:500 13px Manrope,sans-serif;width:100%}
+.cerca input::placeholder{color:var(--ink3)}
+.risultati{position:absolute;left:0;right:0;top:50px;z-index:5;border-radius:18px;padding:6px;display:none;max-height:360px;overflow:auto}
+.risultati.on{display:block}
+.ris{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:12px;font-size:12.5px;text-decoration:none;color:#fff}
+.ris:hover{background:rgba(255,255,255,.08);color:#fff}
+.ris small{display:block;color:var(--ink3);font-size:11px}
+.campana{width:44px;height:44px;border-radius:99px;border:1px solid var(--line);background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}
+.campana b{position:absolute;top:6px;right:6px;min-width:16px;height:16px;border-radius:99px;background:var(--acc);font-size:10px;line-height:16px;text-align:center;padding:0 4px}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.tile{background:var(--tile);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0;color:var(--tile-ink);text-decoration:none;transition:transform .15s}
+a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
+.tile-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tile-h small{font-size:12px;font-weight:700;color:#3c3631}
+.tile-h span{font-size:11px;font-weight:700;color:var(--acc-ink)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:34px}
+.bars i{width:5px;border-radius:3px;background:var(--acc);opacity:.85;min-height:3px}
+.tile .v{font-size:20px;font-weight:700;color:var(--acc-ink)}
+.tile .s{font-size:11.5px;color:var(--tile-ink2)}
+
+.riga2{display:flex;flex-wrap:wrap;gap:14px}
+.grafico{flex:2 1 380px}
+.grafico svg{width:100%;height:180px;display:block}
+.mesi{display:flex;justify-content:space-between;font-size:10.5px;color:#6b625b}
+.leg{display:flex;gap:16px;font-size:11.5px;color:#3c3631}
+.giornale{flex:1 1 240px;min-height:260px;border-radius:18px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;background:linear-gradient(160deg,#2b3f4d 0%,#18262f 60%,#0f1a21 100%);border:1px solid var(--line)}
+.chip{font-size:11px;font-weight:700;border-radius:99px;padding:4px 10px;background:rgba(255,255,255,.12);color:#fff}
+.pill{align-self:flex-start;background:var(--acc);color:#fff;text-decoration:none;font-weight:700;font-size:12.5px;border-radius:99px;padding:12px 16px}
+.pill:hover{color:#fff;filter:brightness(1.08)}
+
+.sez{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
+.sez h2{margin:0;font-size:14px;font-weight:800;padding-left:10px;border-left:3px solid var(--acc)}
+.mezzi{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.mezzo{border-radius:18px;padding:16px;display:flex;align-items:center;gap:14px;background:var(--tile);color:var(--tile-ink);text-decoration:none;transition:transform .15s}
+.mezzo:hover{transform:translateY(-3px);color:var(--tile-ink)}
+.mezzo.acc{background:var(--acc);color:#fff}
+.mezzo.acc:hover{color:#fff}
+.mezzo b{font-size:15px;font-weight:800}
+.mezzo .s{font-size:11.5px;margin-top:4px;opacity:.85}
+.mezzo .p{margin-top:10px;display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:4px 10px;background:#f3ece6}
+.mezzo.acc .p{background:rgba(255,255,255,.22)}
+.mezzo .tot{width:64px;height:64px;border-radius:99px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fde3d0;flex:0 0 auto;font-size:11px;font-weight:800;text-align:center;line-height:1.15}
+.mezzo.acc .tot{background:rgba(255,255,255,.22)}
+
+.profilo{display:flex;align-items:center;gap:12px}
+.avatar{width:40px;height:40px;border-radius:99px;background:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:800}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.stats div{background:rgba(255,255,255,.07);border-radius:14px;padding:10px 6px}
+.stats b{display:block;font-size:15px}
+.stats small{font-size:10.5px;color:var(--ink3)}
+.cal{background:rgba(255,255,255,.06);border-radius:18px;padding:14px}
+.cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cal-h button{width:32px;height:32px;border-radius:99px;border:0;background:rgba(255,255,255,.10);cursor:pointer}
+.cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.cal-g .wd{font-size:10.5px;color:var(--ink3);padding:4px 0}
+.cal-g .d{height:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11.5px;color:rgba(255,255,255,.85);border-radius:99px;position:relative}
+.cal-g .d.oggi{background:var(--acc);color:#fff;font-weight:800}
+.cal-g .d.ev::after{content:'';position:absolute;bottom:2px;width:5px;height:5px;border-radius:99px;background:var(--ok)}
+.cal-g .d.oggi.ev::after{background:#fff}
+.cal-leg{display:flex;gap:12px;margin-top:10px;font-size:10.5px;color:var(--ink2)}
+.agenda{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.06);text-decoration:none;color:#fff}
+.item:hover{background:rgba(255,255,255,.11);color:#fff}
+.item .tag{width:40px;height:40px;border-radius:12px;background:rgba(242,113,28,.18);color:var(--acc-soft);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:0 0 auto}
+.item .t{flex:1 1 auto;min-width:0}
+.item .t span{font-size:10px;font-weight:700;color:var(--acc-soft)}
+.item .t div{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .t small{font-size:11px;color:var(--ink3)}
+.item .amt{font-size:12px;font-weight:700;white-space:nowrap}
+.item .t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.vuoto{font-size:12px;color:var(--ink3);padding:8px 2px}
+
+.seg{width:fit-content;max-width:calc(100% - 24px);margin:0 auto calc(20px + var(--sab));border-radius:99px;padding:5px;display:flex;justify-content:center;gap:4px}
+.seg a{color:var(--ink2);text-decoration:none;font-weight:600;font-size:12.5px;padding:10px 14px;border-radius:99px}
+.seg a.on{background:var(--acc);color:#fff}
+
+/* attesa e sblocco di Bilancio */
+.stato{position:fixed;left:50%;bottom:calc(20px + var(--sab));transform:translateX(-50%);z-index:20;border-radius:99px;padding:10px 16px;font-size:12.5px;font-weight:600;display:none}
+.stato.on{display:block}
+#bil{position:fixed;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;z-index:-2}
+.sblocco{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(10,8,6,.55)}
+.sblocco.on{display:flex}
+.sblocco .box{width:min(480px,100%);height:min(720px,100%);border-radius:28px;overflow:hidden;display:flex;flex-direction:column}
+.sblocco .box header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 12px 18px;font-weight:800;font-size:14px}
+.sblocco .box header button{width:44px;height:44px;border-radius:99px;border:0;background:rgba(255,255,255,.12);cursor:pointer}
+.sblocco .slot{flex:1 1 auto;background:#fff}
+/* il riquadro di Bilancio non si sposta (si ricaricherebbe): si posiziona sopra la finestra */
+#bil.mostra{left:50%;top:50%;right:auto;bottom:auto;transform:translate(-50%,-50%) translateY(34px);width:min(480px,calc(100vw - 40px));height:min(652px,calc(100vh - 108px));opacity:1;pointer-events:auto;z-index:31;border-radius:0 0 28px 28px}
+
+@media (max-width:700px){
+  .wrap{padding:calc(12px + var(--sat)) 12px 14px;gap:12px}
+  nav{flex-direction:row;flex:1 1 100%;position:static;padding:8px;border-radius:22px;overflow-x:auto}
+  .navbtn .tip{display:none}
+  .nav-spazio{min-height:0;min-width:8px}
+  main{padding:16px;border-radius:24px}
+  aside{max-width:none;border-radius:24px}
+  .head h1{font-size:21px}
+  .head > div:first-child{flex:1 1 100% !important}
+  .cerca{flex:1 1 0}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tile{padding:13px}
+  .tile .v{font-size:17px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="glass" aria-label="Sezioni">
+  <div class="brand" aria-hidden="true">G</div>
+  <a class="navbtn on" href="#" aria-label="Panoramica" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="tip">Panoramica</span></a>
+  <a class="navbtn" href="bilancio/" aria-label="Bilancio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M5 6l9-3 2 3"/></svg><span class="tip">Bilancio</span></a>
+  <a class="navbtn giornale-link" href="#" aria-label="Giornale di Bordo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Giornale di Bordo</span></a>
+  <a class="navbtn" href="#agenda" aria-label="Scadenze"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Scadenze</span></a>
+  <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
+  <div class="nav-spazio"></div>
+  <a class="navbtn" href="bilancio/" aria-label="Impostazioni (in Bilancio)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="tip">Impostazioni</span></a>
+</nav>
+
+<main class="glass">
+  <div class="head">
+    <div style="flex:1 1 260px">
+      <h1 id="saluto">Ciao, Giordano</h1>
+      <p id="sotto">Ecco come stanno le tue finanze e i tuoi mezzi</p>
+    </div>
+    <div class="cerca">
+      <label><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color:var(--ink3)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Cerca spese, mezzi, voci…" aria-label="Cerca tra i movimenti di Bilancio" autocomplete="off"></label>
+      <div class="risultati glass" id="ris"></div>
+    </div>
+    <a class="campana" href="#agenda" aria-label="Scadenze dei prossimi 7 giorni"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></a>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="riga2">
+    <a class="tile grafico" href="bilancio/" aria-label="Entrate e uscite: apri Bilancio">
+      <div class="tile-h"><small style="font-size:14px" id="g-tit">Entrate vs uscite</small><span>Bilancio</span></div>
+      <svg id="g" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Grafico di entrate e uscite per mese"></svg>
+      <div class="mesi"><span>Gen</span><span>Feb</span><span>Mar</span><span>Apr</span><span>Mag</span><span>Giu</span><span>Lug</span><span>Ago</span><span>Set</span><span>Ott</span><span>Nov</span><span>Dic</span></div>
+      <div class="leg"><span><b style="color:var(--acc)">●</b> Uscite</span><span><b style="color:#8a7f77">●</b> Entrate</span></div>
+    </a>
+    <div class="giornale">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div><div style="font-size:15px;font-weight:800">Giornale di Bordo</div><div style="font-size:11.5px;color:var(--ink2);margin-top:3px">Spese, lavori e manutenzioni</div></div>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffb07a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="mono" style="font-size:24px;font-weight:700" id="gb-tot">–</div>
+        <div style="font-size:11.5px;color:var(--ink2)" id="gb-sub">spese dei mezzi</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px" id="gb-chips"></div>
+        <a class="pill giornale-link" href="#" style="margin-top:10px">Apri il Giornale</a>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <div class="sez"><h2>I miei mezzi</h2><a class="giornale-link" href="#" style="font-size:12px">apri il Giornale</a></div>
+    <div class="mezzi" id="mezzi"></div>
+  </section>
+</main>
+
+<aside class="glass" aria-label="Agenda">
+  <div class="profilo">
+    <div class="avatar" aria-hidden="true">G</div>
+    <div style="flex:1 1 auto"><div style="font-size:14px;font-weight:800">Giordano</div><div style="font-size:11.5px;color:var(--ink2)" id="aggiornato">Dashboard personale</div></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="cal">
+    <div class="cal-h"><b style="font-size:13px" id="cal-tit"></b>
+      <div style="display:flex;gap:6px"><button aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button aria-label="Mese successivo" onclick="calSposta(1)">›</button></div></div>
+    <div class="cal-g" id="cal"></div>
+    <div class="cal-leg"><span><b style="color:var(--acc)">●</b> oggi</span><span><b style="color:var(--ok)">●</b> rate e scadenze</span></div>
+  </div>
+  <div class="sez" id="agenda"><h2>In programma</h2></div>
+  <div class="agenda" id="lista"></div>
+</aside>
+
+</div>
+<div class="seg glass" role="navigation" aria-label="App">
+  <a class="on" href="#">Panoramica</a><a href="bilancio/">Bilancio</a><a class="giornale-link" href="#">Giornale di Bordo</a>
+</div>
+
+<div class="stato glass" id="stato" role="status">Apro Bilancio…</div>
+<div class="sblocco" id="sblocco" role="dialog" aria-modal="true" aria-label="Sblocca Bilancio">
+  <div class="box glass">
+    <header><span>Sblocca Bilancio per vedere i numeri</span><button aria-label="Chiudi" onclick="chiudiSblocco()">✕</button></header>
+    <div class="slot" id="slot"></div>
+  </div>
+</div>
+<iframe id="bil" src="bilancio/index.html" title="Bilancio (in background)" aria-hidden="true" tabindex="-1"></iframe>
+
+<script>
+// indirizzo del Giornale di Bordo (repo App-Gommone su GitHub Pages)
+const GIORNALE_URL = 'giornale/';
+document.querySelectorAll('.giornale-link').forEach(a => a.href = GIORNALE_URL);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// come in Bilancio: punto per le migliaia anche a 4 cifre (1.520 €), virgola per i decimali
+const migliaia = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const eur0 = v => (v<0?'-':'') + migliaia(Math.abs(Math.round(v))) + ' €';
+const eur2 = v => { const [i, d] = Math.abs(v).toFixed(2).split('.'); return (v<0?'-':'') + migliaia(i) + ',' + d + ' €'; };
+const fmtD = s => { const [y,m,d] = s.split('-'); return `${+d} ${['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][m-1]}${y!=new Date().getFullYear()?' '+y:''}`; };
+const giorniA = s => Math.round((new Date(s+'T12:00') - new Date(new Date().toISOString().slice(0,10)+'T12:00'))/864e5);
+
+/* ---- Lettura da Bilancio ----
+   Gira DENTRO il riquadro di Bilancio (eval nel suo contesto): usa le sue funzioni, così i numeri sono gli stessi dell'app. */
+function estrai(){
+  const oggi = today(), ym = thisMonth(), y = now.getFullYear(), mese = now.getMonth();
+  const sumA = (l, f) => l.reduce((a, x) => a + f(x), 0);
+  const nelMese = (t, m) => t.d.slice(0,7) === m;
+  const mesi = Array.from({length:12}, (_, i) => `${y}-${String(i+1).padStart(2,'0')}`);
+  const serieU = mesi.map(m => sumA(S.tx.filter(t => t.t==='u' && nelMese(t,m)), spesa));
+  const serieE = mesi.map(m => sumA(S.tx.filter(t => t.t==='e' && nelMese(t,m)), t => t.amt));
+  // da pagare nel mese, come la card di Bilancio: rate, abbonamenti e spese fisse, scadenze del Giornale
+  const daPagare = [
+    ...rateDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
+    ...abboDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
+    ...bordoDelMese(ym).map(x => ({amt:x.amt || 0, paid:x.paid}))];
+  const patr = sumA(S.conti, c => c.v), liq = sumA(S.conti.filter(c => c.g!=='Investimenti'), c => c.v);
+  // mezzi: le spese dell'anno in Mezzi › Auto / SH / Moto / Gommone (anche quelle arrivate dal Giornale)
+  const mz = S.tx.filter(t => t.t==='u' && /^mezzi$/i.test(t.cat||'') && txYear(t)===y);
+  const nomeMezzo = n => ({auto:'Auto', scooter:'SH', moto:'Moto', gommone:'Gommone', carrello:'Gommone'})[(n.split(' ').pop()||'').toLowerCase()];
+  const scad = bordo.voci.filter(v => !v.paid && v.d >= oggi);
+  const mezzi = [...new Set(['Auto','SH','Gommone', ...mz.map(t => t.sub).filter(Boolean)])].map(nome => {
+    const l = mz.filter(t => t.sub===nome), per = {};
+    l.forEach(t => { const k = t.det || 'Altro'; per[k] = (per[k]||0) + spesa(t); });
+    const prossima = scad.filter(v => nomeMezzo(v.n)===nome).sort((a,b) => a.d.localeCompare(b.d))[0];
+    const ultima = l.slice().sort((a,b) => b.d.localeCompare(a.d))[0];
+    return {nome, tot:sumA(l, spesa), voci:Object.entries(per).sort((a,b) => b[1]-a[1]).slice(0,3).map(x => x[0]),
+      prossima: prossima ? {n:prossima.n, d:prossima.d, amt:prossima.amt} : null, ultima: ultima ? {d:ultima.d, det:ultima.det||ultima.sub, amt:spesa(ultima)} : null};
+  }).filter(m => m.tot || m.prossima || ['Auto','SH','Gommone'].includes(m.nome));
+  // in programma: scadenze del Giornale, prossima rata di ogni piano, rinnovi degli abbonamenti
+  const agenda = [
+    ...scad.map(v => ({d:v.d, titolo:v.n, app:'Giornale di Bordo', amt:v.amt, tag:(nomeMezzo(v.n)||'').slice(0,4).toUpperCase() || 'MEZZO'})),
+    ...S.rate.filter(r => r.first && residue(r) > 0).map(r => ({d:dueDate(r, pagate(r)), titolo:(r.prod||r.tipo||'Rata') + (r.tipo && r.prod ? ' · '+r.tipo : ''), app:'Bilancio · rate', amt:quota(r, pagate(r)), tag:'RATA'})),
+    ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => ({d:a.next, titolo:a.n, app:'Bilancio · abbonamenti', amt:a.costo, tag:'ABB'}))
+  ].filter(x => x.d && x.d >= oggi).sort((a,b) => a.d.localeCompare(b.d));
+  // giorni con rate o scadenze, per il calendario (anche quelle già pagate)
+  const eventi = [...new Set([
+    ...bordo.voci.map(v => v.d),
+    ...S.rate.flatMap(r => r.first ? Array.from({length:r.n - r.fi}, (_, i) => dueDate(r, r.fi + i)) : []),
+    ...(S.abbo||[]).filter(a => a.attivo!==false && a.next).map(a => a.next),
+    ...S.tx.filter(t => t.abid).map(t => t.d)])].filter(Boolean);
+  const storico = (S.storico||[]).slice(-8).map(f => f.tot).concat([patr]);
+  return {
+    oggi, mese, anno:y, nomeMese:MESI[mese],
+    entrate:serieE[mese], uscite:serieU[mese], serieU, serieE,
+    daPagare: sumA(daPagare.filter(x => !x.paid), x => x.amt), pagato: sumA(daPagare.filter(x => x.paid), x => x.amt), nDaPagare: daPagare.filter(x => !x.paid).length,
+    patr, liq, storico,
+    mezzi, spesaMezzi: sumA(mz, spesa), agenda: agenda.slice(0, 7), eventi,
+    nConti: S.conti.length, nRate: S.rate.filter(r => residue(r) > 0).length,
+    bordo: bordo.stato
+  };
+}
+function cerca(q){
+  q = q.toLowerCase();
+  return S.tx.filter(t => (t.t==='u' || t.t==='e') && [t.cat, t.sub, t.det, t.note].join(' ').toLowerCase().includes(q))
+    .sort((a,b) => b.d.localeCompare(a.d)).slice(0, 8)
+    .map(t => ({d:t.d, testo:[t.sub||t.cat, t.det].filter(Boolean).join(' · '), cat:t.cat, amt:t.t==='e' ? t.amt : -spesa(t)}));
+}
+
+const bil = $('bil');
+let D = null, pronto = false, calOff = 0;
+const W = () => bil.contentWindow;
+function bilancioPronto(){
+  try { return W().eval('(!CLOUD || !!cloud.key) && !!(S && S.carte)'); } catch(e){ return false; }
+}
+function bloccato(){
+  try { const g = W().document.getElementById('gate'); return !!g && g.classList.contains('on') && !bilancioPronto(); } catch(e){ return false; }
+}
+function leggi(){
+  try { D = W().eval('(' + estrai.toString() + ')()'); disegna(); } catch(e){ console.error(e); }
+}
+
+/* ---- Disegno ---- */
+function barre(vals){
+  const v = vals.map(Math.abs), mx = Math.max(1, ...v);
+  return `<div class="bars" aria-hidden="true">${v.map(x => `<i style="height:${Math.max(3, Math.round(x/mx*34))}px"></i>`).join('')}</div>`;
+}
+function disegna(){
+  if(!D) return;
+  const ora = new Date().getHours();
+  $('saluto').textContent = (ora < 13 ? 'Buongiorno' : ora < 18 ? 'Buon pomeriggio' : 'Buonasera') + ', Giordano';
+  $('sotto').textContent = `${D.nomeMese} ${D.anno}: ecco come stanno le tue finanze e i tuoi mezzi`;
+  const saldo = D.entrate - D.uscite, ultimi = (a) => a.slice(Math.max(0, D.mese-8), D.mese+1);
+  const saldi = ultimi(D.serieE.map((e, i) => e - D.serieU[i]));
+  const prossima = D.agenda[0];
+  const tiles = [
+    {href:'bilancio/', lab:`Saldo di ${D.nomeMese.toLowerCase()}`, app:'Bilancio', bars:barre(saldi), v:eur0(saldo), s:`entrate ${eur0(D.entrate)} · uscite ${eur0(D.uscite)}`},
+    {href:'bilancio/', lab:'Da pagare', app:'Bilancio', bars:barre(ultimi(D.serieU)), v:D.daPagare ? eur0(D.daPagare) : 'Tutto pagato', s:D.nDaPagare ? `${D.nDaPagare} ${D.nDaPagare===1?'voce':'voci'} questo mese${D.pagato?' · già pagato '+eur0(D.pagato):''}` : (D.pagato ? 'già pagato '+eur0(D.pagato) : 'niente questo mese')},
+    {href:'bilancio/', lab:'Patrimonio', app:'Bilancio', bars:barre(D.storico), v:eur0(D.patr), s:`liquidità ${eur0(D.liq)}`},
+    prossima ? {href: prossima.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/', lab:'Prossima scadenza', app:prossima.app.split(' · ')[0].replace('Giornale di Bordo','Giornale'),
+      bars:'', v: giorniA(prossima.d)===0 ? 'Oggi' : giorniA(prossima.d)===1 ? 'Domani' : `tra ${giorniA(prossima.d)} giorni`, s:`${prossima.titolo} · ${fmtD(prossima.d)}${prossima.amt!=null?' · '+eur2(prossima.amt):''}`}
+      : {href:'bilancio/', lab:'Prossima scadenza', app:'', bars:'', v:'Nessuna', s:'niente in programma'}
+  ];
+  $('tiles').innerHTML = tiles.map(t => `<a class="tile" href="${t.href}"><div class="tile-h"><small>${esc(t.lab)}</small><span>${esc(t.app)}</span></div>${t.bars || '<div style="height:34px;display:flex;align-items:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F2711C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>'}<div class="v mono">${esc(t.v)}</div><div class="s">${esc(t.s)}</div></a>`).join('');
+  // grafico: uscite (arancione) ed entrate (tratteggio) dell'anno
+  $('g-tit').textContent = `Entrate vs uscite · ${D.anno}`;
+  const mx = Math.max(1, ...D.serieU, ...D.serieE), x = i => 25 + i*(550/11), y = v => 165 - v/mx*145;
+  const linea = s => s.map((v, i) => `${i?'L':'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  $('g').innerHTML = `<g stroke="#ece7e2" stroke-width="1"><line x1="0" y1="20" x2="600" y2="20"/><line x1="0" y1="92" x2="600" y2="92"/><line x1="0" y1="165" x2="600" y2="165"/></g>
+    <path d="${linea(D.serieU)} L${x(11)} 165 L${x(0)} 165 Z" fill="#F2711C" opacity=".10"/>
+    <path d="${linea(D.serieU)}" fill="none" stroke="#F2711C" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <path d="${linea(D.serieE)}" fill="none" stroke="#8a7f77" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(D.mese)}" cy="${y(D.serieU[D.mese])}" r="5" fill="#F2711C" stroke="#fff" stroke-width="2"/>`;
+  // Giornale di Bordo
+  $('gb-tot').textContent = eur0(D.spesaMezzi);
+  $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo il Giornale…' : ' · collega il Giornale in Bilancio → Impostazioni');
+  $('gb-chips').innerHTML = D.mezzi.map(m => `<span class="chip">${esc(m.nome)} · ${eur0(m.tot)}</span>`).join('');
+  $('mezzi').innerHTML = D.mezzi.map((m, i) => `<a class="mezzo${i===1?' acc':''}" href="${GIORNALE_URL}">
+    <div style="flex:1 1 auto;min-width:0"><b>${esc(m.nome)}</b>
+      <div class="s">${m.prossima ? `Prossima: ${esc(m.prossima.n)} · ${fmtD(m.prossima.d)}` : 'Nessuna scadenza in arrivo'}</div>
+      <div class="s">${m.ultima ? `Ultima spesa: ${esc(m.ultima.det)} · ${fmtD(m.ultima.d)}` : 'Nessuna spesa quest\'anno'}</div>
+      <div class="p">${m.voci.length ? esc(m.voci.join(' · ')) : 'nessuna voce'}</div></div>
+    <div class="tot" aria-label="Speso nel ${D.anno}"><span class="mono">${eur0(m.tot)}</span><span style="font-weight:600;opacity:.75">${D.anno}</span></div></a>`).join('');
+  // pannello a destra
+  $('stats').innerHTML = [[D.nConti,'Conti'],[D.mezzi.length,'Mezzi'],[D.nRate,'Rate attive']].map(([v,l]) => `<div><b class="mono">${v}</b><small>${l}</small></div>`).join('');
+  $('aggiornato').textContent = 'Aggiornata alle ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  disegnaCal();
+  $('lista').innerHTML = D.agenda.length ? D.agenda.map(a => `<a class="item" href="${a.app.startsWith('Giornale') ? GIORNALE_URL : 'bilancio/'}"><div class="tag">${esc(a.tag)}</div>
+    <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div><small>${fmtD(a.d)} · ${giorniA(a.d)===0?'oggi':giorniA(a.d)===1?'domani':'tra '+giorniA(a.d)+' giorni'}</small></div>
+    <div class="amt mono">${a.amt!=null ? eur2(a.amt) : '?'}</div></a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
+  const set7 = D.agenda.filter(a => giorniA(a.d) <= 7).length;
+  $('nbadge').hidden = !set7; $('nbadge').textContent = set7;
+}
+function disegnaCal(){
+  const base = new Date(D.anno, D.mese + calOff, 1), y = base.getFullYear(), m = base.getMonth();
+  $('cal-tit').textContent = base.toLocaleDateString('it-IT', {month:'long', year:'numeric'}).replace(/^./, c => c.toUpperCase());
+  const primo = (new Date(y, m, 1).getDay() + 6) % 7, ngiorni = new Date(y, m+1, 0).getDate();
+  const ev = new Set(D.eventi.filter(d => +d.slice(0,4)===y && +d.slice(5,7)===m+1).map(d => +d.slice(8,10)));
+  const oggi = new Date(D.oggi + 'T12:00');
+  let h = ['L','M','M','G','V','S','D'].map(w => `<div class="wd" aria-hidden="true">${w}</div>`).join('');
+  for(let i = 0; i < primo; i++) h += '<div></div>';
+  for(let d = 1; d <= ngiorni; d++){
+    const isOggi = oggi.getFullYear()===y && oggi.getMonth()===m && oggi.getDate()===d;
+    h += `<div class="d${isOggi?' oggi':''}${ev.has(d)?' ev':''}"${ev.has(d)?' title="Rate o scadenze"':''}>${d}</div>`;
+  }
+  $('cal').innerHTML = h;
+}
+function calSposta(k){ calOff += k; if(D) disegnaCal(); }
+
+/* ---- Ricerca tra i movimenti di Bilancio ---- */
+$('q').addEventListener('input', e => {
+  const q = e.target.value.trim(), box = $('ris');
+  if(q.length < 2 || !pronto){ box.classList.remove('on'); return; }
+  let r = []; try { r = W().eval('(' + cerca.toString() + ')(' + JSON.stringify(q) + ')'); } catch(err){}
+  box.innerHTML = r.length ? r.map(t => `<a class="ris" href="bilancio/"><div>${esc(t.testo)}<small>${esc(t.cat)} · ${fmtD(t.d)}</small></div><b class="mono" style="color:${t.amt<0?'#ffb3a1':'#9be3bd'}">${t.amt<0?'-':'+'}${eur2(Math.abs(t.amt))}</b></a>`).join('') : '<div class="vuoto" style="padding:10px">Nessun movimento.</div>';
+  box.classList.add('on');
+});
+document.addEventListener('click', e => { if(!e.target.closest('.cerca')) $('ris').classList.remove('on'); });
+
+/* ---- Bilancio in background: attesa, sblocco, aggiornamenti ---- */
+function mostraSblocco(){ bil.classList.add('mostra'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; $('sblocco').classList.add('on'); $('stato').classList.remove('on'); }
+function chiudiSblocco(){ $('sblocco').classList.remove('on'); bil.classList.remove('mostra'); bil.setAttribute('aria-hidden','true'); bil.tabIndex = -1; }
+let attese = 0;
+const giro = setInterval(() => {
+  attese++;
+  if(bilancioPronto()){
+    if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on'); }
+    leggi();
+    // il Giornale arriva qualche secondo dopo: poi basta ogni 30 secondi
+    if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); setInterval(leggi, 30000); }
+  } else if(bloccato() && !$('sblocco').classList.contains('on')) mostraSblocco();
+  else if(!pronto) $('stato').classList.add('on');
+}, 1000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && pronto) setTimeout(leggi, 1500); });
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Dati reali: mai nel repo
+*.csv
+*.json
+*.numbers
+*.xlsx
+
+.DS_Store
