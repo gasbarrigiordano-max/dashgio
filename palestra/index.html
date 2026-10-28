@@ -141,6 +141,9 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .ese-ed input{height:42px;border-radius:12px;border:1px solid var(--line);background:var(--campo);color:#fff;padding:0 8px;font-size:14px;outline:0;min-width:0;width:100%}
 .ese-ed .x{width:36px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.08);cursor:pointer;color:var(--ink2)}
 .ese-tit{display:grid;grid-template-columns:minmax(0,1fr) 54px 64px 60px 36px;gap:6px;font-size:10.5px;color:var(--ink3);margin-top:10px}
+.ese-ed.mu,.ese-tit.mu{grid-template-columns:minmax(0,1fr) 66px 52px 36px}
+.ese-ed .uso{display:grid;place-items:center;height:42px} .ese-ed .uso input{width:22px;height:22px;accent-color:var(--acc)}
+.ese-ed .info{grid-column:1/-1;font-size:11.5px;color:var(--ink3);margin-top:-2px}
 .azioni{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .azioni .btn{flex:1 1 140px}
 
@@ -297,6 +300,11 @@ const PR = window.Programma;
 const prog = () => P.programma || { slot: PR.SLOT_BASE.map(x => ({...x})), blocchi: [] };
 const muscoli = () => P.muscoli && P.muscoli.length ? P.muscoli : PR.MUSCOLI_BASE;
 const nomeM = id => (muscoli().find(m => m.id === id) || {nome: id}).nome;
+// metodo dei pesi: 4 serie a ripetizioni crescenti, la prima col peso ×5 (il massimale), poi il 10–15% in meno a ogni serie (in media 12,5%)
+const METODO = { rip: [6, 8, 10, 12], calo: 0.125 };
+const inUso = m => (m.esercizi || []).filter(e => e.uso !== false);
+const pesoX5 = e => { const t = String(e.x5 || '').replace(',', '.').match(/\d+(?:\.\d+)?/); return t ? +t[0] : null; };
+const pesiSerie = e => { const p = pesoX5(e); return p ? METODO.rip.map((_, j) => Math.round(p * Math.pow(1 - METODO.calo, j) * 2) / 2) : null; };
 const freccia = ordine => ordine.map(nomeM).join(' → ');
 const giornoLungo = iso => `${PR.GIORNI[PR.dow(iso)]} ${fmtD(iso)}`;
 function cardOggiProgramma(){
@@ -305,11 +313,12 @@ function cardOggiProgramma(){
   const settimana = PR.prossimi(pr, oggi, 7).map(x => `<div class="r"><span>${PR.GIORNI3[PR.dow(x.d)]} ${+x.d.slice(8)}</span><b>${x.g ? esc(freccia(x.g.ordine)) : '<span style="color:var(--ink3)">riposo</span>'}</b></div>`).join('');
   let testa;
   if (g) {
-    const es = g.ordine.flatMap(id => (muscoli().find(m => m.id === id) || {esercizi: []}).esercizi.map(e => ({...e, m: id})));
+    const es = g.ordine.flatMap(id => inUso(muscoli().find(m => m.id === id) || {esercizi: []}).map(e => ({...e, m: id, pesi: pesiSerie(e)})));
     const due = g.ordine.length > 1;
     testa = `<h2>Oggi: ${esc(freccia(g.ordine))}</h2>
       <p class="nota">${due ? (g.secondoGiorno ? `Secondo giorno della coppia: priorità a <b>${esc(nomeM(g.ordine[0]))}</b>, si parte dal suo esercizio più pesante.` : `Primo giorno della coppia: priorità a <b>${esc(nomeM(g.ordine[0]))}</b>. Domani si inverte.`) : 'Un solo muscolo oggi.'}</p>
-      ${es.length ? `<ol style="margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--ink2)">${es.map(e => `<li><b style="color:#fff">${esc(e.nome)}</b> · ${esc(nomeM(e.m))}${e.serie ? ' · ' + esc(e.serie) + '×' + esc(e.rip || '?') : ''}</li>`).join('')}</ol>`
+      ${es.length ? `<ol style="margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--ink2)">${es.map(e => `<li><b style="color:#fff">${esc(e.nome)}</b> · ${esc(nomeM(e.m))} · ${e.pesi ? `<span class="mono">${e.pesi.map(kg).join(' → ')}</span> kg` : METODO.rip.join('-')}</li>`).join('')}</ol>
+      <p class="nota" style="margin-top:6px">4 serie da ${METODO.rip.join('-')} ripetizioni: la prima col peso ×5, poi il 10–15% in meno a ogni serie.</p>`
         : `<p class="nota avviso">Non ci sono ancora esercizi per ${esc(g.ordine.map(nomeM).join(' e '))}: aggiungili in <a href="#" onclick="tab='schede';disegna();return false">Programma</a>.</p>`}
       <div class="azioni"><button class="btn" type="button" onclick="iniziaProgramma()">${giaFatto ? 'Rifai l\'allenamento di oggi' : 'Inizia l\'allenamento di oggi'}</button></div>`;
   } else {
@@ -320,8 +329,8 @@ function cardOggiProgramma(){
 }
 function iniziaProgramma(){
   const g = PR.giorno(prog(), oggiISO()); if (!g) return;
-  const esercizi = g.ordine.flatMap(id => (muscoli().find(m => m.id === id) || {esercizi: []}).esercizi.map(e => ({ id: nuovoId(), nome: e.nome, muscolo: id,
-    obiettivo: {serie: e.serie, rip: e.rip, rec: e.rec, note: e.note || ''}, serie: Array.from({length: Math.max(1, num(e.serie) || 1)}, () => ({kg: '', rip: '', fatto: false})) })));
+  const esercizi = g.ordine.flatMap(id => inUso(muscoli().find(m => m.id === id) || {esercizi: []}).map(e => ({ id: nuovoId(), nome: e.nome, muscolo: id,
+    obiettivo: {serie: String(METODO.rip.length), rip: METODO.rip.join('-'), rec: e.rec || '', note: e.note || '', pesi: pesiSerie(e)}, serie: METODO.rip.map(() => ({kg: '', rip: '', fatto: false})) })));
   P.inCorso = { id: nuovoId(), d: oggiISO(), inizio: new Date().toISOString(), schedaId: 'prog:' + g.ordine.join(''), nome: g.ordine.map(nomeM).join(' + '), note: '', esercizi };
   salva('inCorso'); tab = 'oggi'; disegna();
   if (!esercizi.length) toast('Aggiungi gli esercizi dei muscoli in Programma, o qui con "+ Esercizio"');
@@ -347,9 +356,11 @@ function vistaProgramma(){
       <div class="azioni"><button class="btn ghost" type="button" onclick="altraProposta()">Un'altra</button><button class="btn ghost" type="button" onclick="modificaBlocco(null, true)">Modifica</button><button class="btn" type="button" onclick="accettaProposta()">Accetta</button></div></section>` : ''}
     <div class="sez"><h2>Blocchi</h2><button class="link" type="button" onclick="modificaBlocco(null)">+ Blocco a mano</button></div>
     ${altri.map(b => `<section class="sess glass" onclick="modificaBlocco('${b.id}')"><div class="t">${periodo(b)}${b.dal > oggi ? ' · in arrivo' : ''}</div><small>${b.coppie.map(c => esc(PR.scriviCoppia(c)) || '–').join(' · ')}</small></section>`).join('') || (cur ? '' : '<p class="vuoto">Nessun blocco: accetta la proposta o scrivine uno (es. B/S, T/P, D).</p>')}
-    <div class="sez"><h2>Muscoli ed esercizi</h2></div>
-    <p class="nota" style="margin:-4px 2px 10px">Per ogni muscolo gli esercizi in ordine: il primo è il più pesante, quello da fare all'inizio quando il muscolo ha la priorità.</p>
-    ${muscoli().map(m => `<button class="scelta" type="button" onclick="modificaMuscolo('${esc(m.id)}')"><span class="ico">${esc(m.id)}</span><span class="cresce"><b>${esc(m.nome)}</b><small>${m.esercizi.length ? esc(m.esercizi.map(e => e.nome).join(' · ')) : 'nessun esercizio: tocca per aggiungerli'}</small></span></button>`).join('')}
+    <div class="sez"><h2>Muscoli ed esercizi</h2><button class="link" type="button" onclick="$('imp-scheda').click()">Importa scheda pesi</button></div>
+    <input type="file" id="imp-scheda" accept=".json,application/json" hidden onchange="importaScheda(this.files[0]);this.value=''">
+    <p class="nota" style="margin:-4px 2px 10px">Per ogni muscolo gli esercizi in uso, in ordine: il primo è quello da fare all'inizio quando il muscolo ha la priorità. Ognuno ${METODO.rip.length} serie da ${METODO.rip.join('-')}: la prima col peso ×5, poi il 10–15% in meno a ogni serie.</p>
+    ${muscoli().map(m => { const u = inUso(m), altri = (m.esercizi || []).length - u.length;
+      return `<button class="scelta" type="button" onclick="modificaMuscolo('${esc(m.id)}')"><span class="ico">${esc(m.id)}</span><span class="cresce"><b>${esc(m.nome)}</b><small>${u.length ? esc(u.map(e => e.nome + (pesoX5(e) ? ' ' + kg(pesoX5(e)) + ' kg' : '')).join(' · ')) : (m.esercizi || []).length ? 'nessun esercizio in uso' : 'nessun esercizio: tocca per aggiungerli'}${altri ? ` · altri ${altri} in archivio` : ''}</small></span></button>`; }).join('')}
     <div class="sez"><h2>Giorni</h2><button class="link" type="button" onclick="modificaGiorni()">Cambia</button></div>
     <p class="nota" style="margin:-4px 2px 0">${pr.slot.map(sl => esc(PR.etichettaSlot(sl))).join(' · ')}: con due giorni di fila la coppia si ripete e la priorità si inverte.</p>
     <div class="sez"><h2>Schede libere</h2><button class="link" type="button" onclick="modificaScheda(null)">+ Nuova scheda</button></div>
@@ -394,7 +405,7 @@ function salvaGiorni(){
 function modificaMuscolo(id){
   const m = muscoli().find(x => x.id === id); if (!m) return;
   bozza = {...JSON.parse(JSON.stringify(m)), tipo: 'muscolo'};
-  if (!bozza.esercizi.length) bozza.esercizi.push({nome: '', serie: '4', rip: '6-8', rec: '120', note: ''});
+  if (!bozza.esercizi.length) bozza.esercizi.push({nome: '', x5: '', uso: true, note: ''});
   disegnaBozza(false);
 }
 
@@ -421,10 +432,11 @@ function cardEsercizio(es, i){
       <button class="link" type="button" onclick="togliEsercizio(${i})" aria-label="Togli ${esc(es.nome)}">Togli</button></div>
     ${prima ? `<p class="prima">Ultima volta (${fmtD(prima.d)}): ${prima.serie.map(s => (num(s.kg) ? kg(num(s.kg)) + '×' : '') + s.rip).join(' · ')}</p>` : ''}
     ${es.serie.map((s, j) => {
-      const pp = prima && (prima.serie[j] || prima.serie.at(-1));
+      const pp = prima && (prima.serie[j] || prima.serie.at(-1)), rips = String(o && o.rip || '').split('-'), meta = o && o.pesi ? o.pesi[j] : null;
+      const kgSugg = meta != null ? kg(meta) : pp && num(pp.kg) ? kg(num(pp.kg)) : '0', ripSugg = rips.length === es.serie.length && rips[j] ? rips[j] : pp ? pp.rip : rips[0] || '';
       return `<div class="set${s.fatto ? ' fatto' : ''}"><span class="n">${j + 1}</span>
-        <label><input inputmode="decimal" aria-label="Chili serie ${j + 1}" value="${esc(s.kg)}" placeholder="${pp && num(pp.kg) ? kg(num(pp.kg)) : '0'}" oninput="cambiaSet(${i},${j},'kg',this.value)"><span>kg</span></label>
-        <label><input inputmode="numeric" aria-label="Ripetizioni serie ${j + 1}" value="${esc(s.rip)}" placeholder="${pp ? esc(pp.rip) : esc(String(o && o.rip || '').split('-')[0] || '')}" oninput="cambiaSet(${i},${j},'rip',this.value)"><span>rip</span></label>
+        <label><input inputmode="decimal" aria-label="Chili serie ${j + 1}" value="${esc(s.kg)}" placeholder="${esc(kgSugg)}" oninput="cambiaSet(${i},${j},'kg',this.value)"><span>kg</span></label>
+        <label><input inputmode="numeric" aria-label="Ripetizioni serie ${j + 1}" value="${esc(s.rip)}" placeholder="${esc(ripSugg)}" oninput="cambiaSet(${i},${j},'rip',this.value)"><span>rip</span></label>
         <button class="spunta" type="button" onclick="spunta(${i},${j})" aria-label="Serie ${j + 1} fatta" aria-pressed="${!!s.fatto}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button></div>`;
     }).join('')}
     <div class="es-piedi"><button class="link" type="button" onclick="aggiungiSerie(${i})">+ Serie</button>${es.serie.length > 1 ? `<button class="link" type="button" onclick="togliSerie(${i})">− Serie</button>` : ''}</div>
@@ -502,7 +514,15 @@ function modificaScheda(id){
 function disegnaBozza(nuova){
   const mu = bozza.tipo === 'muscolo';
   apri(mu ? 'Esercizi · ' + bozza.nome : nuova ? 'Nuova scheda' : 'Modifica scheda', `<div class="campi"><label class="tutta">Nome<input id="sc-n" value="${esc(bozza.nome)}" placeholder="Es. Giorno A · Petto e tricipiti" oninput="bozza.nome=this.value"></label></div>
-    ${mu ? '<p class="nota">In ordine: il primo è il più pesante, da fare per primo quando questo muscolo ha la priorità.</p>' : ''}
+    ${mu ? `<p class="nota">In ordine: il primo in uso è quello da fare per primo quando questo muscolo ha la priorità. Peso ×5: il massimale, la prima serie (${METODO.rip[0]} ripetizioni); le altre scendono da sole del 10–15%. Togli "in uso" per tenere un esercizio in archivio.</p>
+    <div class="ese-tit mu"><span>Esercizio</span><span>×5 kg</span><span>In uso</span><span></span></div>
+    ${bozza.esercizi.map((e, i) => `<div class="ese-ed mu">
+      <input aria-label="Esercizio ${i + 1}" list="sc-lista" value="${esc(e.nome)}" placeholder="Esercizio" oninput="bozza.esercizi[${i}].nome=this.value">
+      <input aria-label="Peso per 5 ripetizioni, esercizio ${i + 1}" inputmode="decimal" value="${esc(e.x5 || '')}" placeholder="kg" oninput="bozza.esercizi[${i}].x5=this.value">
+      <label class="uso"><input type="checkbox" aria-label="In uso, esercizio ${i + 1}" ${e.uso !== false ? 'checked' : ''} onchange="bozza.esercizi[${i}].uso=this.checked"></label>
+      <button class="x" type="button" aria-label="Togli esercizio ${i + 1}" onclick="bozza.esercizi.splice(${i},1);disegnaBozza(false)">✕</button>
+      ${e.x8 || e.x10 || e.mesi ? `<small class="info">${esc([e.x8 && '×8 ' + e.x8 + ' kg', e.x10 && '×10 ' + e.x10 + ' kg', e.mesi && 'periodo ' + e.mesi].filter(Boolean).join(' · '))}</small>` : ''}
+      ${i ? `<button class="link" type="button" style="grid-column:1/-1;justify-self:start;min-height:30px" onclick="sposta(${i},false)">↑ Sposta su</button>` : ''}</div>`).join('')}` : `
     <div class="ese-tit"><span>Esercizio</span><span>Serie</span><span>Rip</span><span>Rec (s)</span><span></span></div>
     ${bozza.esercizi.map((e, i) => `<div class="ese-ed">
       <input aria-label="Esercizio ${i + 1}" list="sc-lista" value="${esc(e.nome)}" placeholder="Esercizio" oninput="bozza.esercizi[${i}].nome=this.value">
@@ -511,9 +531,9 @@ function disegnaBozza(nuova){
       <input aria-label="Recupero in secondi" inputmode="numeric" value="${esc(e.rec)}" oninput="bozza.esercizi[${i}].rec=this.value">
       <button class="x" type="button" aria-label="Togli esercizio ${i + 1}" onclick="bozza.esercizi.splice(${i},1);disegnaBozza(${nuova})">✕</button>
       <input aria-label="Note esercizio ${i + 1}" style="grid-column:1/-1;height:36px;font-size:12.5px" value="${esc(e.note)}" placeholder="Note (tempo, presa, macchina…)" oninput="bozza.esercizi[${i}].note=this.value">
-      ${i ? `<button class="link" type="button" style="grid-column:1/-1;justify-self:start;min-height:30px" onclick="sposta(${i},${nuova})">↑ Sposta su</button>` : ''}</div>`).join('')}
+      ${i ? `<button class="link" type="button" style="grid-column:1/-1;justify-self:start;min-height:30px" onclick="sposta(${i},${nuova})">↑ Sposta su</button>` : ''}</div>`).join('')}`}
     <datalist id="sc-lista">${nomiEsercizi().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-    <button class="btn ghost pieno" type="button" style="margin-top:12px" onclick="bozza.esercizi.push({nome:'',serie:'3',rip:'8-10',rec:'90',note:''});disegnaBozza(${nuova})">+ Esercizio</button>
+    <button class="btn ghost pieno" type="button" style="margin-top:12px" onclick="bozza.esercizi.push(${mu ? "{nome:'',x5:'',uso:true,note:''}" : "{nome:'',serie:'3',rip:'8-10',rec:'90',note:''}"});disegnaBozza(${nuova})">+ Esercizio</button>
     <div class="azioni">${nuova || mu ? '' : `<button class="btn rosso" type="button" onclick="eliminaScheda()">Elimina</button>`}<button class="btn" type="button" onclick="salvaScheda()">Salva</button></div>`);
 }
 function sposta(i, nuova){ const e = bozza.esercizi; [e[i - 1], e[i]] = [e[i], e[i - 1]]; disegnaBozza(nuova); }
@@ -522,6 +542,7 @@ function salvaScheda(){
   if (bozza.tipo === 'muscolo') {
     if (!bozza.nome) return toast('Dai un nome al muscolo');
     const {tipo, ...m} = bozza;
+    m.esercizi = [...m.esercizi.filter(e => e.uso !== false), ...m.esercizi.filter(e => e.uso === false)]; // prima quelli in uso
     P.muscoli = muscoli().map(x => x.id === m.id ? m : x); salva('muscoli'); chiudi(); disegna(); return;
   }
   if (!bozza.nome) return toast('Dai un nome alla scheda');
@@ -529,6 +550,22 @@ function salvaScheda(){
   const i = P.schede.findIndex(s => s.id === bozza.id);
   if (i >= 0) P.schede[i] = bozza; else P.schede.push(bozza);
   salva('schede'); chiudi(); disegna();
+}
+// scheda dei pesi da file (preparato fuori dall'app): {tipo:'scheda-pesi', muscoli:[{id:'P', nome:'Petto', esercizi:[{nome, x5, x8, x10, mesi, uso}]}]}
+async function importaScheda(file){
+  if (!file) return;
+  let d; try { d = JSON.parse(await file.text()); } catch(e){ return toast('File non leggibile'); }
+  if (!d || d.tipo !== 'scheda-pesi' || !Array.isArray(d.muscoli)) return toast('Non è una scheda dei pesi');
+  const t = v => String(v ?? '').trim().slice(0, 40), nuovi = {};
+  d.muscoli.forEach(x => {
+    const m = muscoli().find(m => m.id === x.id || m.nome.toLowerCase() === String(x.nome || '').toLowerCase()); if (!m || !Array.isArray(x.esercizi)) return;
+    nuovi[m.id] = x.esercizi.filter(e => e && t(e.nome)).map(e => ({nome: String(e.nome).trim().slice(0, 80), x5: t(e.x5), x8: t(e.x8), x10: t(e.x10), mesi: t(e.mesi), uso: e.uso !== false, note: t(e.note)}));
+  });
+  const ids = Object.keys(nuovi); if (!ids.length) return toast('Nessun muscolo riconosciuto nella scheda');
+  const n = ids.reduce((a, k) => a + nuovi[k].length, 0), u = ids.reduce((a, k) => a + nuovi[k].filter(e => e.uso).length, 0);
+  if (!confirm(`Importo ${n} esercizi (${u} in uso) per ${ids.map(nomeM).join(', ')}. Prendono il posto degli esercizi attuali di questi muscoli. Continuare?`)) return;
+  P.muscoli = muscoli().map(m => nuovi[m.id] ? {...m, esercizi: [...nuovi[m.id].filter(e => e.uso), ...nuovi[m.id].filter(e => !e.uso)]} : m);
+  salva('muscoli'); toast(`Scheda importata: ${u} esercizi in uso`); disegna();
 }
 function eliminaScheda(){ if (!confirm('Eliminare la scheda "' + bozza.nome + '"? Gli allenamenti già fatti restano nello storico.')) return; P.schede = P.schede.filter(s => s.id !== bozza.id); salva('schede'); chiudi(); disegna(); }
 
