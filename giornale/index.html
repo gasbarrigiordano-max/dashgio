@@ -5556,7 +5556,8 @@ async function vecchieVoci(app, uid) {
   const data = app.firestore().collection('users').doc(uid).collection('data');
   try {
     const snap = await data.get();
-    return snap.docs.map(d => [d.id, d.data().value]).filter(([, v]) => typeof v === 'string');
+    // _notifiedDeadlines e simili: stato delle vecchie notifiche push, non serve più
+    return snap.docs.map(d => [d.id, d.data().value]).filter(([k, v]) => typeof v === 'string' && !k.startsWith('_'));
   } catch (e) {
     if (e.code !== 'permission-denied') throw e;
     // elenco non permesso: una voce alla volta (quelle che non esistono si saltano)
@@ -5581,8 +5582,7 @@ async function trasloco() {
       let fase = 'leggo il vecchio Giornale (progetto app-gommone)';
       try {
         const voci = await vecchieVoci(app, u.uid);
-        fase = 'scrivo nella cassaforte (progetto contabilit-1a500)';
-        for (const [k, v] of voci) await Cassaforte.scrivi('giornale', k, v);
+        for (const [k, v] of voci) { fase = 'scrivo "' + k + '" nella cassaforte (progetto contabilit-1a500)'; await Cassaforte.scrivi('giornale', k, v); }
         // ricontrollo: ogni voce riletta e decifrata dalla cassaforte deve essere identica
         const letti = await Cassaforte.tutti('giornale');
         const diverse = voci.filter(([k, v]) => letti[k] !== v).map(([k]) => k);
