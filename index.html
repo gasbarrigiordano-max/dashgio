@@ -1094,7 +1094,7 @@ async function salvaEvento(){
    l'evento di quella giornata si sposta, si aggiorna o si elimina; se non c'è, si crea nel calendario di lavoro.
    L'evento si riconosce dal segno che l'app gli lascia (dglav = id della giornata); la prima volta dalla data e dal titolo. */
 const normT = s => window.Porto ? Porto.norm(s) : String(s || '').toUpperCase();
-async function eventiDelGiorno(d){
+async function eventiGoogleDelGiorno(d){
   const lav = calLavoro(), [lavConto, ...r] = lav ? lav.split('|') : [null], lavId = r.join('|'), out = [];
   const da = new Date(d + 'T00:00'), a = new Date(da.getTime() + 864e5);
   for(const c of gcalAttivi()){
@@ -1111,7 +1111,7 @@ function puntiEvento(e, g){
   return e.tag === 'LAV' ? 1 : 0; // nel calendario di lavoro
 }
 async function eventoDellaGiornata(g){
-  const l = (await eventiDelGiorno(g.d)).map(e => ({e, p: puntiEvento(e, g)})).filter(x => x.p > 0).sort((a, b) => b.p - a.p);
+  const l = (await eventiGoogleDelGiorno(g.d)).map(e => ({e, p: puntiEvento(e, g)})).filter(x => x.p > 0).sort((a, b) => b.p - a.p);
   if(!l.length) return null;
   if(l.length > 1 && l[0].p === l[1].p && l[0].p < 100) return {ambiguo: true};
   return l[0].e;
