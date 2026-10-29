@@ -925,7 +925,8 @@
   body::before{content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--mesh);}
   /* schermate a tutto schermo (scelta del mezzo, accesso, impostazioni): coprono l'app, quindi fondo sfumato pieno */
   #launcher-screen, #auth-screen, #vehicle-onboarding-screen, #launcher-settings-screen, #vehicle-proposal-screen{background:var(--mesh) !important; background-color:#1f1814 !important;}
-  .phone{background:transparent; border-left:0; border-right:0;}
+  /* gommone come auto e scooter: fondo scuro pieno sotto i riquadri di vetro (sul tramonto le scritte si leggevano poco) */
+  .phone{background:var(--navy-deep); border-left:0; border-right:0;}
   /* superfici di vetro */
   .masthead, .tabbar, .modal, .toast, .vg-suggestions,
   .hero-stat, .stat-card, .chart-card, .fuel-card, .nav-card, .part-table-row{
@@ -1806,8 +1807,8 @@
   <div class="masthead">
     <div class="masthead-top">
       <div class="brand" onclick="showLauncher()" style="cursor:pointer;">
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#F2711C" stroke-width="1.4"/><path d="M12 4 L12 20 M4 12 L20 12" stroke="#F2711C" stroke-width="1" opacity="0.5"/><path d="M12 6 L14 12 L12 18 L10 12 Z" fill="#F2711C"/></svg>
-        <span class="brand-text" id="masthead-label">Mezzi</span>
+        <span style="font-size:17px; line-height:1;">⛵</span>
+        <span class="brand-text" id="masthead-label">Gommone</span>
       </div>
       <div class="masthead-icons">
         <button class="settings-btn" onclick="showTab('impostazioni')" aria-label="Impostazioni">
