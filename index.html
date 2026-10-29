@@ -238,7 +238,7 @@ body.in-app{overflow:hidden}
 body{background:#2a201a}
 body::before{background:url(comune/sfondo.svg) center/cover no-repeat !important}
 .glass{background:rgba(255,255,255,.10) !important;border:1px solid rgba(255,255,255,.24) !important;-webkit-backdrop-filter:blur(22px) saturate(150%) !important;backdrop-filter:blur(22px) saturate(150%) !important;box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28) !important}
-.wrap{padding:84px 24px 24px 92px !important}
+.wrap{padding:calc(84px + var(--sat)) 24px calc(24px + var(--sab)) 92px !important}
 nav{position:fixed !important;left:18px;top:50%;transform:translateY(-50%);border-radius:99px !important;padding:10px 6px !important;gap:6px !important;align-self:auto !important}
 nav .brand,nav .nav-spazio{display:none}
 .navbtn{width:38px !important;height:38px !important;border-radius:99px !important;color:rgba(255,255,255,.85) !important}
@@ -263,7 +263,8 @@ main,aside{border-radius:30px !important}
 .mezzo.acc{background:rgba(242,113,28,.55) !important}
 .cal,.stats div,.item{background:rgba(255,255,255,.10) !important;border-color:rgba(255,255,255,.14) !important}
 /* barra in alto */
-.v5top{position:fixed;left:0;right:0;top:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:12;
+/* sotto l'orologio e la batteria quando è aperta a tutto schermo (iPhone e iPad): su computer --sat è 0 */
+.v5top{position:fixed;left:0;right:0;top:0;height:calc(64px + var(--sat));display:flex;align-items:center;justify-content:space-between;padding:var(--sat) 18px 0;z-index:12;
   background:linear-gradient(180deg,rgba(25,18,13,.55),rgba(25,18,13,.15));-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .v5top .grp{display:flex;gap:8px;align-items:center}
 .v5top .t{width:38px;height:38px;border-radius:99px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;cursor:pointer;position:relative}
