@@ -16,7 +16,10 @@
 <title>Bilancio — Finanze personali</title>
 <script src="../comune/fisso.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 /* tema Carta (predefinito): bianco caldo e verde smeraldo */
 :root{
@@ -406,6 +409,8 @@ nav button.on{color:var(--acc)}
 :root[data-theme="notte"].incorporata,:root[data-theme="notte"].incorporata .gate{background:transparent}
 :root[data-theme="notte"].incorporata body::before{display:none}
 html.incorporata,html.incorporata[data-theme]{--sat:0px;--sab:0px}
+/* la sfocatura dei riquadri dentro la Dashboard vede solo il fondo trasparente della pagina: costava senza vedersi */
+html.incorporata .card,html.incorporata .seg,html.incorporata .mx-wrap,html.incorporata .tx{-webkit-backdrop-filter:none !important;backdrop-filter:none !important}
 :root[data-theme="notte"] body::before{content:'';position:fixed;inset:0;z-index:-1;background:var(--mesh)}
 :root[data-theme="notte"] .gate{background:var(--mesh)}
 :root[data-theme="notte"] .card,
@@ -2698,11 +2703,12 @@ const authMsg = e => ({
   'auth/network-request-failed':'Nessuna connessione'
 })[e.code] || 'Accesso non riuscito: '+(e.code||e.message);
 
-function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error(src)); document.head.appendChild(s); }); }
+// async = false: i tre file di Firebase si scaricano insieme ma partono in ordine (app, auth, firestore)
+function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement('script'); s.async=false; s.src=src; s.onload=ok; s.onerror=()=>ko(new Error(src)); document.head.appendChild(s); }); }
 async function boot(){
   if(!CLOUD) return;
   gate('loading','Connessione…');
-  try{ for(const f of ['app','auth','firestore']) await loadScript(`${FIREBASE_SDK}firebase-${f}-compat.js`); }
+  try{ await Promise.all(['app','auth','firestore'].map(f=>loadScript(`${FIREBASE_SDK}firebase-${f}-compat.js`))); }
   catch(e){ return gate('error','Impossibile caricare Firebase. Controlla la connessione e riprova.'); }
   firebase.initializeApp(FIREBASE_CONFIG);
   // niente cache di Firestore su disco: Bilancio, Mezzi e Dashboard stanno sullo stesso indirizzo e una cache condivisa

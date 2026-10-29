@@ -12,7 +12,10 @@
 <title>Dashboard di Giordano</title>
 <script src="comune/fisso.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <!--
   Dashboard di Giordano: una pagina che riassume le app personali (Bilancio, Mezzi, Palestra, in futuro altre).
   La Palestra si legge direttamente dalla cassaforte (Cassaforte.tutti('palestra')).
@@ -252,7 +255,7 @@ main,aside{border-radius:30px !important}
 .head h1{text-shadow:0 2px 16px rgba(60,30,10,.35)}
 .head p{color:rgba(255,255,255,.85)}
 .cerca label{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25)}
-.tile,.mezzo{background:linear-gradient(rgba(30,18,10,.42),rgba(30,18,10,.42)),rgba(255,255,255,.04) !important;color:#fff !important;border:1px solid rgba(255,255,255,.22);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.tile,.mezzo{background:linear-gradient(rgba(30,18,10,.42),rgba(30,18,10,.42)),rgba(255,255,255,.04) !important;color:#fff !important;border:1px solid rgba(255,255,255,.22)}
 .tile .tile-h small{color:rgba(255,255,255,.88) !important}
 .tile .tile-h span{color:#ffd2ad !important}
 .tile .v{color:#fff !important}
@@ -261,7 +264,7 @@ main,aside{border-radius:30px !important}
 .tile .ico{color:#ffd2ad}
 .mesi,.leg{color:rgba(255,255,255,.8) !important}
 .grafico svg g{stroke:rgba(255,255,255,.18)}
-.giornale{background:rgba(20,32,44,.28) !important;border:1px solid rgba(255,255,255,.22) !important;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.giornale{background:rgba(20,32,44,.28) !important;border:1px solid rgba(255,255,255,.22) !important}
 .mezzo .p{background:rgba(255,255,255,.18) !important;color:#fff}
 .mezzo .tot{background:rgba(255,255,255,.2) !important}
 .mezzo.acc{background:rgba(242,113,28,.55) !important}
@@ -1186,8 +1189,8 @@ function controlla(){
   }
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on');
-      // Mezzi e Palestra si preparano in sottofondo: aprendoli dopo, il cambio di vista è immediato
-      setTimeout(() => { frameDi('mezzi'); frameDi('palestra'); frameDi('lavoro'); }, 800); }
+      // le altre app si preparano in sottofondo, una alla volta e a Dashboard già disegnata: aprendole dopo, il cambio di vista è immediato
+      setTimeout(() => precarica(['palestra', 'lavoro', 'mezzi']), 2000); }
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
@@ -1201,6 +1204,13 @@ async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 let vista = 'panoramica';
 const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/', lavoro: 'lavoro/' };
 const frames = {};
+// la prossima parte solo quando la precedente ha finito di caricarsi e il telefono è libero (Mezzi, la più pesante, per ultima)
+function precarica(lista){
+  const v = lista.shift(); if(!v) return;
+  const dopo = () => (window.requestIdleCallback || (f => setTimeout(f, 300)))(() => precarica(lista), {timeout: 4000});
+  if(frames[v]) return dopo();
+  frameDi(v).addEventListener('load', () => setTimeout(dopo, 1200), {once: true});
+}
 function frameDi(v, extra){
   if(!frames[v]){
     const f = document.createElement('iframe');

@@ -57,7 +57,8 @@
     async set(id, v) { try { const db = await this.open(); await new Promise(ok => { const t = db.transaction('k', 'readwrite'), s = t.objectStore('k'); v == null ? s.delete(id) : s.put(v, id); t.oncomplete = t.onerror = () => ok(); }); } catch (e) {} }
   };
 
-  function carica(src) { return new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error(src)); document.head.appendChild(s); }); }
+  // async = false: i file si scaricano tutti insieme ma partono nell'ordine in cui sono stati aggiunti
+  function carica(src) { return new Promise((ok, ko) => { const s = document.createElement('script'); s.async = false; s.src = src; s.onload = ok; s.onerror = () => ko(new Error(src)); document.head.appendChild(s); }); }
   const authMsg = e => ({
     'auth/invalid-credential': 'Email o password errate', 'auth/wrong-password': 'Email o password errate',
     'auth/user-not-found': 'Email o password errate', 'auth/invalid-email': 'Email non valida',
@@ -73,9 +74,9 @@
     async avvia() {
       if (this._avvio) return this._avvio;
       this._avvio = (async () => {
-        if (!window.firebase || !firebase.initializeApp) await carica(SDK + 'firebase-app-compat.js');
-        if (!firebase.auth) await carica(SDK + 'firebase-auth-compat.js');
-        if (!firebase.firestore) await carica(SDK + 'firebase-firestore-compat.js');
+        const fb = window.firebase || {};
+        await Promise.all([!fb.initializeApp && 'app', !fb.auth && 'auth', !fb.firestore && 'firestore'].filter(Boolean)
+          .map(n => carica(SDK + 'firebase-' + n + '-compat.js')));
         if (!(firebase.apps || []).some(a => a.name === '[DEFAULT]')) firebase.initializeApp(CONFIG);
         // niente cache su disco, come in Bilancio: una cache condivisa fra più schede dello stesso sito può bloccare l'avvio su Safari
         this.db = firebase.firestore();

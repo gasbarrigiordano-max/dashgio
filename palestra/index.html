@@ -12,7 +12,10 @@
 <title>Palestra</title>
 <script src="../comune/fisso.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <!--
   Palestra: schede di allenamento, registro degli allenamenti con i record, progressi del corpo, abbonamento e ingressi.
   Dati cifrati nella cassaforte comune (comune/cassaforte.js), in bilancio/{uid}/palestra/{voce}:
@@ -34,6 +37,8 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:url(../comu
 /* dentro la Dashboard: si vede lo sfondo della Dashboard */
 html.incorporata body{background:transparent} html.incorporata body::before{display:none}
 html.incorporata{--sat:0px;--sab:0px}
+/* dentro la Dashboard la sfocatura dei riquadri vede solo il fondo trasparente della pagina: costava senza vedersi */
+html.incorporata .glass:not(.tabs):not(.toast):not(.recupero){-webkit-backdrop-filter:none;backdrop-filter:none}
 :root{color-scheme:dark}
 a{color:var(--acc-soft)}
 button,input,select,textarea{font:inherit;color:inherit}

@@ -10,8 +10,9 @@
 <script src="../comune/fisso.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
   :root{
     --navy-deep:#0A1F30;
@@ -928,8 +929,8 @@
   /* gommone come auto e scooter: fondo scuro pieno sotto i riquadri di vetro (sul tramonto le scritte si leggevano poco) */
   .phone{background:var(--navy-deep); border-left:0; border-right:0;}
   /* superfici di vetro */
-  .masthead, .tabbar, .modal, .toast, .vg-suggestions,
-  .hero-stat, .stat-card, .chart-card, .fuel-card, .nav-card, .part-table-row{
+  /* solo ciò che scorre sopra altro contenuto: i riquadri stanno su un fondo pieno, sfocarli costava senza vedersi */
+  .masthead, .tabbar, .modal, .toast, .vg-suggestions{
     -webkit-backdrop-filter:blur(26px) saturate(140%); backdrop-filter:blur(26px) saturate(140%);
   }
   .hero-stat, .stat-card, .chart-card, .fuel-card, .nav-card{
@@ -3297,9 +3298,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- cassaforte comune con Bilancio e la Dashboard: stesso account, stessa passphrase, dati cifrati -->
 <script src="../comune/cassaforte.js"></script>
 <script>
@@ -5084,14 +5082,30 @@ function vaResetImport() {
   document.getElementById('va-import-step-map').style.display = 'none';
   document.getElementById('va-import-step-done').style.display = 'none';
 }
+/* Librerie pesanti (Excel, grafici, mappe): si scaricano solo la prima volta che servono, non all'apertura */
+const LIBRERIE = {
+  xlsx: ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'],
+  chart: ['https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js'],
+  leaflet: ['https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css']
+};
+const libCaricate = {};
+function libreria(nome) {
+  return libCaricate[nome] || (libCaricate[nome] = Promise.all(LIBRERIE[nome].map(url => new Promise((ok, ko) => {
+    const css = url.endsWith('.css'), el = document.createElement(css ? 'link' : 'script');
+    if (css) { el.rel = 'stylesheet'; el.href = url; } else el.src = url;
+    el.onload = ok; el.onerror = () => { delete libCaricate[nome]; ko(new Error(url)); };
+    document.head.appendChild(el);
+  }))));
+}
 function vaHandleImportFile(event) {
   const file = event.target.files[0];
   if (!file) return;
   const isCsv = /\.csv$/i.test(file.name);
   vaImportIsBinaryDate = !isCsv;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
+      await libreria('xlsx');
       const wb = isCsv
         ? XLSX.read(e.target.result, { type: 'string', cellDates: true })
         : XLSX.read(e.target.result, { type: 'array', cellDates: true });
@@ -5295,6 +5309,7 @@ function vaRenderStatistiche() {
   document.getElementById('va-chart-category-period').textContent = vaStatsYear === 'all' ? 'Totale speso · sempre' : `Totale speso · ${vaStatsYear}`;
   document.getElementById('va-chart-category-total').textContent = fmtEUR(totalSpent);
 
+  if (typeof Chart === 'undefined') { libreria('chart').then(vaRenderStatistiche, () => {}); return; }
   const ctx1 = document.getElementById('va-chart-category').getContext('2d');
   if (vaChartCategory) vaChartCategory.destroy();
   if (catIds.length) {
@@ -9015,7 +9030,7 @@ function renderRouteMap(mapId, sectionId, routePoints) {
     return;
   }
   section.style.display = 'block';
-  if (typeof L === 'undefined') return;
+  if (typeof L === 'undefined') { libreria('leaflet').then(() => renderRouteMap(mapId, sectionId, routePoints), () => {}); return; }
   setTimeout(() => {
     try {
       const m = L.map(mapId, { zoomControl: false, attributionControl: false, scrollWheelZoom: false });
@@ -9035,7 +9050,7 @@ function renderTripRouteMap(trip) {
 
 function initMapIfNeeded() {
   if (map || !document.getElementById('trip-map')) return;
-  if (typeof L === 'undefined') return;
+  if (typeof L === 'undefined') { libreria('leaflet').then(initMapIfNeeded, () => {}); return; }
   try {
     map = L.map('trip-map', { zoomControl: false, attributionControl: false }).setView([41.9, 12.5], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
@@ -9096,6 +9111,7 @@ function renderStatistiche() {
     state.statsYear === 'all' ? 'Totale speso · sempre' : `Totale speso · ${state.statsYear}`;
   document.getElementById('chart-category-total').textContent = fmtEUR(totalSpent);
 
+  if (typeof Chart === 'undefined') { libreria('chart').then(renderStatistiche, () => {}); return; }
   const ctx1 = document.getElementById('chart-category').getContext('2d');
   if (chartCategory) chartCategory.destroy();
   if (catIds.length) {
