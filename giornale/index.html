@@ -1536,7 +1536,7 @@
     <input type="hidden" id="va-ref-id">
     <div class="field">
       <label>Data</label>
-      <input type="date" id="va-ref-date">
+      <input type="date" id="va-ref-date" onchange="vaRefOdoHint()">
     </div>
     <div class="field">
       <label>Prezzo al litro (€/L)</label>
@@ -1548,7 +1548,8 @@
     </div>
     <div class="field">
       <label>Km fatti dal pieno precedente</label>
-      <input type="number" id="va-ref-km" inputmode="numeric" placeholder="es. 420">
+      <input type="number" id="va-ref-km" inputmode="numeric" placeholder="es. 420" oninput="vaRefOdoHint()">
+      <div class="field-hint" id="va-ref-odo-hint"></div>
     </div>
     <div class="field">
       <label>Totale speso (€)</label>
@@ -3616,12 +3617,53 @@ async function vaLoadAll() {
     if (r.station && importedSuffixRe.test(r.station)) { r.station = r.station.replace(importedSuffixRe, '').trim(); vaNotesCleaned = true; }
   });
   if (vaNotesCleaned) await Promise.all([vaSave('expenses', vState.expenses), vaSave('refuels', vState.refuels)]);
+  // contachilometri dei pieni già registrati (una volta, poi solo per quelli che ne restano senza)
+  if (vaOdoCompleta()) { vaKmAvanti(Math.max(...vState.refuels.map(r => r.odo || 0))); await Promise.all([vaSave('refuels', vState.refuels), vaSave('settings', vState.settings)]); }
 }
 async function vaSave(key, data) {
   try { await storageSet(currentVehicle.prefix + key, JSON.stringify(data)); }
   catch (e) { showToast('Errore nel salvataggio'); }
 }
 function closeVaModal(id) { document.getElementById(id).classList.remove('show'); }
+
+/* ---- Contachilometri ----
+   Ogni rifornimento salva il contachilometri al pieno (odo) = contachilometri del pieno precedente + km fatti.
+   Così un cambio pezzo registrato in mezzo, che porta avanti i km del veicolo, non sposta il conto dei pieni:
+   pieno a 100.000, cambio a 100.150, pieno dopo con 300 km fatti → 100.300 (non 100.450).
+   I km del veicolo (kmTotali) salgono da soli col contachilometri dei pieni e coi km degli interventi. */
+const vaPieni = () => [...vState.refuels].sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((a.odo ?? 0) - (b.odo ?? 0)));
+// pieni senza contachilometri (registrati prima, o importati): avanti dal pieno precedente che lo ha,
+// se no all'indietro dal successivo, se no dall'ultimo = km del veicolo. Restituisce true se ha cambiato qualcosa
+function vaOdoCompleta() {
+  const s = vaPieni(); let cambiato = false;
+  if (!s.length) return false;
+  if (!s.some(r => r.odo != null)) { s[s.length - 1].odo = vState.settings.kmTotali || 0; cambiato = true; }
+  for (let i = 1; i < s.length; i++) if (s[i].odo == null && s[i - 1].odo != null) { s[i].odo = s[i - 1].odo + (s[i].km || 0); cambiato = true; }
+  for (let i = s.length - 2; i >= 0; i--) if (s[i].odo == null && s[i + 1].odo != null) { s[i].odo = s[i + 1].odo - (s[i + 1].km || 0); cambiato = true; }
+  return cambiato;
+}
+const vaKmInterventi = () => Math.max(0, ...(vState.manutenzione || []).map(m => m.km || 0), ...Object.values(vState.parts || {}).flatMap(p => (p.history || []).map(h => h.km || 0)));
+// km del veicolo almeno pari all'ultimo pieno e all'ultimo intervento; true se sono saliti
+function vaKmAvanti(km) {
+  const prima = vState.settings.kmTotali || 0;
+  vState.settings.kmTotali = Math.max(prima, km || 0);
+  return vState.settings.kmTotali !== prima;
+}
+// contachilometri che avrà un pieno nuovo (o modificato): quello del pieno precedente + km fatti
+function vaOdoPieno(date, km, escludiId) {
+  const s = vaPieni().filter(r => r.id !== escludiId && r.odo != null);
+  const prima = s.filter(r => String(r.date) <= date).pop();
+  const base = prima ? prima.odo : s.length ? s[0].odo - (s[0].km || 0) : (vState.settings.kmTotali || 0);
+  return base + (km || 0);
+}
+function vaRefOdoHint() {
+  const el = document.getElementById('va-ref-odo-hint'); if (!el) return;
+  const date = document.getElementById('va-ref-date').value || todayISO(), km = parseFloat(document.getElementById('va-ref-km').value);
+  const id = document.getElementById('va-ref-id').value || null;
+  const s = vaPieni().filter(r => r.id !== id && r.odo != null && String(r.date) <= date), prima = s.pop();
+  el.textContent = isNaN(km) ? (prima ? `Pieno precedente a ${prima.odo.toLocaleString('it-IT')} km` : '')
+    : `Contachilometri a questo pieno: ${vaOdoPieno(date, km, id).toLocaleString('it-IT')} km${prima ? ` (pieno precedente a ${prima.odo.toLocaleString('it-IT')})` : ''}`;
+}
 function vaCurrentOf(arr) { return [...arr].sort((a, b) => new Date(b.scadenza || 0) - new Date(a.scadenza || 0))[0] || null; }
 function vaComputeKmPerLitro() {
   let totalKm = 0, totalLiters = 0;
@@ -4643,6 +4685,7 @@ async function vaSavePartChange() {
   vaSyncLinkedExpense(entry, { date, amount: entry.price, note: label, category: 'manutenzione', excluded, ...pag });
   closeVaModal('va-part-modal-overlay');
   showToast('Cambio registrato');
+  if (vaKmAvanti(data.km)) { vaSave('settings', vState.settings); vaRenderMasthead(); }
   vaRenderStandardParts();
   vaRenderDashboard();
   vaSave('parts', vState.parts);
@@ -4715,6 +4758,7 @@ async function vaSaveTagliando() {
 
   closeVaModal('va-tagliando-modal-overlay');
   showToast('Tagliando registrato');
+  if (vaKmAvanti(km)) { vaSave('settings', vState.settings); vaRenderMasthead(); }
   vaRenderStandardParts();
   vaRenderDashboard();
   vaSave('parts', vState.parts);
@@ -4788,6 +4832,7 @@ async function vaSaveManutenzione() {
   vaSyncLinkedExpense(entry, { date, amount: entry.price, note: name, category: 'manutenzione', excluded, ...pag });
   closeVaModal('va-manutenzione-modal-overlay');
   showToast('Voce salvata');
+  if (vaKmAvanti(data.km)) { vaSave('settings', vState.settings); vaRenderMasthead(); }
   vaRenderManutenzioneList();
   vaRenderDashboard();
   vaSave('manutenzione', vState.manutenzione);
@@ -4812,7 +4857,7 @@ function vaRefuelRow(r) {
   return `<div class="refuel-row" onclick="vaOpenRefuelModal('${r.id}')">
     <div>
       <div class="rr-left">${fmtDate(r.date)}${r.station ? ' · ' + escapeHtml(r.station) : ''}</div>
-      <div class="rr-sub">${r.km ? r.km + ' km' : 'senza km'} · ${(r.euro / r.pricePerLitro).toFixed(1)} L · ${r.pricePerLitro.toFixed(3)} €/L</div>
+      <div class="rr-sub">${r.km ? r.km + ' km' : 'senza km'}${r.odo != null ? ' · a ' + r.odo.toLocaleString('it-IT') + ' km' : ''} · ${(r.euro / r.pricePerLitro).toFixed(1)} L · ${r.pricePerLitro.toFixed(3)} €/L</div>
     </div>
     <div class="rr-amount">-${fmtEUR(r.euro)}</div>
   </div>`;
@@ -4907,6 +4952,7 @@ function vaOpenRefuelModal(id) {
     document.getElementById('va-ref-delete-btn').style.display = 'none';
   }
   document.getElementById('va-refuel-modal-overlay').classList.add('show');
+  vaRefOdoHint();
 }
 async function vaSaveRefuel() {
   const id = document.getElementById('va-ref-id').value;
@@ -4927,19 +4973,23 @@ async function vaSaveRefuel() {
   if (!pricePerLitro || pricePerLitro <= 0) { showToast('Inserisci il prezzo al litro'); return; }
   if (!euro || euro <= 0) { showToast('Inserisci il totale speso'); return; }
 
+  // contachilometri al pieno: dal pieno precedente, non dai km attuali del veicolo (che un cambio pezzo può aver portato avanti)
+  const odo = vaOdoPieno(date, isNaN(km) ? 0 : km, id || null);
   if (id) {
     const old = vState.refuels.find(x => x.id === id);
-    vState.settings.kmTotali = Math.max(0, (vState.settings.kmTotali || 0) - (old.km || 0));
-    Object.assign(old, { date, pricePerLitro, km: isNaN(km) ? null : km, euro, station, fuelType, excluded, ...pag });
+    // i pieni dopo questo hanno i km fatti contati da qui: il loro contachilometri si sposta della stessa differenza
+    const diff = old.odo != null ? odo - old.odo : 0;
+    if (diff) vState.refuels.forEach(r => { if (r !== old && r.odo != null && String(r.date) > String(old.date)) r.odo += diff; });
+    Object.assign(old, { date, pricePerLitro, km: isNaN(km) ? null : km, odo, euro, station, fuelType, excluded, ...pag });
     const linkedExpense = vState.expenses.find(x => x.id === old.expenseId);
     if (linkedExpense) Object.assign(linkedExpense, { amount: euro, date, note: station || 'Rifornimento', excluded, ...pag });
-    vState.settings.kmTotali = (vState.settings.kmTotali || 0) + (isNaN(km) ? 0 : km);
+    vState.settings.kmTotali = Math.max(0, (vState.settings.kmTotali || 0) + diff);
   } else {
     const expenseId = uid();
     vState.expenses.push({ id: expenseId, category: 'carburante', amount: euro, date, note: station || 'Rifornimento', excluded, ...pag });
-    vState.refuels.push({ id: uid(), date, pricePerLitro, km: isNaN(km) ? null : km, euro, station, fuelType, excluded, expenseId, ...pag });
-    vState.settings.kmTotali = (vState.settings.kmTotali || 0) + (isNaN(km) ? 0 : km);
+    vState.refuels.push({ id: uid(), date, pricePerLitro, km: isNaN(km) ? null : km, odo, euro, station, fuelType, excluded, expenseId, ...pag });
   }
+  vaKmAvanti(Math.max(odo, ...vState.refuels.map(r => r.odo || 0), vaKmInterventi()));
   closeVaModal('va-refuel-modal-overlay');
   showToast('Rifornimento registrato');
   vaRenderRifornimenti();
@@ -4957,7 +5007,9 @@ function vaDeleteRefuel() {
   showConfirm('Eliminare questo rifornimento?', 'I km collegati verranno tolti dal totale del veicolo. La spesa collegata verrà rimossa anche dalle Spese.', async () => {
     vState.refuels = vState.refuels.filter(x => x.id !== id);
     vState.expenses = vState.expenses.filter(x => x.id !== r.expenseId);
-    vState.settings.kmTotali = Math.max(0, (vState.settings.kmTotali || 0) - (r.km || 0));
+    // se era l'ultimo pieno i km del veicolo tornano indietro dei suoi km fatti, ma non sotto l'ultimo pieno rimasto né l'ultimo intervento
+    const ultimo = !vState.refuels.some(x => (x.odo || 0) > (r.odo || 0));
+    if (ultimo) vState.settings.kmTotali = Math.max((vState.settings.kmTotali || 0) - (r.km || 0), ...vState.refuels.map(x => x.odo || 0), vaKmInterventi());
     closeVaModal('va-refuel-modal-overlay');
     showToast('Rifornimento eliminato');
     vaRenderRifornimenti();
@@ -4983,6 +5035,9 @@ async function vaShiftRefuelKm() {
   const oldKm = sorted.map(r => r.km);
   sorted.forEach((r, i) => { r.km = i === 0 ? null : oldKm[i - 1]; });
   vState.settings.kmTotali = sorted.reduce((s, r) => s + (r.km || 0), 0);
+  sorted[sorted.length - 1].odo = vState.settings.kmTotali;
+  for (let i = sorted.length - 2; i >= 0; i--) sorted[i].odo = sorted[i + 1].odo - (sorted[i + 1].km || 0);
+  vaKmAvanti(vaKmInterventi());
   await Promise.all([
     vaSave('refuels', vState.refuels),
     vaSave('settings', vState.settings),
@@ -5204,6 +5259,7 @@ async function vaConfirmImport() {
     vState.refuels.push({ id: uid(), date: e.date, pricePerLitro: e.price, km: e.km ?? null, euro: e.total, station: e.station, fuelType: e.fuelType, expenseId });
     vState.settings.kmTotali = (vState.settings.kmTotali || 0) + (e.km || 0);
   });
+  vaOdoCompleta();
   await Promise.all([
     vaSave('refuels', vState.refuels),
     vaSave('expenses', vState.expenses),
