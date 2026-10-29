@@ -66,5 +66,12 @@
     return parti.length === 1 ? parti[0] : null;
   }
 
-  window.Porto = { URL: URL_PORTO, analizza, leggi, trova, norm };
+  // una nave della tabella (in qualsiasi giorno) nominata nel titolo: per i giorni che il porto non ha ancora pubblicato
+  function nave(dati, titolo) {
+    if (!dati || !titolo) return null;
+    const t = ' ' + norm(titolo) + ' ';
+    return [...new Set(dati.navi.map(n => n.nave))].filter(n => t.includes(' ' + n + ' ')).sort((a, b) => b.length - a.length)[0] || null;
+  }
+
+  window.Porto = { URL: URL_PORTO, analizza, leggi, trova, nave, norm };
 })();

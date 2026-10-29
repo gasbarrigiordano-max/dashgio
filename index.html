@@ -328,6 +328,7 @@ a.p{text-decoration:none}
 .molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}
 .molo-t b{font-size:34px;line-height:1;font-weight:700;color:#fff}
 .molo-b{flex:0 0 auto;min-width:52px;padding:6px 10px;border-radius:12px;background:#F2711C;color:#fff;display:flex;flex-direction:column;align-items:center;line-height:1}
+.molo-b.attesa{background:rgba(242,113,28,.18);border:1px dashed rgba(255,176,122,.7);color:#ffd2ad}
 .molo-b small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
 .molo-b b{font-size:20px;margin-top:3px}
 .molo-ev{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:rgba(242,113,28,.14);border:1px solid rgba(242,113,28,.35)}
@@ -848,17 +849,26 @@ async function gcalLeggi(){
 }
 // moli del porto di Civitavecchia: le navi nominate nei titoli degli eventi Google (comune/porto.js)
 let PORTO = null, portoProvato = 0;
-const etichettaMolo = m => m.banchina ? `molo ${m.banchina}` : 'molo non ancora indicato';
+const etichettaMolo = m => m.attesa ? 'molo non ancora pubblicato' : m.banchina ? `molo ${m.banchina}` : 'molo non ancora indicato';
 // il molo ben visibile: etichetta a destra delle voci in agenda
-const badgeMolo = a => a.molo ? `<div class="molo-b" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.banchina || '–')}</b></div>` : '';
-function applicaMoli(){
-  if(!PORTO) return;
-  GC.eventi.forEach(e => { if(e.molo === undefined) e.molo = Porto.trova(PORTO, e.titolo, e.d); });
+const badgeMolo = a => a.molo ? `<div class="molo-b${a.molo.attesa ? ' attesa' : ''}" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.attesa ? '…' : a.molo.banchina || '–')}</b></div>` : '';
+// la nave nel giorno dell'evento; dopo l'ultimo giorno pubblicato dal porto, se la nave è nota: molo in attesa
+function moloDi(e){
+  const m = Porto.trova(PORTO, e.titolo, e.d); if(m) return m;
+  const n = PORTO.al && e.d > PORTO.al ? Porto.nave(PORTO, e.titolo) : null;
+  return n ? { d: e.d, nave: n, banchina: '', orari: '', attesa: true } : null;
 }
+function applicaMoli(tutti){
+  if(!PORTO) return;
+  GC.eventi.forEach(e => { if(tutti || e.molo === undefined) e.molo = moloDi(e); });
+}
+// la tabella del porto cambia una volta a settimana: con la Dashboard aperta a lungo si rilegge ogni 3 ore
 function leggiPorto(){
-  if(PORTO || !window.Porto || !GC.eventi.length || Date.now() - portoProvato < 10 * 60e3) return;
+  if(!window.Porto || !GC.eventi.length) return;
+  if(PORTO && Date.now() - PORTO.letto < 3 * 36e5) return;
+  if(Date.now() - portoProvato < 10 * 60e3) return;
   portoProvato = Date.now();
-  Porto.leggi().then(d => { PORTO = d; applicaMoli(); if(D) disegna(); else disegnaGoogle(); }).catch(e => console.warn('porto', e));
+  Porto.leggi().then(d => { PORTO = {...d, letto: Date.now()}; applicaMoli(true); if(D) disegna(); else disegnaGoogle(); }).catch(e => console.warn('porto', e));
 }
 const dgid = a => ('dg' + [...(a.app + '|' + a.titolo + '|' + a.d)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36) + a.d.replace(/-/g, '')).slice(0, 60);
 // le scadenze vanno nel calendario principale del primo account collegato
@@ -1109,7 +1119,7 @@ function tileLavoro(){
   if(!gcalAttivi().length) return {...t, v:GC.conti.length ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollegaPrimo()'};
   const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
-  const molo = ev.molo ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(ev.molo.banchina || '–')}</b>${ev.molo.banchina ? '' : '<small>da definire</small>'}</div>` : '';
+  const molo = ev.molo ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(ev.molo.attesa ? '…' : ev.molo.banchina || '–')}</b>${ev.molo.banchina ? '' : `<small>${ev.molo.attesa ? 'non ancora pubblicato' : 'da definire'}</small>`}</div>` : '';
   lavoroEv = ev;
   return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:'#', on:'apriNelCalendario(lavoroEv)', ...(molo ? {bars: molo} : {})};
 }
