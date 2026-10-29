@@ -3506,13 +3506,13 @@ const VEHICLE_STANDARD_PARTS = {
     ],
   },
   scooter: {
+    // niente filtro olio; tutti i pezzi con il loro codice prodotto (l'olio con la sigla)
     ordinaria: [
       { key: 'olio_motore', label: 'Olio motore', codeLabel: 'Sigla' },
-      { key: 'filtro_olio', label: 'Filtro olio' },
-      { key: 'gomme', label: 'Gomme' },
-      { key: 'filtro_aria', label: 'Filtro aria' },
-      { key: 'candela', label: 'Candela' },
-      { key: 'trasmissione', label: 'Catena/cinghia trasmissione' },
+      { key: 'gomme', label: 'Gomme', codeLabel: 'Codice prodotto' },
+      { key: 'filtro_aria', label: 'Filtro aria', codeLabel: 'Codice prodotto' },
+      { key: 'candela', label: 'Candela', codeLabel: 'Codice prodotto' },
+      { key: 'trasmissione', label: 'Catena/cinghia trasmissione', codeLabel: 'Codice prodotto' },
     ],
     straordinaria: [
       { key: 'pastiglie_ant', label: 'Pastiglie freno anteriore' },
