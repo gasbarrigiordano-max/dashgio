@@ -154,7 +154,10 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .velo{position:fixed;inset:0;z-index:50;background:rgba(10,8,6,.6);display:none;align-items:flex-end;justify-content:center}
 .velo.on{display:flex}
 .foglio{width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:26px 26px 0 0;padding:18px 18px calc(18px + var(--sab));background:#2a211c;border:1px solid var(--line)}
-.foglio-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.foglio-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-18px -18px 12px;padding:18px 18px 10px;position:sticky;top:-18px;z-index:6;background:#2a211c}
+.foglio-h h3{flex:1 1 auto;min-width:0}
+/* il pulsante principale della finestra anche in alto, accanto al titolo: si salva senza scorrere fino in fondo */
+.foglio-h .in-testa{min-height:38px;padding:0 16px;font-size:13.5px;flex:none}
 .foglio-h h3{margin:0;font-size:17px;font-weight:800}
 .campi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .campi .tutta{grid-column:1/-1}
@@ -829,7 +832,14 @@ function eliminaAbbo(){ if (!confirm('Eliminare l\'abbonamento?')) return; P.abb
 /* finestra */
 function apri(titolo, html){
   $('foglio').innerHTML = `<div class="foglio-h"><h3>${esc(titolo)}</h3><button class="tondo" type="button" onclick="chiudi()" aria-label="Chiudi">✕</button></div>${html}`;
-  $('velo').classList.add('on');
+  inTesta(); $('velo').classList.add('on');
+}
+// il pulsante principale (Salva, Inizia…) anche nella testata, che resta in alto mentre si scorre
+function inTesta(){
+  const f = $('foglio'), b = [...f.querySelectorAll('.azioni .btn')].filter(x => !x.classList.contains('ghost') && !x.classList.contains('rosso')).pop();
+  if (!b) return;
+  const c = b.cloneNode(true); c.removeAttribute('style'); c.removeAttribute('id'); c.classList.add('in-testa');
+  f.querySelector('.foglio-h .tondo').before(c);
 }
 function chiudi(){ $('velo').classList.remove('on'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudi(); });

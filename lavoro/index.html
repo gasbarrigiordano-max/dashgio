@@ -167,7 +167,10 @@ html.largo .wrap{max-width:100%}
 .velo{position:fixed;inset:0;z-index:50;background:rgba(10,8,6,.6);display:none;align-items:flex-end;justify-content:center}
 .velo.on{display:flex}
 .foglio{width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:26px 26px 0 0;padding:18px 18px calc(18px + var(--sab));background:#2a211c;border:1px solid var(--line)}
-.foglio-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.foglio-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-18px -18px 12px;padding:18px 18px 10px;position:sticky;top:-18px;z-index:6;background:#2a211c}
+.foglio-h h3{flex:1 1 auto;min-width:0}
+/* il pulsante principale della finestra anche in alto, accanto al titolo: si salva senza scorrere fino in fondo */
+.foglio-h .in-testa{min-height:38px;padding:0 16px;font-size:13.5px;flex:none}
 .foglio-h h3{margin:0;font-size:17px;font-weight:800}
 .campi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .campi .tutta{grid-column:1/-1}
@@ -301,7 +304,13 @@ function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('titolo').textContent = {prossime: 'Lavoro', mesi: 'Giornate', fatture: 'Fatture', riepilogo: 'Riepilogo'}[tab];
   $('vista').innerHTML = {prossime: vistaProssime, mesi: vistaMesi, fatture: vistaFatture, riepilogo: vistaRiepilogo}[tab]();
-  Moto.largo(tab !== 'prossime'); // tante giornate e tanti numeri: sugli schermi larghi la scheda si allarga
+  Moto.largo(tab !== 'prossime', larghezzaLavoro()); // tante giornate e tanti numeri: sugli schermi larghi la scheda si allarga quanto serve
+}
+// colonne da 420 px: tante quante i riquadri affiancabili (al massimo 4; 3 se ci sono solo elenchi di giornate)
+function larghezzaLavoro(){
+  const v = $('vista'), riquadri = [...v.children].filter(el => !el.matches('.filtri,.filtri-testa,.sez,.nota,.vuoto,.lista')).length;
+  const col = Math.max(1, Math.min(tab === 'fatture' ? 3 : 4, riquadri || (v.querySelector('.lista') ? 3 : 1)));
+  return col * 420 + (col - 1) * 16 + 32 + 4;
 }
 function rigaG(g){
   const m = g.d >= oggiISO() ? moloDi(g) : null;
@@ -343,7 +352,7 @@ function vistaMesi(){
   return `<div class="filtri-testa"><div class="filtri" role="group" aria-label="Mese"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutti</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${nomeMese(k)}</button>`).join('')}</div>
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? esc(a) : 'Tutte'}</button>`).join('')}</div>
-    ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`;
+    ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.slice().reverse().map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi dal più recente, giorni del mese in ordine (2, 3… 28)
 }
 function vistaFatture(){
   const da = ordinate().filter(g => statoDi(g) === 'da'), fatt = ordinate().filter(g => statoDi(g) === 'fatturato');
@@ -542,7 +551,14 @@ async function importa(file){
 }
 
 /* finestra */
-function apri(t, html){ $('foglio').innerHTML = `<div class="foglio-h"><h3>${esc(t)}</h3><button class="tondo" type="button" onclick="chiudi()" aria-label="Chiudi">✕</button></div>${html}`; $('velo').classList.add('on'); }
+function apri(t, html){ $('foglio').innerHTML = `<div class="foglio-h"><h3>${esc(t)}</h3><button class="tondo" type="button" onclick="chiudi()" aria-label="Chiudi">✕</button></div>${html}`; inTesta(); $('velo').classList.add('on'); }
+// il pulsante principale (Salva, Inizia…) anche nella testata, che resta in alto mentre si scorre
+function inTesta(){
+  const f = $('foglio'), b = [...f.querySelectorAll('.azioni .btn')].filter(x => !x.classList.contains('ghost') && !x.classList.contains('rosso')).pop();
+  if (!b) return;
+  const c = b.cloneNode(true); c.removeAttribute('style'); c.removeAttribute('id'); c.classList.add('in-testa');
+  f.querySelector('.foglio-h .tondo').before(c);
+}
 function chiudi(){ $('velo').classList.remove('on'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudi(); });
 
