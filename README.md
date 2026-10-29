@@ -8,11 +8,12 @@ Le mie app personali in un solo sito, con un solo account e una sola cassaforte 
 | `/bilancio/` | Bilancio: finanze personali (dettagli in `bilancio/HANDOFF.md`). |
 | `/giornale/` | Mezzi (prima "Giornale di Bordo"): auto, scooter, moto e gommone. |
 | `/palestra/` | Palestra: schede, registro degli allenamenti e record, progressi del corpo, abbonamento e ingressi. |
+| `/lavoro/` | Lavoro al porto: giornate per agenzia e nave, tariffa lorda e netta, extra, fatture e pagamenti; molo dal porto. |
 | `/comune/cassaforte.js` | Accesso e cifratura condivisi (login, sblocco, lettura e scrittura cifrata). |
 | `/comune/programma.js` | Calcoli del programma della Palestra (coppie di muscoli, blocchi), usati da Palestra e Dashboard. |
 | `/comune/porto.js` | Legge i moli delle navi dal porto di Civitavecchia (settimana e pagine dei mesi). |
 
-Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
+Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`, `#lavoro`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
 
 Sito: GitHub Pages dal ramo `main`, cartella principale → `https://gasbarrigiordano-max.github.io/dashgio/`.
 
@@ -37,6 +38,7 @@ bilancio/{uid}/sez/{sezione}      kid, iv, ct         (Bilancio: tx, conti, rate
 bilancio/{uid}/giornale/{voce}    kid, iv, ct         (Mezzi: trips, auto_expenses…; oltre 600 KB in parti voce__p1, __p2…)
 bilancio/{uid}/palestra/{voce}    kid, iv, ct         (Palestra: schede, sessioni, corpo, abbonamento, inCorso)
 bilancio/{uid}/dashboard/google   kid, iv, ct         (Dashboard: chiave segreta del client Google e permessi di lunga durata)
+bilancio/{uid}/dashboard/lavoro   kid, iv, ct         (Lavoro: giornate, tariffe, fatture)
 ```
 
 Dopo ogni modifica a `firestore.rules`: copiarle in console (Firestore → Regole), sostituire `IL_TUO_UID` con l'UID dell'utente e pubblicare.
