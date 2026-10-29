@@ -514,7 +514,8 @@ const migliaia = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const eur0 = v => (v<0?'-':'') + migliaia(Math.abs(Math.round(v))) + ' €';
 const eur2 = v => { const [i, d] = Math.abs(v).toFixed(2).split('.'); return (v<0?'-':'') + migliaia(i) + ',' + d + ' €'; };
 const fmtD = s => { const [y,m,d] = s.split('-'); return `${+d} ${['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][m-1]}${y!=new Date().getFullYear()?' '+y:''}`; };
-const giorniA = s => Math.round((new Date(s+'T12:00') - new Date(new Date().toISOString().slice(0,10)+'T12:00'))/864e5);
+// giorni da oggi (data del telefono, non quella UTC: dopo mezzanotte "domani" è già domani)
+const giorniA = s => { const o = new Date(); return Math.round((new Date(s+'T12:00') - new Date(o.getFullYear(), o.getMonth(), o.getDate(), 12))/864e5); };
 
 /* ---- Lettura da Bilancio ----
    Gira DENTRO il riquadro di Bilancio (eval nel suo contesto): usa le sue funzioni, così i numeri sono gli stessi dell'app. */
@@ -886,7 +887,7 @@ function applicaMoli(tutti){
 }
 // la tabella del porto cambia una volta a settimana: con la Dashboard aperta a lungo si rilegge ogni 3 ore
 function leggiPorto(){
-  if(!window.Porto || !GC.eventi.length) return;
+  if(!window.Porto || (!GC.eventi.length && !(LAV && LAV.giornate && LAV.giornate.length))) return;
   if(PORTO && Date.now() - PORTO.letto < 3 * 36e5) return;
   if(Date.now() - portoProvato < 10 * 60e3) return;
   portoProvato = Date.now();
@@ -1108,7 +1109,14 @@ function disegnaImpostazioni(){
 async function esciTutto(){ if(!confirm('Uscire dall\'account su questo dispositivo?')) return; await Cassaforte.esci(); location.reload(); }
 
 /* ---- Altre app nella cassaforte: Palestra ---- */
-let PAL = null;
+let PAL = null, LAV = null;
+// le giornate della sezione Lavoro, per il riquadro "Lavoro" (prossima giornata con nave e molo)
+async function leggiLavoro(){
+  try { const t = await Cassaforte.leggi('dashboard', 'lavoro'); LAV = t ? JSON.parse(t) : null; }
+  catch(e){ console.warn('Lavoro', e); }
+  if(LAV && LAV.giornate && LAV.giornate.length) leggiPorto();
+  if(D) disegna();
+}
 async function leggiPalestra(){
   try {
     const t = await Cassaforte.tutti('palestra'), o = {};
@@ -1154,8 +1162,21 @@ function tilePalestra(){
   return {...t, v:'Riposo', s:'nessun allenamento in programma'};
 }
 // riquadro Lavoro: il prossimo evento del calendario di lavoro scelto nelle impostazioni
+// la prossima giornata segnata nella sezione Lavoro (da oggi in poi): nave, agenzia e molo
+function prossimaGiornata(){
+  const oggi = isoLocale(new Date());
+  return ((LAV && LAV.giornate) || []).filter(g => g.d >= oggi).sort((a, b) => a.d.localeCompare(b.d))[0] || null;
+}
 function tileLavoro(){
   const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
+  // prima le giornate della sezione Lavoro (ci sono tutte le agenzie); Google solo se ha un impegno di lavoro prima
+  const g = prossimaGiornata(), evG = gcalAttivi().length ? GC.eventi.filter(e => e.lavoro && e.fineTs > Date.now()).sort((a, b) => a.ts - b.ts)[0] : null;
+  if(g && !(evG && evG.d < g.d)){
+    const m = g.nave && PORTO ? moloDi({titolo: g.nave, d: g.d}) : null;
+    const molo = m ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(m.attesa ? '…' : m.banchina || '–')}</b>${m.banchina ? '' : `<small>${m.attesa ? 'non ancora pubblicato' : 'da definire'}</small>`}</div>` : '';
+    const gg = giorniA(g.d), giorno = gg === 0 ? 'oggi' : gg === 1 ? 'domani' : new Date(g.d + 'T12:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short'});
+    return {...t, app:'Lavoro', v:g.nave || 'Nave da inserire', s:[giorno, g.agenzia, g.tipo].filter(Boolean).join(' · '), on:"dashVai('lavoro/')", ...(molo ? {bars: molo} : {})};
+  }
   if(!GCAL_CLIENT_ID) return {...t, v:'Da configurare', s:'Google Calendar non ancora collegato', on:'apriImpostazioni()'};
   if(!gcalAttivi().length && AUTO.inCorso) return {...t, v:'…', s:'collego Google'};
   if(!gcalAttivi().length && passoAuto()) return {...t, v:'Mostra eventi', s:'per non toccare più: Impostazioni → accesso automatico', on:'gcalCollegaPrimo()'};
@@ -1248,7 +1269,7 @@ function mostraVista(v, extra = ''){
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
   liberaBil();
   Moto.aggiorna(); // la barra in alto e il dock cambiano forma: le pillole si rimettono al loro posto
-  if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto) leggi(); return; }
+  if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto){ leggi(); leggiLavoro(); } return; }
   scrollTo(0, 0); // dalla panoramica scorsa in giù: l'app parte sotto la barra, non nascosta dietro
   if(vista === 'bilancio'){
     bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; dimensiona();
@@ -1304,6 +1325,7 @@ document.addEventListener('click', e => {
   else if(vistaDaHash() !== 'panoramica') mostraVista(vistaDaHash());
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);
+  leggiLavoro(); setInterval(leggiLavoro, 60000);
   disegnaGoogle();
   if(GCAL_CLIENT_ID){ if(GC.conti.length) caricaGis().catch(() => {}); gcalAuto(); }
 })();
