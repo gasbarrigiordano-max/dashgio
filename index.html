@@ -842,6 +842,8 @@ async function gcalLeggi(){
     }
   }
   const cl = lavConto && (GC.conti.find(c => c.email === lavConto) || {calendari: []}).calendari.find(x => x.id === lavId);
+  // eventi delle agenzie (es. "CFFT", "CFFT Costa Toscana"): di lavoro in qualunque calendario siano
+  eventi.forEach(e => { const ag = agenziaDi(e.titolo); if(ag){ e.lavoro = true; e.agenzia = ag; e.tag = ag.slice(0, 4); e.app = ag + (e.ora ? ' · ' + e.ora : ''); } });
   Object.assign(GC, { eventi, collegate, nomeLavoro: cl ? cl.nome : 'Google' });
   if(attivi.length) GC.err = errore;
   applicaMoli(); leggiPorto();
@@ -931,6 +933,9 @@ function disegnaGoogleImp(){
     <div class="imp-az" style="margin:4px 0 10px"><button type="button" onclick="gcalCollega()">+ ${GC.conti.length ? 'Aggiungi un account Google' : 'Collega Google Calendar'}</button></div>
     ${opzioni.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)">Calendario di lavoro (riquadro "Lavoro")
       <select id="lav-sel" onchange="scegliLavoro(this.value)" style="${sel}"><option value="">Principale del primo account</option>${opzioni.map(([v, n]) => `<option value="${esc(v)}"${v === calLavoro() ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2);margin-top:10px">Agenzie (eventi di lavoro con questa parola nel titolo)
+      <input id="ag-in" value="${esc(agenzie().join(', '))}" placeholder="Es. CFFT" onchange="salvaAgenzie(this.value)" autocapitalize="characters" style="${sel}"></label>
+    <p style="font-size:11.5px;margin:4px 0 0;color:var(--ink3)">Contano nel riquadro Lavoro; aggiungendo la nave al titolo (es. "CFFT Costa Toscana") compare il molo.</p>
     ${GC.err ? `<p style="color:#ffb3a1;margin:8px 0 0">${esc(GC.err)}</p>` : ''}
     ${disegnaAuto()}`;
   if(fuoco && $('g-seg')) $('g-seg').focus();
@@ -953,6 +958,16 @@ function mostraCalendario(email, id, si){
   si ? l.add(id) : l.delete(id); v[email] = [...l]; salvaPref('dg:gcalVisti', v); gcalLeggi();
 }
 function scegliLavoro(v){ salvaPref('dg:gcalLavoro2', v || null); gcalLeggi(); }
+// agenzie di lavoro: una parola nel titolo dell'evento basta (preferenza di questo dispositivo, come i calendari scelti)
+const agenzie = () => pref('dg:agenzie', ['CFFT']);
+function agenziaDi(titolo){
+  const t = ' ' + String(titolo || '').toUpperCase().replace(/[^A-Z0-9À-Ü]+/g, ' ') + ' ';
+  return agenzie().find(a => a && t.includes(' ' + a.toUpperCase() + ' ')) || null;
+}
+function salvaAgenzie(v){
+  salvaPref('dg:agenzie', [...new Set(String(v).split(/[,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean))]);
+  if(gcalAttivi().length) gcalLeggi(); else disegnaGoogleImp();
+}
 
 /* ---- Calendario grande: tutte le app nello stesso mese ---- */
 let giornoSel = null;
