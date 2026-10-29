@@ -144,6 +144,9 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .campi textarea{height:auto;min-height:70px;padding:10px 12px;resize:vertical}
 .campi input:focus,.campi select:focus,.campi textarea:focus{border-color:var(--acc)}
 .campi select option{background:#2a211c}
+.campi input[type="date"],.campi input[type="time"]{-webkit-appearance:none;appearance:none;-webkit-min-logical-width:0;min-width:0;max-width:100%;display:block;text-align:left} /* iOS: il controllo nativo della data non sfonda la colonna */
+.campi input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0}
+
 .ese-ed{display:grid;grid-template-columns:minmax(0,1fr) 54px 64px 60px 36px;gap:6px;align-items:center;margin-top:8px}
 .ese-ed input{height:42px;border-radius:12px;border:1px solid var(--line);background:var(--campo);color:#fff;padding:0 8px;font-size:14px;outline:0;min-width:0;width:100%}
 .ese-ed .x{width:36px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.08);cursor:pointer;color:var(--ink2)}
