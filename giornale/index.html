@@ -4126,13 +4126,13 @@ function vaRenderDashboard() {
   container.innerHTML = items.map(it => {
     if (it.type === 'expense') {
       const cat = VEHICLE_CAT_MAP[it.category] || { icon: '🚗', label: it.category };
-      return `<div class="activity-item">
+      return `<div class="activity-item" style="cursor:pointer" onclick="vaOpenExpenseModal('${it.id}')">
         <div class="cat-badge">${cat.icon}</div>
         <div class="activity-info"><div class="activity-title">${cat.label}${it.note ? ' · ' + escapeHtml(it.note) : ''}</div><div class="activity-sub">${fmtDate(it.date)}</div></div>
         <div class="activity-amount">${fmtExpenseAmount(it.amount, it.excluded)}</div>
       </div>`;
     }
-    return `<div class="activity-item">
+    return `<div class="activity-item" style="cursor:pointer" onclick="vaOpenRefuelModal('${it.id}')">
       <div class="cat-badge">⛽</div>
       <div class="activity-info"><div class="activity-title">Rifornimento${it.km ? ' · ' + it.km + ' km' : ''}</div><div class="activity-sub">${fmtDate(it.date)}</div></div>
       <div class="activity-amount">-${fmtEUR(it.euro)}</div>
@@ -6251,7 +6251,7 @@ function renderDashboard() {
   container.innerHTML = items.map(it => {
     if (it.type === 'expense') {
       const cat = CAT_MAP[it.category] || CAT_MAP.altro;
-      return `<div class="activity-item">
+      return `<div class="activity-item" style="cursor:pointer" onclick="openExpenseModal('${it.id}')">
         <div class="cat-badge">${cat.icon}</div>
         <div class="activity-info">
           <div class="activity-title">${cat.label}${it.note ? ' · ' + escapeHtml(it.note) : ''}</div>
@@ -6262,7 +6262,7 @@ function renderDashboard() {
     } else {
       const fuelPart = it.fuelLiters ? ` · ${it.fuelLiters.toFixed(1)} L` : '';
       const costPart = it.estimatedCost ? ` · ≈ ${fmtEUR(it.estimatedCost)}` : '';
-      return `<div class="activity-item">
+      return `<div class="activity-item" style="cursor:pointer" onclick="openTripEditModal('${it.id}')">
         <div class="cat-badge">🧭</div>
         <div class="activity-info">
           <div class="activity-title">Uscita in mare${it.note ? ' · ' + escapeHtml(it.note) : ''}</div>
