@@ -1255,6 +1255,8 @@
 
     <div class="section-label">Manutenzione straordinaria</div>
     <div id="va-parts-straordinaria"></div>
+    <button class="btn btn-ghost" style="margin-top:14px;" onclick="document.getElementById('va-codici-file').click()">Importa codici dei pezzi</button>
+    <input type="file" id="va-codici-file" accept=".json,application/json" hidden onchange="vaImportaCodici(this.files[0]);this.value=''">
 
     <div class="section-label">Manutenzione/sostituzioni</div>
     <div class="field-hint" style="margin-bottom:10px;">Registrazione libera per tutto il resto: aggiungi quante voci vuoi.</div>
@@ -4642,6 +4644,21 @@ async function vaSaveCode() {
   showToast('Salvato');
   vaRenderStandardParts();
   vaSave('parts', vState.parts);
+}
+// codici dei pezzi da un file preparato a parte: {tipo:'codici-pezzi', mezzo:'scooter', codici:{candela:'NGK …', …}}.
+// Solo i pezzi di questo mezzo; i dati restano nella cassaforte come quelli scritti a mano
+async function vaImportaCodici(file) {
+  if (!file) return;
+  let d; try { d = JSON.parse(await file.text()); } catch (e) { return showToast('File non leggibile'); }
+  if (!d || d.tipo !== 'codici-pezzi' || !d.codici || typeof d.codici !== 'object') return showToast('Non è un file di codici dei pezzi');
+  if (d.mezzo && d.mezzo !== currentVehicle.type) return showToast('Questi codici sono per: ' + d.mezzo);
+  const cfg = VEHICLE_STANDARD_PARTS[currentVehicle.type], tutti = [...cfg.ordinaria, ...cfg.straordinaria, ...(currentVehicle.type === 'auto' ? TAGLIANDO_SUBPARTS : [])];
+  const voci = Object.entries(d.codici).map(([k, v]) => [tutti.find(p => p.key === k && p.codeLabel), String(v || '').trim()]).filter(([p, v]) => p && v);
+  if (!voci.length) return showToast('Nessun pezzo di questo mezzo nel file');
+  showConfirm('Importa codici', voci.map(([p, v]) => p.label + ': ' + v).join(' · ') + '. Quelli già scritti vengono sostituiti.', () => {
+    voci.forEach(([p, v]) => { if (!vState.parts[p.key]) vState.parts[p.key] = { history: [] }; vState.parts[p.key].code = v; });
+    vaRenderStandardParts(); vaSave('parts', vState.parts); showToast(voci.length + ' codici inseriti');
+  });
 }
 function vaOpenPartModal(key, label, histId) {
   document.getElementById('va-part-key').value = key;
