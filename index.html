@@ -312,7 +312,7 @@ a.p{text-decoration:none}
   .app-vista iframe{width:calc(100% / .9);height:calc(100% / .9);transform:scale(.9);transform-origin:0 0}
   /* l'app sta ferma tra la barra in alto e il fondo: su iPhone la pagina sotto può scorrere anche con overflow:hidden,
      e la parte alta dell'app (es. "Cambia veicolo" di Mezzi) finiva nascosta dietro la barra */
-  body.in-app .app-vista{position:fixed;left:12px;right:12px;top:calc(64px + var(--sat));bottom:calc(8px + var(--sab));height:auto !important;flex:none}
+  body.in-app .app-vista{position:fixed;left:12px;right:12px;top:calc(64px + var(--sat));bottom:max(6px, calc(var(--sab) - 20px));height:auto !important;flex:none}
   nav.glass{background:rgba(30,20,14,.62) !important}
   .mezzo{padding:12px 13px;gap:10px}
   .mezzo .tot{width:52px;height:52px;font-size:10px}
@@ -617,7 +617,8 @@ function disegna(){
   $('stats').innerHTML = [[D.nConti,'Conti'],[D.mezzi.length,'Mezzi'],[D.nRate,'Rate attive']].map(([v,l]) => `<div><b class="mono">${v}</b><small>${l}</small></div>`).join('');
   $('aggiornato').textContent = 'Aggiornata alle ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   disegnaCal();
-  $('lista').innerHTML = agenda.length ? agenda.map(a => `<a class="item" href="${hrefAgenda(a)}"${a.google ? ' target="_blank" rel="noopener"' : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag)}</div>
+  agendaCorr = agenda;
+  $('lista').innerHTML = agenda.length ? agenda.map((a, i) => `<a class="item" href="${a.google ? '#' : hrefAgenda(a)}"${a.google ? ` onclick="event.preventDefault();apriNelCalendario(agendaCorr[${i}])"` : ''}><div class="tag${a.google ? ' goo' : ''}">${esc(a.tag)}</div>
     <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div><small>${fmtD(a.d)} · ${giorniA(a.d)===0?'oggi':giorniA(a.d)===1?'domani':'tra '+giorniA(a.d)+' giorni'}</small></div>
     ${a.molo ? badgeMolo(a) : `<div class="amt mono">${a.amt!=null ? eur2(a.amt) : a.senzaImporto ? '' : '?'}</div>`}${a.google ? '' : pulsanteGoogle(a)}</a>`).join('') : '<div class="vuoto">Niente in programma.</div>';
   disegnaGoogle();
@@ -976,6 +977,15 @@ function disegnaCalGrande(){
       <div class="t"><span>${esc(a.app)}</span><div>${esc(a.titolo)}</div>${a.paid ? '<small>pagato</small>' : ''}</div>${a.molo ? badgeMolo(a) : `<div class="amt mono">${a.amt != null ? eur2(a.amt) : ''}</div>`}</a>`).join('') : '<div class="vuoto">Niente in questo giorno.</div>'}</div>`;
 }
 function scegliGiorno(iso){ giornoSel = iso; disegnaCalGrande(); }
+// un evento di Google (In programma, riquadro Lavoro): si apre nel calendario della Dashboard, sul suo giorno e con la sua scheda
+let agendaCorr = [], lavoroEv = null;
+function apriNelCalendario(a){
+  if(!a) return;
+  const oggi = new Date(), d = new Date(a.d + 'T12:00');
+  calOff = (d.getFullYear() - oggi.getFullYear()) * 12 + d.getMonth() - oggi.getMonth();
+  giornoSel = a.d; apriCalendario(); if(D) disegnaCal();
+  if(a.google) apriEvento(a);
+}
 let evGiorno = [], evAperto = null;
 
 /* ---- Eventi di Google Calendar: aggiungere, modificare, eliminare ---- */
@@ -1099,7 +1109,8 @@ function tileLavoro(){
   const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
   const molo = ev.molo ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(ev.molo.banchina || '–')}</b>${ev.molo.banchina ? '' : '<small>da definire</small>'}</div>` : '';
-  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:ev.href, blank:true, ...(molo ? {bars: molo} : {})};
+  lavoroEv = ev;
+  return {...t, app:GC.nomeLavoro || 'Google', v:ev.titolo, s:quando(ev), href:'#', on:'apriNelCalendario(lavoroEv)', ...(molo ? {bars: molo} : {})};
 }
 function quando(ev){
   const g = giorniA(ev.d), giorno = g === 0 ? 'oggi' : g === 1 ? 'domani' : new Date(ev.d + 'T12:00').toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'short'});
