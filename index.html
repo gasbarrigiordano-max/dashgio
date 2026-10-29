@@ -323,6 +323,11 @@ a.p{text-decoration:none}
 }
 /* il passo che manca all'accesso automatico a Google */
 .passo-auto{flex:1 1 100%;order:3;text-align:left;border:1px dashed rgba(255,176,122,.6) !important;background:rgba(242,113,28,.12) !important;color:#ffd2ad !important;border-radius:12px !important;padding:8px 10px !important;font-size:12px !important;line-height:1.35;height:auto !important}
+/* cifre nascoste (pulsante con l'occhio): gli importi della panoramica si sfocano */
+#occhio .chiuso, body.cifre-nascoste #occhio .aperto{display:none}
+body.cifre-nascoste #occhio .chiuso{display:block}
+body.cifre-nascoste #occhio{background:rgba(255,255,255,.28)}
+body.cifre-nascoste :is(.tile:not(.testo) .v, .tile:not(.testo) .s, #gb-tot, #gb-chips, .mezzo .tot, .item .amt, .ris b, #calv-giorno .amt){filter:blur(9px);-webkit-user-select:none;user-select:none;transition:filter .2s}
 /* molo delle navi: numero grande nel riquadro Lavoro, etichetta arancione in agenda */
 .molo-t{height:34px;display:flex;align-items:baseline;gap:8px}
 .molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}
@@ -370,6 +375,7 @@ main{container-type:inline-size}
     <button class="p" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Impostazioni</button>
   </div>
   <div class="grp">
+    <button class="t" type="button" id="occhio" onclick="nascondiCifre()" aria-label="Nascondi le cifre" aria-pressed="false"><svg class="aperto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="chiuso" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
     <button class="t" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
     <button class="t" type="button" onclick="apriCalendario()" aria-label="Scadenze dei prossimi 7 giorni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b id="nbadge" hidden></b></button>
     <button class="t" type="button" onclick="dashVai('');setTimeout(()=>$('q').focus(),50)" aria-label="Cerca"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
@@ -960,6 +966,14 @@ function mostraCalendario(email, id, si){
   const v = pref('dg:gcalVisti', {}), l = new Set(v[email] || ['primary']);
   si ? l.add(id) : l.delete(id); v[email] = [...l]; salvaPref('dg:gcalVisti', v); gcalLeggi();
 }
+// cifre nascoste: preferenza di questo dispositivo
+function nascondiCifre(si){
+  si = si === undefined ? !document.body.classList.contains('cifre-nascoste') : si;
+  document.body.classList.toggle('cifre-nascoste', si);
+  const b = $('occhio'); b.setAttribute('aria-pressed', si); b.setAttribute('aria-label', si ? 'Mostra le cifre' : 'Nascondi le cifre');
+  salvaPref('dg:cifreNascoste', si || null);
+}
+nascondiCifre(!!pref('dg:cifreNascoste', false));
 function scegliLavoro(v){ salvaPref('dg:gcalLavoro2', v || null); gcalLeggi(); }
 // agenzie di lavoro: una parola nel titolo dell'evento basta (preferenza di questo dispositivo, come i calendari scelti)
 const agenzie = () => pref('dg:agenzie', ['CFFT']);
