@@ -310,6 +310,9 @@ a.p{text-decoration:none}
   .grafico svg{height:120px}
   .mesi{font-size:9.5px}
   .app-vista iframe{width:calc(100% / .9);height:calc(100% / .9);transform:scale(.9);transform-origin:0 0}
+  /* l'app sta ferma tra la barra in alto e il fondo: su iPhone la pagina sotto può scorrere anche con overflow:hidden,
+     e la parte alta dell'app (es. "Cambia veicolo" di Mezzi) finiva nascosta dietro la barra */
+  body.in-app .app-vista{position:fixed;left:12px;right:12px;top:calc(64px + var(--sat));bottom:calc(8px + var(--sab));height:auto !important;flex:none}
   nav.glass{background:rgba(30,20,14,.62) !important}
   .mezzo{padding:12px 13px;gap:10px}
   .mezzo .tot{width:52px;height:52px;font-size:10px}
@@ -1154,7 +1157,8 @@ const sabPx = () => $('sab-sonda').getBoundingClientRect().height;
 function dimensiona(){
   const box = $('app-vista'); if(!document.body.classList.contains('in-app')) return;
   const sotto = tel() ? 8 + sabPx() : 18; // sul telefono, dentro un'app, il dock in basso si nasconde; l'app finisce sopra la barra dell'iPhone
-  box.style.height = Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
+  // sul telefono il riquadro è fisso allo schermo (CSS): niente altezza calcolata, così la pagina non può scorrere
+  box.style.height = tel() ? '' : Math.max(320, innerHeight - box.getBoundingClientRect().top - sotto) + 'px';
   if(vista === 'bilancio'){
     const r = box.getBoundingClientRect(), k = tel() ? SCALA_TEL : 1; bil.style.inset = 'auto';
     Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width / k + 'px', height: r.height / k + 'px', transform: k < 1 ? `scale(${k})` : '', transformOrigin: '0 0'});
@@ -1171,6 +1175,7 @@ function mostraVista(v, extra = ''){
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
   liberaBil();
   if(vista === 'panoramica'){ if(pronto) leggi(); return; }
+  scrollTo(0, 0); // dalla panoramica scorsa in giù: l'app parte sotto la barra, non nascosta dietro
   if(vista === 'bilancio'){
     bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; dimensiona();
     // bilancio/#passphrase e #impostazioni: la finestra giusta di Bilancio
@@ -1198,7 +1203,14 @@ addEventListener('resize', dimensiona);
 document.addEventListener('click', e => {
   const a = e.target.closest('a[href]'); if(!a || a.target === '_blank' || e.defaultPrevented || a.closest('.cf-porta')) return; // la porta (prima volta) apre Bilancio da solo
   const h = a.getAttribute('href');
-  if(/^(bilancio|giornale|palestra)\//.test(h)){ e.preventDefault(); dashVai(h); }
+  if(/^(bilancio|giornale|palestra)\//.test(h)){
+    e.preventDefault();
+    // di nuovo Mezzi dalla barra mentre si è dentro un mezzo: si torna alla scelta del mezzo
+    if(h.startsWith('giornale/') && vista === 'mezzi' && (a.closest('nav') || a.closest('.v5top')) && frames.mezzi){
+      try { const w = frames.mezzi.contentWindow, l = w.document.getElementById('launcher-screen'); if(l && w.getComputedStyle(l).display === 'none' && w.showLauncher){ w.showLauncher(); return; } } catch(err){}
+    }
+    dashVai(h);
+  }
   else if(h === '#' && (a.closest('nav') || a.closest('.seg') || a.closest('.v5top'))){ e.preventDefault(); dashVai(''); }
 });
 
