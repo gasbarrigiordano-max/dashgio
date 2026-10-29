@@ -47,7 +47,7 @@ a{color:var(--acc-soft)}a:hover{color:#ffd2b0}
 button{font:inherit;color:inherit}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
 .glass{background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08)}
-.wrap{max-width:1440px;margin:0 auto;padding:calc(20px + var(--sat)) 20px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
+.wrap{max-width:1440px;transition:max-width .55s cubic-bezier(.3,.85,.3,1);margin:0 auto;padding:calc(20px + var(--sat)) 20px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
 
 /* barra delle sezioni */
 nav{border-radius:26px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto;align-self:flex-start;position:sticky;top:20px;z-index:10} /* sopra i riquadri: i nomi dei pulsanti non finiscono sotto */
@@ -206,6 +206,9 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 @media (max-width:700px){ .calv{gap:3px} .calv .g{min-height:58px;padding:4px;border-radius:10px} .ev-c{font-size:0;height:6px;padding:0;border-radius:3px} .ev-piu{display:none} .pannello .box{padding:16px;border-radius:22px} }
 
 /* app dentro la Dashboard: Bilancio (il riquadro già aperto), Mezzi, Palestra */
+/* schermo largo e schermata con molti dati (l'app lo chiede con Moto.largo): la scheda si allarga */
+@media (min-width:1600px){ body.in-app.largo .wrap{max-width:100vw} }
+@media (prefers-reduced-motion:reduce){ .wrap{transition:none} }
 .app-vista{display:none;flex:999 1 560px;min-width:0;border-radius:28px;overflow:hidden;position:relative;height:calc(100vh - 40px - var(--sat))}
 body.in-app .app-vista{display:block}
 body.in-app main, body.in-app aside, body.in-app .seg{display:none}
@@ -1263,6 +1266,7 @@ function mostraVista(v, extra = ''){
   vista = PERCORSI[v] ? v : 'panoramica';
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
   document.body.classList.toggle('in-app', vista !== 'panoramica');
+  document.body.classList.toggle('largo', vista !== 'panoramica' && largoDi(vista));
   const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro'}[vista];
   document.querySelectorAll('nav .navbtn, .v5top .p').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
@@ -1285,6 +1289,15 @@ function mostraVista(v, extra = ''){
   if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
   if(!nuovo) entraApp(f);
 }
+// l'app aperta chiede più larghezza (o la restituisce) cambiando scheda; vale solo se è quella in vista
+addEventListener('message', e => {
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'moto-largo') return;
+  const f = vista === 'bilancio' ? bil : frames[vista];
+  if(f && e.source === f.contentWindow) document.body.classList.toggle('largo', !!e.data.si);
+});
+function largoDi(v){ try { const f = v === 'bilancio' ? bil : frames[v]; return !!(f && f.contentWindow.motoLargo); } catch(e){ return false; } }
+// mentre la scheda si allarga o si stringe, Bilancio (posizionato a mano) la segue
+if(window.ResizeObserver) new ResizeObserver(() => dimensiona()).observe($('app-vista'));
 // l'app aperta fa entrare la sua schermata come quando si cambia scheda al suo interno
 function entraApp(f){ try { const w = f.contentWindow; if(w.Moto && w.motoVista) w.Moto.entra(w.motoVista()); } catch(e){} }
 // l'evidenziazione della voce attiva scivola da una voce all'altra (dock e barra in alto)

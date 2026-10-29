@@ -46,7 +46,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .glass{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--line);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 3px rgba(40,20,5,.45)}
 .tabs.glass{background:rgba(30,20,14,.55)}
 html.incorporata .tabs.glass{background:rgba(30,20,14,.85);-webkit-backdrop-filter:none;backdrop-filter:none}
-.wrap{max-width:760px;margin:0 auto;padding:calc(14px + var(--sat)) 16px calc(110px + var(--sab))}
+.wrap{max-width:760px;transition:max-width .55s cubic-bezier(.3,.85,.3,1);margin:0 auto;padding:calc(14px + var(--sat)) 16px calc(110px + var(--sab))}
 
 header.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .tondo{width:44px;height:44px;border-radius:99px;border:1px solid var(--line);background:rgba(0,0,0,.28);display:grid;place-items:center;color:var(--ink2);text-decoration:none;cursor:pointer;flex:none}
@@ -129,6 +129,22 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .filtri::-webkit-scrollbar{display:none}
 .filtri button{flex:none;border:0;border-radius:99px;padding:7px 12px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer;text-transform:capitalize}
 .filtri button.on{background:var(--acc)}
+.filtri-testa{display:flex;gap:8px;align-items:flex-start}
+/* Riepilogo, Giornate e Fatture su schermo largo: tutta la larghezza, riquadri su più colonne invece che uno sotto l'altro */
+html.largo .wrap{max-width:100%}
+@media (min-width:1100px){
+  html.largo #vista{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:0 16px;align-items:start}
+  html.largo #vista>.filtri,html.largo #vista>.filtri-testa,html.largo #vista>.sez,html.largo #vista>.nota,html.largo #vista>.vuoto{grid-column:1/-1}
+  /* gli elenchi di giornate a tutta larghezza, in fondo, con le righe su più colonne */
+  html.largo #vista>.lista{grid-column:1/-1;order:10}
+  html.largo .lista .righe{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:0 12px}
+}
+@media (prefers-reduced-motion:reduce){ .wrap{transition:none} }
+.filtri-testa .filtri{flex:1 1 auto;min-width:0}
+.vista-tog{flex:none;display:flex;gap:2px;padding:3px;border-radius:99px;background:rgba(255,255,255,.08)}
+.vista-tog button{border:0;border-radius:99px;padding:5px 10px;background:transparent;color:var(--ink2);font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
+.vista-tog button.on{background:var(--acc);color:#fff}
+@media (max-width:600px){ .filtri-testa{flex-direction:column-reverse;align-items:stretch;gap:6px} .vista-tog{align-self:flex-end} } /* telefono: il pulsante sopra, i mesi su tutta la riga */
 /* calendario del mese nel riepilogo: stessi colori delle etichette di stato */
 .cal-int,.cal-griglia{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal-int{margin:8px 0 4px;font-size:10.5px;font-weight:800;color:var(--ink3);text-align:center}
@@ -280,6 +296,7 @@ function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('titolo').textContent = {prossime: 'Lavoro', mesi: 'Giornate', fatture: 'Fatture', riepilogo: 'Riepilogo'}[tab];
   $('vista').innerHTML = {prossime: vistaProssime, mesi: vistaMesi, fatture: vistaFatture, riepilogo: vistaRiepilogo}[tab]();
+  Moto.largo(tab !== 'prossime'); // tante giornate e tanti numeri: sugli schermi larghi la scheda si allarga
 }
 function rigaG(g){
   const m = g.d >= oggiISO() ? moloDi(g) : null;
@@ -306,11 +323,22 @@ function vistaProssime(){
     <div class="sez"><h2>In programma</h2><small>${fut.length} ${fut.length === 1 ? 'giornata' : 'giornate'}${senzaNave.length ? ` · <span class="manca">${senzaNave.length} senza nave</span>` : ''}</small></div>
     ${fut.slice(1).map(rigaG).join('') || '<p class="vuoto">Nient\'altro in programma.</p>'}`;
 }
+// Giornate: filtro per mese e per agenzia, a elenco o a calendario (la scelta resta su questo dispositivo)
+let giorMese = '', giorCal = (() => { try { return localStorage.getItem('lv:giornateCal') === '1'; } catch (e) { return false; } })();
+function vistaGiornate(cal){ giorCal = cal; try { localStorage.setItem('lv:giornateCal', cal ? '1' : '0'); } catch (e) {} disegna(); Moto.entra($('vista')); }
+function filtraGiornate(mese, ag){ if (mese !== undefined) giorMese = mese; if (ag !== undefined) filtroAg = ag; disegna(); Moto.entra($('vista')); }
 function vistaMesi(){
-  const ags = agenzie(), lista = ordinate().reverse().filter(g => !filtroAg || g.agenzia === filtroAg);
+  const ags = agenzie(), anno = String(new Date().getFullYear());
+  const mesiCi = [...new Set(L.giornate.map(g => g.d.slice(0, 7)))].sort().reverse();
+  if (giorMese && !mesiCi.includes(giorMese)) giorMese = '';
+  const lista = ordinate().reverse().filter(g => (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
   const perMese = new Map(); lista.forEach(g => { const k = g.d.slice(0, 7); if (!perMese.has(k)) perMese.set(k, []); perMese.get(k).push(g); });
-  return `<div class="filtri">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" onclick="filtroAg=${esc(JSON.stringify(a))};disegna()">${a ? esc(a) : 'Tutte'}</button>`).join('')}</div>
-    ${[...perMese].map(([k, l]) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>${l.map(rigaG).join('')}`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`;
+  const nomeMese = k => MESI[+k.slice(5) - 1] + (k.startsWith(anno) ? '' : ' ' + k.slice(2, 4));
+  const testa = (k, l) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>`;
+  return `<div class="filtri-testa"><div class="filtri" role="group" aria-label="Mese"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutti</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${nomeMese(k)}</button>`).join('')}</div>
+      <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
+    <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? esc(a) : 'Tutte'}</button>`).join('')}</div>
+    ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`;
 }
 function vistaFatture(){
   const da = ordinate().filter(g => statoDi(g) === 'da'), fatt = ordinate().filter(g => statoDi(g) === 'fatturato');
@@ -355,7 +383,7 @@ function vistaRiepilogo(){
       ${mk ? '' : `<div class="barre" aria-label="Totale per mese: tocca un mese per vederlo">${mesi.map(m => `<div onclick="filtraRiep(${m.i})" title="${MESI_L[m.i]}"><i class="moto-barra${m.fut ? ' fut' : ''}" style="--i:${m.i};height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>`}
     </section>
     ${mk ? calendarioMese(mk, l) : ''}
-    ${mk ? `<section class="card glass"><h2>Giornate</h2>${l.length ? l.slice().sort((a, b) => a.d.localeCompare(b.d)).map(rigaG).join('') : '<p class="nota">Nessuna giornata in questo mese.</p>'}</section>` : ''}
+    ${mk ? `<section class="card glass lista"><h2>Giornate</h2>${l.length ? `<div class="righe">${l.slice().sort((a, b) => a.d.localeCompare(b.d)).map(rigaG).join('')}</div>` : '<p class="nota">Nessuna giornata in questo mese.</p>'}</section>` : ''}
     <section class="card glass"><h2>Per agenzia</h2>
       <table class="tab-ag"><tr><th>Agenzia</th><th class="n">Giornate</th><th class="n">Totale</th><th class="n">Da incassare</th></tr>
       ${agenzie().filter(a => !mk || l.some(g => g.agenzia === a)).map(a => { const x = l.filter(g => g.agenzia === a); return `<tr><td><b>${esc(a)}</b></td><td class="n">${x.length}</td><td class="n mono">${eur0(somma(x, totale))}</td><td class="n mono">${eur0(somma(x.filter(g => g.stato !== 'pagato' && g.d <= oggi), totale))}</td></tr>`; }).join('')}</table>
@@ -367,7 +395,7 @@ function vistaRiepilogo(){
 }
 
 // il mese a griglia (lunedì per primo): ogni giornata col colore del suo stato, agenzia e totale; un giorno vuoto aggiunge una giornata
-function calendarioMese(mk, l){
+function calendarioMese(mk, l, titolo = 'Calendario'){
   const [a, m] = mk.split('-').map(Number), giorni = new Date(a, m, 0).getDate(), vuoti = (new Date(a, m - 1, 1).getDay() + 6) % 7, oggi = oggiISO();
   const per = {}; l.forEach(g => (per[g.d] = per[g.d] || []).push(g));
   let celle = '<span></span>'.repeat(vuoti);
@@ -377,7 +405,7 @@ function calendarioMese(mk, l){
     const tit = x.map(g => `${g.agenzia || '–'}${g.nave ? ' · ' + g.nave : ''} · ${ETICH[statoDi(g)]}`).join('\n');
     celle += `<button type="button" class="cg pieno ${statoDi(x[0])}${cl}" onclick="modifica('${x[0].id}')" title="${esc(tit)}" aria-label="${d} ${MESI_L[m - 1]}: ${esc(tit)}"><b>${d}</b><small>${esc((x[0].agenzia || '').slice(0, 6))}${x.length > 1 ? ' ×' + x.length : ''}</small><i class="mono">${cifre(somma(x, totale), 0)}</i></button>`;
   }
-  return `<section class="card glass"><h2>Calendario</h2>
+  return `<section class="card glass">${titolo ? `<h2>${titolo}</h2>` : ''}
     <div class="cal-int" aria-hidden="true">${['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(g => `<span>${g}</span>`).join('')}</div>
     <div class="cal-griglia">${celle}</div>
     <div class="cal-leg"><span class="da">${ETICH.da}</span><span class="fatturato">${ETICH.fatturato}</span><span class="pagato">${ETICH.pagato}</span><span class="futura">${ETICH.futura}</span></div></section>`;

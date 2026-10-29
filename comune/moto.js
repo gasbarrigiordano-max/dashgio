@@ -2,6 +2,7 @@
    - Moto.entra(vista): cambiando scheda, i riquadri visibili entrano con una dissolvenza e un leggero scorrimento
      e i grafici dentro la vista si disegnano (linee da sinistra, barre dal basso)
    - Moto.disegna(el): solo i grafici dentro el (per esempio quando arrivano i dati)
+   - Moto.largo(si): la schermata ha molti dati, sugli schermi larghi la scheda si allarga
    - Moto.pillola(menu, '.on'): l'evidenziazione della voce attiva scivola da una voce all'altra; la pillola copia
      sfondo e ombra della voce attiva, quindi da ferma la barra è identica a prima
    Con "Riduci movimento" attivo nel telefono non si muove niente.
@@ -87,5 +88,12 @@
   // un menu che era nascosto (display:none) torna visibile: la pillola si rimette al suo posto senza scivolare
   const aggiorna = () => menu.forEach(m => posa(m, !m.visto));
 
-  window.Moto = { entra, disegna, pillola, aggiorna };
+  // schermate con molti dati (Mensile, Riepilogo…): l'app chiede più larghezza; dentro la Dashboard il pannello si allarga
+  // con lo stesso movimento (sugli schermi larghi), e l'app allarga il suo contenuto (html.largo)
+  function largo(si) {
+    si = !!si; window.motoLargo = si;
+    document.documentElement.classList.toggle('largo', si);
+    try { if (parent !== window) parent.postMessage({ tipo: 'moto-largo', si }, location.origin); } catch (e) {}
+  }
+  window.Moto = { entra, disegna, pillola, aggiorna, largo };
 })();

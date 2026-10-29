@@ -318,7 +318,10 @@ nav button.on{color:var(--acc)}
   /* due colonne: menu laterale largo quanto la voce più lunga + contenuto. Il menu è nel flusso della pagina,
      quindi il contenuto parte sempre dopo di lui (anche quando il carattere arriva in ritardo e il menu si allarga) */
   body{max-width:none;margin:0;padding:0 0 40px;display:grid;grid-template-columns:max-content minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
-  .mast,main{max-width:1200px;margin:0 auto;width:100%;grid-column:2;box-sizing:border-box}
+  .mast,main{max-width:1200px;margin:0 auto;width:100%;grid-column:2;box-sizing:border-box;transition:max-width .55s cubic-bezier(.3,.85,.3,1)}
+  /* Mensile e altre schermate con molti dati: tutta la larghezza e più righe della tabella senza scorrere */
+  html.largo .mast,html.largo main{max-width:100%}
+  html.largo .mx-wrap{max-height:calc(100vh - 210px)}
   .mast{grid-row:1} main{grid-row:2}
   .mast{padding:16px 28px 12px;border-bottom:none}
   .view{padding:12px 28px 28px}
@@ -1024,6 +1027,7 @@ function showTab(t){
   $('period-bar').style.display = (t==='pat' || SUB.includes(t)) ? 'none' : 'block';
   render(); window.scrollTo(0,0);
   Moto.entra(document.querySelector('.view.on'));
+  Moto.largo(t === 'mx'); // il Mensile ha tante colonne: sugli schermi larghi la scheda si allarga
 }
 // la vista aperta: la Dashboard la fa entrare quando si apre Bilancio
 window.motoVista = () => document.querySelector('.view.on');
