@@ -834,14 +834,14 @@ async function leggiEventi(c, id, da, a, lavoro, comeLavoro){
     const r = await gcalFetch(c, apiEventi(id) + '?' + q);
     (r.items || []).forEach(e => {
       if(e.status === 'cancelled' || !e.start) return;
-      const dgid = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.dgid;
+      const priv = (e.extendedProperties && e.extendedProperties.private) || {}, dgid = priv.dgid, dglav = priv.dglav;
       const tutto = !!e.start.date, inizio = tutto ? new Date(e.start.date + 'T00:00') : new Date(e.start.dateTime);
       const fine = e.end ? (e.end.date ? new Date(e.end.date + 'T00:00') : new Date(e.end.dateTime)) : new Date(inizio.getTime() + 36e5);
       const ora = tutto ? '' : inizio.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
       out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: e.summary || '(senza titolo)', app: nomeCal + (ora ? ' · ' + ora : ''),
         conto: c.email, gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
         descr: e.description || '', luogo: e.location || '',
-        tag: comeLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid });
+        tag: comeLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid, dglav });
     });
     pagina = r.nextPageToken || '';
   } while(pagina);
@@ -1089,6 +1089,76 @@ async function salvaEvento(){
     chiudiEvento(); giornoSel = di; await gcalLeggi();
   } catch(e){ err('Non salvato: ' + e.message); }
 }
+/* ---- Giornate di Lavoro collegate a Google Calendar ----
+   Salvando una giornata in Lavoro (data, nave o agenzia cambiate) o eliminandola, Lavoro lo dice alla Dashboard, che ha Google:
+   l'evento di quella giornata si sposta, si aggiorna o si elimina; se non c'è, si crea nel calendario di lavoro.
+   L'evento si riconosce dal segno che l'app gli lascia (dglav = id della giornata); la prima volta dalla data e dal titolo. */
+const normT = s => window.Porto ? Porto.norm(s) : String(s || '').toUpperCase();
+async function eventiDelGiorno(d){
+  const lav = calLavoro(), [lavConto, ...r] = lav ? lav.split('|') : [null], lavId = r.join('|'), out = [];
+  const da = new Date(d + 'T00:00'), a = new Date(da.getTime() + 864e5);
+  for(const c of gcalAttivi()){
+    const ids = new Set(vistiDi(c.email)); if(lavConto === c.email) ids.add(lavId);
+    for(const id of ids){ try { out.push(...await leggiEventi(c, id, da, a, false, lavConto === c.email && id === lavId)); } catch(e){ console.warn('calendario', e); } }
+  }
+  return out.filter(e => e.d === d);
+}
+function puntiEvento(e, g){
+  if(e.dglav === g.id) return 100;
+  const t = ' ' + normT(e.titolo) + ' ';
+  if(g.nave && t.includes(' ' + normT(g.nave) + ' ')) return 10;
+  if(g.agenzia && t.includes(' ' + normT(g.agenzia) + ' ')) return 5;
+  return e.tag === 'LAV' ? 1 : 0; // nel calendario di lavoro
+}
+async function eventoDellaGiornata(g){
+  const l = (await eventiDelGiorno(g.d)).map(e => ({e, p: puntiEvento(e, g)})).filter(x => x.p > 0).sort((a, b) => b.p - a.p);
+  if(!l.length) return null;
+  if(l.length > 1 && l[0].p === l[1].p && l[0].p < 100) return {ambiguo: true};
+  return l[0].e;
+}
+const reTesto = s => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+async function aggiornaEventoLavoro(e, prima, dopo){
+  const giorni = Math.round((new Date(dopo.d + 'T12:00') - new Date(prima.d + 'T12:00')) / 864e5), tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome';
+  const sposta = iso => { const [d, t] = iso.split('T'); return piuGiorno(d, giorni) + (t ? 'T' + t : ''); };
+  const corpo = { extendedProperties: { private: { dglav: dopo.id, ...(e.dgid ? {dgid: e.dgid} : {}) } } };
+  if(giorni){ corpo.start = e.tutto ? {date: sposta(e.inizioL)} : {dateTime: sposta(e.inizioL) + ':00', timeZone: tz}; corpo.end = e.tutto ? {date: sposta(e.fineL)} : {dateTime: sposta(e.fineL) + ':00', timeZone: tz}; }
+  // il titolo segue nave e agenzia: si sostituisce la vecchia, se manca si aggiunge
+  let tit = e.titolo;
+  [['nave', ' · '], ['agenzia', ' · ']].forEach(([k, sep]) => {
+    if(prima[k] && dopo[k] !== prima[k] && reTesto(prima[k]).test(tit)) tit = tit.replace(reTesto(prima[k]), dopo[k] || '').replace(/\s*·\s*$|^\s*·\s*/g, '').trim();
+    if(dopo[k] && !(' ' + normT(tit) + ' ').includes(' ' + normT(dopo[k]) + ' ')) tit += sep + dopo[k];
+  });
+  if(tit !== e.titolo) corpo.summary = tit;
+  await gcalFetch(contoDi(e.conto), apiEventi(e.cal) + '/' + encodeURIComponent(e.gid), { method: 'PATCH', body: JSON.stringify(corpo) });
+}
+async function creaEventoLavoro(g){
+  const lav = calLavoro(), [email, ...r] = lav ? lav.split('|') : [gcalAttivi()[0].email, 'primary'];
+  await gcalFetch(contoDi(email), apiEventi(r.join('|') || 'primary'), { method: 'POST', body: JSON.stringify({
+    summary: [g.nave || 'Lavoro', g.agenzia].filter(Boolean).join(' · '), description: 'Da Lavoro · Dashboard di Giordano' + (g.tipo ? ' · ' + g.tipo : ''),
+    start: {date: g.d}, end: {date: piuGiorno(g.d, 1)}, extendedProperties: { private: { dglav: g.id } } }) });
+}
+addEventListener('message', async e => {
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-cal') return;
+  const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
+  if(!gcalAttivi().length) return rispondi('Calendario non aggiornato: Google non è collegato nella Dashboard');
+  const {azione, prima, dopo} = e.data;
+  try {
+    if(azione === 'elimina'){
+      const ev = await eventoDellaGiornata(prima);
+      if(!ev) return;
+      if(ev.ambiguo) return rispondi('Più eventi di lavoro quel giorno: il calendario non è stato toccato');
+      if(!confirm(`Eliminare anche "${ev.titolo}" del ${fmtD(prima.d)} da Google Calendar?`)) return;
+      await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' });
+      rispondi('Evento eliminato anche dal calendario');
+    } else {
+      const ev = await eventoDellaGiornata(prima || dopo);
+      if(ev && ev.ambiguo) return rispondi('Più eventi di lavoro quel giorno: sposta a mano quello giusto nel calendario');
+      if(ev){ await aggiornaEventoLavoro(ev, prima || dopo, dopo); rispondi(prima && prima.d !== dopo.d ? 'Calendario aggiornato: evento spostato al ' + fmtD(dopo.d) : 'Calendario aggiornato'); }
+      else { await creaEventoLavoro(dopo); rispondi('Evento aggiunto al calendario'); }
+    }
+    await gcalLeggi();
+  } catch(err){ rispondi('Calendario non aggiornato: ' + err.message); }
+});
 async function eliminaEvento(){
   const ev = evAperto; if(!ev || !ev.gid || !confirm('Eliminare "' + ev.titolo + '" da Google Calendar?')) return;
   try { await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' }); chiudiEvento(); await gcalLeggi(); }

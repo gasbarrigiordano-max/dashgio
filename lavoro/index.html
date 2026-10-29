@@ -477,8 +477,18 @@ function salvaGiornata(id){
   if (g.stato === 'pagato' && !g.dataPagamento) g.dataPagamento = oggiISO();
   L.giornate = [...L.giornate.filter(x => x.id !== g.id), g];
   salva(); chiudi(); disegna();
+  // data, nave o agenzia nuove: anche l'evento nel calendario (stato, fattura e importi non lo toccano)
+  if (!vecchia || ['d', 'nave', 'agenzia'].some(k => (vecchia[k] || '') !== (g[k] || ''))) avvisaCalendario('salva', vecchia ? {...vecchia} : null, {...g});
 }
-function elimina(id){ if (!confirm('Eliminare questa giornata?')) return; L.giornate = L.giornate.filter(x => x.id !== id); salva(); chiudi(); disegna(); }
+function elimina(id){
+  if (!confirm('Eliminare questa giornata?')) return;
+  const g = L.giornate.find(x => x.id === id);
+  L.giornate = L.giornate.filter(x => x.id !== id); salva(); chiudi(); disegna();
+  if (g) avvisaCalendario('elimina', {...g}, null);
+}
+// il calendario (Google) lo aggiorna la Dashboard, che ha l'accesso; qui arriva l'esito da mostrare
+function avvisaCalendario(azione, prima, dopo){ try { if (parent !== window) parent.postMessage({ tipo: 'lavoro-cal', azione, prima, dopo }, location.origin); } catch (e) {} }
+addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.tipo === 'lavoro-cal-esito' && e.data.testo) toast(e.data.testo); });
 
 // fattura: le giornate da fatturare di un'agenzia, con il numero della fattura
 function fattura(ag){
