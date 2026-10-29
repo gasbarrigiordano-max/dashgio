@@ -961,6 +961,7 @@ function afterLoad(){
   if(!S.opz.invGruppi){ invGruppi(); S.opz.invGruppi = true; save(); }
   if(!S.opz.mezziPerMezzo){ migraMezzi(); S.opz.mezziPerMezzo = true; save(); }
   payDueRate(); payAbbo(); bordoImporta(); settleCards(); autoStorico();
+  aggiornaCripto(true);
 }
 const txMonth = t => +t.d.slice(5,7)-1;
 function inPeriod(t){ return txYear(t)===ui.year && (ui.month==='all' || txMonth(t)===ui.month); }
@@ -1344,7 +1345,7 @@ function renderPat(){
   GRP.forEach(([g,col])=>{
     const items = S.conti.filter(c=>c.g===g);
     html += `<div class="pg-${g.toLowerCase()}"><div class="gh"><b><i class="dot" style="background:${col}"></i>${g}</b><span class="mono">${eur(tot(g),0)}</span></div><div class="card" style="padding:4px 14px">
-      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${pct(c.v)} del patrimonio</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty" style="padding:12px 0;font-size:12.5px">Nessun conto</div>'}</div></div>`;
+      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${pct(c.v)} del patrimonio${c.cripto&&c.cripto.length ? ' · '+c.cripto.map(r=>fmtQ(r.q)+' '+esc(r.sim)).join(', ')+' · in tempo reale' : ''}</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty" style="padding:12px 0;font-size:12.5px">Nessun conto</div>'}</div></div>`;
   });
   html += `</div><button class="btn ghost pat-add" onclick="openConto()">+ Aggiungi conto</button>`;
   html += storicoHTML();
@@ -1457,22 +1458,107 @@ function saveFoto(m){
 }
 function openConto(id){
   const c = id ? S.conti.find(x=>x.id===id) : {g:'Banche',n:'',v:0};
+  crBozza = (c.cripto||[]).map(r=>({...r}));
   sheet(`<h3>${id?'Modifica conto':'Nuovo conto'}</h3>
-    <div class="f"><label>Gruppo</label><select id="c-g">${['Banche','Cash','Investimenti'].map(g=>`<option ${c.g===g?'selected':''}>${g}</option>`).join('')}</select></div>
+    <div class="f"><label>Gruppo</label><select id="c-g" onchange="$('c-cr').style.display=this.value==='Investimenti'?'':'none';crTotale()">${['Banche','Cash','Investimenti'].map(g=>`<option ${c.g===g?'selected':''}>${g}</option>`).join('')}</select></div>
     <div class="f"><label>Nome</label><input id="c-n" value="${esc(c.n)}" placeholder="es. ING"></div>
     <div class="f"><label>Saldo (€)</label><input id="c-v" inputmode="decimal" class="amt" value="${c.v||''}" placeholder="0 €"></div>
+    <div class="f" id="c-cr" style="${c.g==='Investimenti'?'':'display:none'}"><label>Criptovalute · valore in tempo reale</label>
+      <div class="note" style="margin:0 0 6px">Scrivi il simbolo (BTC, ETH, CRO…) e quante ne hai: il saldo si calcola dalla quotazione in euro e si aggiorna da solo.</div>
+      <div id="c-cr-righe"></div>
+      <button class="btn ghost" type="button" style="margin-top:6px" onclick="crBozza.push({sim:'',q:''});crRighe()">+ Criptovaluta</button>
+      <label style="margin-top:10px">Altro nel conto (€, non in cripto)</label><input id="c-ex" inputmode="decimal" class="amt" value="${c.extra||''}" placeholder="0 €" oninput="crTotale()">
+      <div class="note" id="c-cr-tot" style="margin-top:6px"></div></div>
     <button class="btn" onclick="saveConto('${id||''}')">Salva</button>
     ${id?`<button class="btn danger" style="margin-top:8px" onclick="delConto('${id}')">Elimina</button>`:''}
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Annulla</button>`);
+  crRighe(); crBozza.forEach((r,i)=>{ if(r.sim && PREZZI[r.cg||CG_ID[r.sim]]==null) crCerca(i); });
 }
 const num = s => parseFloat(String(s).replace(',','.')) || 0;
 function saveConto(id){
   const o = {g:$('c-g').value, n:$('c-n').value.trim(), v:num($('c-v').value)};
   if(!o.n) return toast('Inserisci un nome');
+  // criptovalute: il saldo è la loro quotazione (più l'altro nel conto); si ricalcola subito e poi da solo
+  const vecchio = id ? (S.conti.find(x=>x.id===id).cripto||[]) : [];
+  o.cripto = o.g==='Investimenti' ? crBozza.map(r=>({sim:String(r.sim||'').trim().toUpperCase(), q:num(r.q), cg:r.cg||null})).filter(r=>r.sim && r.q>0)
+    .map(r=>({...r, cg:r.cg || (vecchio.find(x=>x.sim===r.sim)||{}).cg || CG_ID[r.sim] || null})) : [];
+  o.extra = o.cripto.length ? num(($('c-ex')||{}).value||0) : 0;
+  if(o.cripto.length){ const t = crValore(o); if(t!=null) o.v = t; } else { o.cripto = undefined; o.extra = undefined; }
   if(id) Object.assign(S.conti.find(x=>x.id===id),o); else S.conti.push({id:uid(),...o});
-  save(); closeSheet(); render(); toast('Salvato');
+  save(); closeSheet(); render(); toast('Salvato'); if(o.cripto) aggiornaCripto(true);
 }
 function delConto(id){ S.conti=S.conti.filter(x=>x.id!==id); save(); closeSheet(); render(); }
+
+/* ---- Criptovalute: il saldo dei conti dalla quotazione in tempo reale ----
+   conto.cripto = [{sim:'BTC', q:0.05, cg:'bitcoin'}], conto.extra = euro nel conto; saldo = Σ quantità × prezzo in euro + extra.
+   Prezzi da CoinGecko (riserva: Binance); a loro arrivano solo i nomi delle monete, mai le quantità. */
+const CG_ID = {BTC:'bitcoin', ETH:'ethereum', CRO:'crypto-com-chain', SOL:'solana', XRP:'ripple', ADA:'cardano', DOGE:'dogecoin', DOT:'polkadot',
+  POL:'polygon-ecosystem-token', MATIC:'matic-network', LINK:'chainlink', LTC:'litecoin', AVAX:'avalanche-2', BNB:'binancecoin', USDT:'tether', USDC:'usd-coin',
+  SHIB:'shiba-inu', ATOM:'cosmos', XLM:'stellar', TRX:'tron', TON:'the-open-network', PEPE:'pepe', NEAR:'near', APT:'aptos', ARB:'arbitrum', OP:'optimism',
+  SUI:'sui', ALGO:'algorand', VET:'vechain', HBAR:'hedera-hashgraph', ICP:'internet-computer', FIL:'filecoin', UNI:'uniswap', AAVE:'aave', BCH:'bitcoin-cash', ETC:'ethereum-classic'};
+let PREZZI = {}, prezziOra = 0, crBozza = [];
+const fmtQ = q => (+q).toLocaleString('it-IT', {maximumFractionDigits:8, useGrouping:'always'});
+const crValore = c => { const r = c.cripto||[]; if(!r.length || r.some(x=>PREZZI[x.cg]==null)) return null; return round2(sum(r.map(x=>x.q*PREZZI[x.cg])) + (c.extra||0)); };
+async function crId(sim){
+  if(CG_ID[sim]) return CG_ID[sim];
+  try { const j = await (await fetch('https://api.coingecko.com/api/v3/search?query='+encodeURIComponent(sim))).json();
+    const c = (j.coins||[]).filter(c=>String(c.symbol).toUpperCase()===sim).sort((a,b)=>(a.market_cap_rank||1e9)-(b.market_cap_rank||1e9))[0];
+    return c ? c.id : null; } catch(e){ return null; }
+}
+async function crPrezzi(righe){
+  const ids = [...new Set(righe.map(r=>r.cg).filter(Boolean))]; if(!ids.length) return;
+  try { const j = await (await fetch('https://api.coingecko.com/api/v3/simple/price?vs_currencies=eur&ids='+ids.join(','))).json();
+    ids.forEach(id=>{ if(j[id] && j[id].eur!=null) PREZZI[id] = j[id].eur; }); } catch(e){ console.warn('CoinGecko', e); }
+  // riserva: Binance, coppia in euro
+  const mancano = righe.filter(r=>r.cg && PREZZI[r.cg]==null);
+  await Promise.all([...new Set(mancano.map(r=>r.sim))].map(async sim=>{
+    try { const j = await (await fetch('https://api.binance.com/api/v3/ticker/price?symbol='+sim+'EUR')).json();
+      if(j && j.price) mancano.filter(r=>r.sim===sim).forEach(r=>PREZZI[r.cg] = +j.price); } catch(e){}
+  }));
+}
+// all'apertura e ogni 2 minuti: prezzi nuovi → saldi dei conti con le cripto (e la voce con lo stesso nome in Investimenti)
+async function aggiornaCripto(forza){
+  const conti = S.conti.filter(c=>c.cripto && c.cripto.length); if(!conti.length) return;
+  if(!forza && Date.now()-prezziOra < 110e3) return;
+  prezziOra = Date.now();
+  let cambiato = false;
+  for(const c of conti) for(const r of c.cripto) if(!r.cg){ r.cg = await crId(r.sim); if(r.cg) cambiato = true; }
+  await crPrezzi(conti.flatMap(c=>c.cripto));
+  conti.forEach(c=>{
+    const t = crValore(c); if(t==null) return;
+    c.vAgg = Date.now();
+    if(Math.abs(t-(c.v||0)) >= 0.01){ c.v = t; cambiato = true; }
+    const k = S.inv.findIndex(r=>r.n.toLowerCase()===c.n.toLowerCase());
+    if(k>=0 && !invSomma(k) && Math.abs(t-(S.inv[k].eff||0)) >= 0.01){ Object.assign(S.inv[k], {eff:t, agg:today()}); cambiato = true; }
+  });
+  if(cambiato){ save(); render(); }
+}
+setInterval(()=>{ if(S && S.conti) aggiornaCripto(); }, 120e3);
+// finestra del conto: righe delle criptovalute, prezzo e valore di ognuna
+function crRighe(){
+  const box = $('c-cr-righe'); if(!box) return;
+  box.innerHTML = crBozza.map((r,i)=>{ const cg = r.cg || CG_ID[String(r.sim||'').toUpperCase()], p = PREZZI[cg];
+    return `<div style="display:grid;grid-template-columns:90px minmax(0,1fr) 40px;gap:6px;margin-top:6px">
+      <input value="${esc(r.sim||'')}" placeholder="BTC" autocapitalize="characters" aria-label="Simbolo" oninput="crBozza[${i}].sim=this.value.toUpperCase();crBozza[${i}].cg=null;crTotale()" onchange="crCerca(${i})">
+      <input value="${r.q===''||r.q==null?'':esc(String(r.q).replace('.',','))}" inputmode="decimal" placeholder="Quantità" aria-label="Quantità" oninput="crBozza[${i}].q=this.value;crTotale()">
+      <button class="btn ghost" type="button" aria-label="Togli" style="padding:0" onclick="crBozza.splice(${i},1);crRighe()">✕</button></div>
+      <div class="note" style="margin:2px 2px 0">${p!=null ? `1 ${esc(r.sim)} = ${eur(p)} · ${eur(round2(num(r.q)*p))}` : r.sim ? 'quotazione: la cerco…' : ''}</div>`; }).join('');
+  crTotale();
+}
+async function crCerca(i){
+  const r = crBozza[i]; if(!r || !r.sim) return;
+  r.cg = r.cg || await crId(r.sim); if(!r.cg){ toast('Non trovo la criptovaluta '+r.sim); return; }
+  await crPrezzi([r]); crRighe();
+}
+function crTotale(){
+  const el = $('c-cr-tot'); if(!el) return;
+  const righe = crBozza.map(r=>({...r, sim:String(r.sim||'').toUpperCase(), q:num(r.q)})).filter(r=>r.sim && r.q>0).map(r=>({...r, cg:r.cg||CG_ID[r.sim]}));
+  const t = crValore({cripto:righe, extra:num(($('c-ex')||{}).value||0)});
+  const inv = $('c-g') && $('c-g').value==='Investimenti';
+  $('c-v').disabled = inv && righe.length>0;
+  if(inv && righe.length && t!=null) $('c-v').value = String(t).replace('.',',');
+  el.textContent = !inv || !righe.length ? '' : t!=null ? `Saldo calcolato: ${eur(t)} · si aggiorna da solo` : 'Saldo: aspetto le quotazioni…';
+}
 
 /* ---- Altro: Rate / Investimenti / Trading ---- */
 function renderAltro(){
