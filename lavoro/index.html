@@ -171,7 +171,12 @@ html.largo .wrap{max-width:100%}
 .foglio-h h3{margin:0;font-size:17px;font-weight:800}
 .campi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .campi .tutta{grid-column:1/-1}
-.campi label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
+.campi label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2);position:relative}
+/* suggerimenti sotto i campi (al posto del menu di sistema, che in Safari a volte compariva trasparente sopra gli altri campi) */
+.sugg{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:5;background:#2a211c;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.5);max-height:240px;overflow:auto;padding:4px}
+.sugg button{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:#fff;font-family:inherit;font-size:14px;font-weight:600;padding:9px 10px;border-radius:8px;text-align:left;cursor:pointer}
+.sugg button:hover,.sugg button.on{background:rgba(255,255,255,.1)}
+.sugg small{flex:none;font-size:10.5px;font-weight:800;color:var(--acc);text-transform:uppercase;letter-spacing:.04em}
 .campi input,.campi select,.campi textarea{height:46px;border-radius:14px;border:1px solid var(--line);background:var(--campo);color:#fff;padding:0 12px;font-size:16px;outline:0;min-width:0;width:100%}
 .campi textarea{height:auto;min-height:64px;padding:10px 12px;resize:vertical}
 .campi input:focus,.campi select:focus,.campi textarea:focus{border-color:var(--acc)}
@@ -415,26 +420,52 @@ function calendarioMese(mk, l, titolo = 'Calendario'){
 function modifica(id, giorno){
   const g = id ? L.giornate.find(x => x.id === id) : { d: giorno || oggiISO(), agenzia: '', nave: '', tipo: '', lordo: '', extra: '', stato: '', fattura: '', note: '' };
   if (!g) return;
-  const navi = [...new Set([...naviDelGiorno(g.d).map(titolo), ...L.giornate.map(x => x.nave).filter(Boolean)])];
-  const tipi = [...new Set(L.giornate.map(x => x.tipo).filter(Boolean))];
+  SUGG.agenzie = agenzie(); SUGG.tipi = [...new Set(L.giornate.map(x => x.tipo).filter(Boolean))]; aggiornaNavi(g.d);
   apri(id ? 'Giornata' : 'Nuova giornata', `<div class="campi">
     <label>Data<input id="m-d" type="date" value="${esc(g.d)}" onchange="aggiornaNavi(this.value)"></label>
-    <label>Agenzia<input id="m-a" list="m-al" value="${esc(g.agenzia)}" autocapitalize="characters" placeholder="Es. CFFT"></label>
-    <label class="tutta">Nave<input id="m-n" list="m-nl" value="${esc(g.nave)}" placeholder="Es. Costa Toscana"></label>
-    <label class="tutta">Servizio<input id="m-t" list="m-tl" value="${esc(g.tipo)}" placeholder="Es. AM/PM GO, PS, Spiaggia"></label>
+    <label>Agenzia<input id="m-a" data-sugg="agenzie" autocomplete="off" value="${esc(g.agenzia)}" autocapitalize="characters" placeholder="Es. CFFT"></label>
+    <label class="tutta">Nave<input id="m-n" data-sugg="navi" autocomplete="off" value="${esc(g.nave)}" placeholder="Es. Costa Toscana"></label>
+    <label class="tutta">Servizio<input id="m-t" data-sugg="tipi" autocomplete="off" value="${esc(g.tipo)}" placeholder="Es. AM/PM GO, PS, Spiaggia"></label>
     <label>Lordo €<input id="m-l" inputmode="decimal" value="${esc(g.lordo)}" oninput="ricalcola()"></label>
     <label>Extra €<input id="m-e" inputmode="decimal" value="${esc(g.extra)}" oninput="ricalcola()"></label>
     <label>Stato<select id="m-s"><option value=""${!g.stato ? ' selected' : ''}>Da fatturare</option><option value="fatturato"${g.stato === 'fatturato' ? ' selected' : ''}>Fatturata</option><option value="pagato"${g.stato === 'pagato' ? ' selected' : ''}>Pagata</option></select></label>
     <label>N. fattura<input id="m-f" value="${esc(g.fattura || '')}" placeholder="Es. 12/2026"></label>
     <label class="tutta">Note<textarea id="m-no">${esc(g.note || '')}</textarea></label></div>
     <div class="conti" id="m-c"></div>
-    <datalist id="m-al">${agenzie().map(a => `<option value="${esc(a)}">`).join('')}</datalist>
-    <datalist id="m-nl">${navi.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
-    <datalist id="m-tl">${tipi.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="azioni">${id ? `<button class="btn rosso" type="button" onclick="elimina('${id}')">Elimina</button>` : ''}<button class="btn" type="button" onclick="salvaGiornata('${id || ''}')">Salva</button></div>`);
   ricalcola();
 }
-function aggiornaNavi(d){ $('m-nl').innerHTML = [...new Set([...naviDelGiorno(d).map(titolo), ...L.giornate.map(x => x.nave).filter(Boolean)])].map(n => `<option value="${esc(n)}">`).join(''); }
+// navi da suggerire: prima quelle in porto quel giorno, poi quelle già usate
+function aggiornaNavi(d){ SUGG.inPorto = naviDelGiorno(d).map(titolo); SUGG.navi = [...new Set([...SUGG.inPorto, ...L.giornate.map(x => x.nave).filter(Boolean)])]; }
+/* suggerimenti dei campi Agenzia, Nave e Servizio: filtrati mentre si scrive, si sceglie col dito, col mouse o con frecce e Invio */
+const SUGG = { navi: [], agenzie: [], tipi: [], inPorto: [] };
+function mostraSugg(inp){
+  const lab = inp.parentElement; let box = lab.querySelector('.sugg');
+  const q = inp.value.trim().toLowerCase(), lista = SUGG[inp.dataset.sugg] || [];
+  const voci = lista.filter(v => v.toLowerCase().includes(q) && v.toLowerCase() !== q)
+    .sort((a, b) => (b.toLowerCase().startsWith(q) - a.toLowerCase().startsWith(q))).slice(0, 8);
+  if (!voci.length) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.className = 'sugg'; box.setAttribute('role', 'listbox'); lab.appendChild(box); }
+  box.innerHTML = voci.map(v => `<button type="button" role="option" tabindex="-1" data-v="${esc(v)}">${esc(v)}${inp.dataset.sugg === 'navi' && SUGG.inPorto.includes(v) ? '<small>in porto</small>' : ''}</button>`).join('');
+}
+const chiudiSugg = () => document.querySelectorAll('.sugg').forEach(b => b.remove());
+document.addEventListener('focusin', e => { if (e.target.matches('input[data-sugg]')) { chiudiSugg(); mostraSugg(e.target); } });
+document.addEventListener('input', e => { if (e.target.matches('input[data-sugg]')) mostraSugg(e.target); });
+document.addEventListener('focusout', e => { if (e.target.matches('input[data-sugg]')) setTimeout(() => { if (!e.target.parentElement.contains(document.activeElement)) e.target.parentElement.querySelector('.sugg')?.remove(); }, 150); });
+// pointerdown: la scelta arriva prima che il campo perda il fuoco
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.sugg button'); if (!b) return;
+  e.preventDefault(); const inp = b.closest('label').querySelector('input');
+  inp.value = b.dataset.v; b.closest('.sugg').remove();
+});
+document.addEventListener('keydown', e => {
+  if (!e.target.matches('input[data-sugg]')) return;
+  const box = e.target.parentElement.querySelector('.sugg'); if (!box) return;
+  const b = [...box.querySelectorAll('button')], i = b.findIndex(x => x.classList.contains('on'));
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); b.forEach(x => x.classList.remove('on')); const n = b[(i + (e.key === 'ArrowDown' ? 1 : -1) + b.length) % b.length]; n.classList.add('on'); n.scrollIntoView({block: 'nearest'}); }
+  else if (e.key === 'Enter' && i >= 0) { e.preventDefault(); e.target.value = b[i].dataset.v; box.remove(); }
+  else if (e.key === 'Escape') box.remove();
+});
 function ricalcola(){ const g = { lordo: $('m-l').value, extra: $('m-e').value }; $('m-c').innerHTML = `<span>Netto<br><b class="mono">${eur(netto(g))}</b></span><span>Extra<br><b class="mono">${eur(num(g.extra) || 0)}</b></span><span>Totale<br><b class="mono">${eur(totale(g))}</b></span>`; }
 function salvaGiornata(id){
   const d = $('m-d').value; if (!d) return toast('Scegli la data');
