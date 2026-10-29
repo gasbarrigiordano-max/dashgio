@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1411">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lavoro">
+<link rel="icon" type="image/png" href="../dashboard-favicon.png">
+<link rel="apple-touch-icon" href="../dashboard-180.png">
+<title>Lavoro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!--
+  Lavoro al porto: le giornate per agenzia e nave, la tariffa (lorda, netta, extra), la fattura e il pagamento.
+  Dati cifrati nella cassaforte comune (comune/cassaforte.js), voce bilancio/{uid}/dashboard/lavoro:
+  {giornate:[{id, d, agenzia, nave, tipo, lordo, extra, stato:''|'fatturato'|'pagato', fattura, dataFattura, dataPagamento, note}], aliquote}
+  Netto = lordo − ritenuta (21% sull'85%) + rivalsa 4%, come nel foglio Numbers; totale = netto + extra.
+  Il molo delle navi viene dal porto di Civitavecchia (comune/porto.js).
+-->
+<style>
+:root{
+  --ink:#fff; --ink2:rgba(255,255,255,.76); --ink3:rgba(255,255,255,.6);
+  --acc:#F2711C; --acc-soft:#ffb07a;
+  --glass:linear-gradient(rgba(40,24,12,.16),rgba(40,24,12,.16)),rgba(255,255,255,.10); --line:rgba(255,255,255,.22); --campo:rgba(0,0,0,.28);
+  --ok:#7fd3a8; --ko:#ffb3a1; --warn:#f5c46b; --blu:#8ab4f8;
+  --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{min-height:100vh;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#17120f;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:url(../comune/sfondo.svg) center/cover no-repeat}
+html.incorporata body{background:transparent} html.incorporata body::before{display:none}
+html.incorporata{--sat:0px;--sab:0px}
+:root{color-scheme:dark}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);border:1px solid var(--line);box-shadow:0 10px 40px rgba(20,10,0,.18), inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 3px rgba(40,20,5,.45)}
+.tabs.glass{background:rgba(30,20,14,.55)}
+html.incorporata .tabs.glass{background:rgba(30,20,14,.85);-webkit-backdrop-filter:none;backdrop-filter:none}
+.wrap{max-width:760px;margin:0 auto;padding:calc(14px + var(--sat)) 16px calc(110px + var(--sab))}
+
+header.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.tondo{width:44px;height:44px;border-radius:99px;border:1px solid var(--line);background:rgba(0,0,0,.28);display:grid;place-items:center;color:var(--ink2);text-decoration:none;cursor:pointer;flex:none}
+header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
+.sync{width:9px;height:9px;border-radius:99px;background:var(--ok);flex:none}
+.sync.salvo{background:var(--warn)}.sync.err{background:#ff7a5c}
+
+.card{border-radius:22px;padding:16px;margin-bottom:12px}
+.card h2{margin:0 0 4px;font-size:15px;font-weight:800}
+.sez{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 2px 10px}
+.sez h2{margin:0;font-size:14px;font-weight:800;padding-left:10px;border-left:3px solid var(--acc)}
+.sez small{font-size:12px;color:var(--ink2)}
+.nota{font-size:12.5px;color:var(--ink2);margin:4px 0 0;line-height:1.45}
+.vuoto{font-size:13px;color:var(--ink3);padding:14px 4px;text-align:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border:0;border-radius:99px;background:var(--acc);color:#1a1411;font-weight:800;font-size:14px;cursor:pointer;text-decoration:none}
+.btn.ghost{background:rgba(255,255,255,.1);color:#fff}
+.btn.rosso{background:rgba(110,28,18,.45);color:#ffd3c8;border:1px solid rgba(255,140,110,.35)}
+.btn.piccolo{min-height:36px;padding:0 14px;font-size:13px}
+.link{background:none;border:0;color:var(--acc-soft);font-weight:700;font-size:13px;cursor:pointer;min-height:44px;padding:0 4px}
+
+/* prossima giornata */
+.prossima .quando{font-size:13px;color:var(--ink2);font-weight:700;text-transform:capitalize}
+.prossima .nave{font-size:24px;font-weight:800;margin:4px 0 2px;line-height:1.2}
+.prossima .riga{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.12);font-size:12px;font-weight:700}
+.molo{display:inline-flex;flex-direction:column;align-items:center;line-height:1;padding:6px 10px;border-radius:12px;background:var(--acc);color:#fff;min-width:52px}
+.molo small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
+.molo b{font-size:20px;margin-top:3px}
+.molo.prev{outline:2px dotted rgba(255,255,255,.65);outline-offset:-4px}
+.molo.grande b{font-size:30px}
+
+/* elenco giornate */
+.g{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);margin-bottom:8px;cursor:pointer;width:100%;text-align:left;color:#fff}
+.g:hover{background:rgba(255,255,255,.11)}
+.g .data{width:46px;flex:none;text-align:center;line-height:1.1}
+.g .data b{display:block;font-size:19px}
+.g .data small{font-size:10.5px;color:var(--ink3);text-transform:uppercase;font-weight:700}
+.g .mid{flex:1 1 auto;min-width:0}
+.g .mid b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g .mid small{display:block;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g .imp{text-align:right;flex:none}
+.g .imp b{display:block;font-size:14px}
+.g .imp small{font-size:11px;color:var(--ink3)}
+.manca{color:#ffd98a;text-shadow:0 1px 4px rgba(50,25,0,.75)}
+.stato{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;margin-top:3px}
+.stato.da{background:rgba(245,196,107,.18);color:var(--warn)}
+.stato.fatturato{background:rgba(138,180,248,.2);color:var(--blu)}
+.stato.pagato{background:rgba(127,211,168,.18);color:var(--ok)}
+.stato.futura{background:rgba(255,255,255,.1);color:var(--ink2)}
+.filtri{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.filtri button{flex:none;border:1px solid var(--line);background:rgba(255,255,255,.07);color:#fff;border-radius:99px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
+.filtri button.on{background:#fff;color:#1d1a18}
+.mese-h{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px;gap:10px}
+.mese-h b{font-size:15px;text-transform:capitalize}
+.mese-h small{font-size:12px;color:var(--ink2)}
+
+/* fatture e riepilogo */
+.gruppo{border-radius:18px;padding:14px;margin-bottom:10px}
+.gruppo .testa{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.gruppo .testa b{font-size:15px}
+.gruppo .testa .mono{font-size:16px;font-weight:700}
+.gruppo .sotto{font-size:12px;color:var(--ink2);margin-top:4px}
+.kpi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.kpi div{background:rgba(255,255,255,.07);border-radius:16px;padding:12px}
+.kpi b{display:block;font-size:19px}
+.kpi small{font-size:11.5px;color:var(--ink3)}
+.tab-ag{width:100%;border-collapse:collapse;font-size:13px}
+.tab-ag th{text-align:left;font-size:11px;color:var(--ink3);font-weight:700;padding:6px 4px}
+.tab-ag td{padding:8px 4px;border-top:1px solid rgba(255,255,255,.1)}
+.tab-ag td.n,.tab-ag th.n{text-align:right}
+.barre{display:flex;align-items:flex-end;gap:6px;height:110px;margin-top:10px}
+.barre div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--ink3);height:100%;justify-content:flex-end}
+.barre i{width:100%;max-width:30px;border-radius:7px 7px 3px 3px;background:var(--acc);min-height:3px}
+.barre i.fut{background:rgba(242,113,28,.35)}
+
+/* finestra */
+.velo{position:fixed;inset:0;z-index:50;background:rgba(10,8,6,.6);display:none;align-items:flex-end;justify-content:center}
+.velo.on{display:flex}
+.foglio{width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:26px 26px 0 0;padding:18px 18px calc(18px + var(--sab));background:#2a211c;border:1px solid var(--line)}
+.foglio-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.foglio-h h3{margin:0;font-size:17px;font-weight:800}
+.campi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.campi .tutta{grid-column:1/-1}
+.campi label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
+.campi input,.campi select,.campi textarea{height:46px;border-radius:14px;border:1px solid var(--line);background:var(--campo);color:#fff;padding:0 12px;font-size:16px;outline:0;min-width:0;width:100%}
+.campi textarea{height:auto;min-height:64px;padding:10px 12px;resize:vertical}
+.campi input:focus,.campi select:focus,.campi textarea:focus{border-color:var(--acc)}
+.campi select option{background:#2a211c}
+.conti{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);font-size:13px}
+.conti b{font-size:15px}
+.scelte{max-height:42vh;overflow:auto;margin-top:6px}
+.scelte label{display:flex;align-items:center;gap:10px;padding:9px 4px;border-top:1px solid rgba(255,255,255,.08);font-size:13.5px}
+.scelte input{width:20px;height:20px;accent-color:var(--acc)}
+.azioni{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.azioni .btn{flex:1 1 140px}
+
+.tabs{position:fixed;left:50%;bottom:calc(12px + var(--sab));transform:translateX(-50%);z-index:30;border-radius:99px;padding:5px;display:flex;gap:2px;max-width:calc(100% - 20px)}
+.tabs button{border:0;background:transparent;color:var(--ink2);border-radius:99px;padding:8px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;font-weight:700;cursor:pointer;min-width:60px}
+.tabs button.on{background:var(--acc);color:#fff}
+.tabs svg{width:19px;height:19px}
+.fab{position:fixed;right:max(16px, calc(50% - 364px));bottom:calc(84px + var(--sab));z-index:31;width:54px;height:54px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:28px;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.35)}
+.toast{position:fixed;left:50%;top:calc(14px + var(--sat));transform:translateX(-50%);z-index:60;border-radius:99px;padding:10px 16px;font-size:13px;font-weight:700;display:none}
+.toast.on{display:block}
+@media (max-width:420px){ .tabs button{padding:8px 9px;min-width:54px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="tondo" href="../" aria-label="Dashboard" title="Dashboard"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></a>
+    <h1 id="titolo">Lavoro</h1>
+    <span class="sync" id="sync" title="Sincronizzato" aria-label="Sincronizzato"></span>
+  </header>
+  <main id="vista" aria-live="polite"></main>
+</div>
+
+<button class="fab" type="button" onclick="modifica(null)" aria-label="Aggiungi giornata">+</button>
+<nav class="tabs glass" aria-label="Sezioni">
+  <button data-t="prossime" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0"/></svg>Prossime</button>
+  <button data-t="mesi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Giornate</button>
+  <button data-t="fatture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>Fatture</button>
+  <button data-t="riepilogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Riepilogo</button>
+</nav>
+<input type="file" id="imp-file" accept=".json,application/json" hidden onchange="importa(this.files[0]);this.value=''">
+<div class="velo" id="velo" onclick="if(event.target===this) chiudi()"><div class="foglio" id="foglio" role="dialog" aria-modal="true"></div></div>
+<div class="toast glass" id="toast" role="status"></div>
+
+<script src="../comune/cassaforte.js"></script>
+<script src="../comune/porto.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nuovoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const oggiISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0, 10); };
+const MESI = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const MESI_L = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+const GG = ['dom','lun','mar','mer','gio','ven','sab'];
+const fmtD = iso => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MESI[m-1]}${y !== new Date().getFullYear() ? ' ' + y : ''}`; };
+const giornoSett = iso => GG[new Date(iso + 'T12:00').getDay()];
+const giorni = iso => Math.round((new Date(iso + 'T00:00:00') - new Date(oggiISO() + 'T00:00:00')) / 86400000);
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : null; };
+// sempre col punto delle migliaia (di suo, in italiano, non lo mette sotto le 10.000), come in Bilancio
+const cifre = (v, dec) => v.toLocaleString('it-IT', {minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: 'always'});
+const eur = v => cifre(v, 2) + ' €';
+const eur0 = v => cifre(v, 0) + ' €';
+const somma = (l, f) => l.reduce((a, x) => a + (f(x) || 0), 0);
+function toast(m){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2400); }
+
+/* ---------------- Dati nella cassaforte ---------------- */
+const BASE = { giornate: [], aliquote: { imponibile: 0.85, ritenuta: 0.21, rivalsa: 0.04 } };
+let L = JSON.parse(JSON.stringify(BASE)), tSalva = null, salvando = false, sporco = false;
+async function carica(){
+  const t = await Cassaforte.leggi('dashboard', 'lavoro');
+  L = t ? {...JSON.parse(JSON.stringify(BASE)), ...JSON.parse(t)} : JSON.parse(JSON.stringify(BASE));
+}
+function salva(){ sporco = true; setSync('salvo'); clearTimeout(tSalva); tSalva = setTimeout(invia, 500); }
+async function invia(){
+  if (salvando) { tSalva = setTimeout(invia, 300); return; }
+  salvando = true; sporco = false;
+  try { await Cassaforte.scrivi('dashboard', 'lavoro', JSON.stringify(L)); setSync(sporco ? 'salvo' : 'ok'); }
+  catch(e) { console.error(e); sporco = true; setSync('err'); toast(e.code === 'permission-denied' ? 'Salvataggio rifiutato: controlla le regole di Firestore (voce "dashboard")' : 'Salvataggio non riuscito: riprovo'); tSalva = setTimeout(invia, 4000); }
+  salvando = false;
+}
+function setSync(s){ const el = $('sync'); el.className = 'sync' + (s === 'ok' ? '' : ' ' + s); el.title = el.ariaLabel = {ok:'Sincronizzato', salvo:'Salvataggio…', err:'Errore di salvataggio'}[s]; }
+window.addEventListener('beforeunload', e => { if (sporco) { invia(); e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || sporco || salvando || $('velo').classList.contains('on')) return;
+  try { await carica(); disegna(); } catch(e){}
+});
+
+/* conti come nel foglio: netto = lordo − (lordo × 85% × 21%) + (lordo × 4%); totale = netto + extra */
+const netto = g => { const a = L.aliquote, l = num(g.lordo) || 0; return l - l * a.imponibile * a.ritenuta + l * a.rivalsa; };
+const totale = g => netto(g) + (num(g.extra) || 0);
+const ordinate = () => [...L.giornate].sort((a, b) => a.d.localeCompare(b.d));
+const agenzie = () => [...new Set(L.giornate.map(g => g.agenzia).filter(Boolean))].sort();
+const statoDi = g => g.stato === 'pagato' ? 'pagato' : g.stato === 'fatturato' ? 'fatturato' : g.d > oggiISO() ? 'futura' : 'da';
+const ETICH = { pagato: 'pagata', fatturato: 'fatturata', da: 'da fatturare', futura: 'in programma' };
+const etichStato = g => { const s = statoDi(g); return `<span class="stato ${s}">${ETICH[s]}${g.fattura && s !== 'da' ? ' · n. ' + esc(g.fattura) : ''}</span>`; };
+
+/* ---------------- Moli dal porto ---------------- */
+let PORTO = null;
+async function leggiPorto(){
+  if (!window.Porto) return;
+  try { PORTO = await Porto.leggi(); disegna(); } catch(e) { console.warn('porto', e); }
+}
+function moloDi(g){
+  if (!PORTO || !g.nave) return null;
+  return Porto.trova(PORTO, g.nave, g.d);
+}
+const badgeMolo = (m, grande) => m ? `<span class="molo${m.fonte === 'mese' ? ' prev' : ''}${grande ? ' grande' : ''}" title="${esc(m.nave + ' · molo ' + (m.banchina || 'da definire') + (m.orari ? ' · ' + m.orari : '') + (m.fonte === 'mese' ? ' · previsione del mese' : ''))}"><small>molo</small><b class="mono">${esc(m.banchina || '–')}</b></span>` : '';
+// navi in porto quel giorno (per scegliere la nave di una giornata)
+const naviDelGiorno = d => PORTO ? [...new Set(PORTO.navi.filter(n => n.d === d).map(n => n.nave))] : [];
+const titolo = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+/* ---------------- Viste ---------------- */
+let tab = 'prossime', filtroAg = '';
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); });
+function disegna(){
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+  $('titolo').textContent = {prossime: 'Lavoro', mesi: 'Giornate', fatture: 'Fatture', riepilogo: 'Riepilogo'}[tab];
+  $('vista').innerHTML = {prossime: vistaProssime, mesi: vistaMesi, fatture: vistaFatture, riepilogo: vistaRiepilogo}[tab]();
+}
+function rigaG(g){
+  const m = g.d >= oggiISO() ? moloDi(g) : null;
+  return `<button class="g" type="button" onclick="modifica('${g.id}')">
+    <span class="data"><b>${+g.d.slice(8)}</b><small>${giornoSett(g.d)} ${MESI[+g.d.slice(5, 7) - 1]}</small></span>
+    <span class="mid"><b>${g.nave ? esc(g.nave) : '<span class="manca">nave da inserire</span>'}</b><small>${esc(g.agenzia || '–')}${g.tipo ? ' · ' + esc(g.tipo) : ''}</small>${etichStato(g)}</span>
+    ${m ? badgeMolo(m) : ''}
+    <span class="imp"><b class="mono">${eur(totale(g))}</b><small>lordo ${eur0(num(g.lordo) || 0)}</small></span></button>`;
+}
+function vistaProssime(){
+  if (!L.giornate.length) return `<section class="card glass"><h2>Nessuna giornata</h2><p class="nota">Aggiungi le giornate con il "+" oppure importa il foglio di quest'anno (file preparato da Claude) da Riepilogo → Importa.</p>
+    <div class="azioni"><button class="btn" type="button" onclick="$('imp-file').click()">Importa giornate</button></div></section>`;
+  const oggi = oggiISO(), fut = ordinate().filter(g => g.d >= oggi), p = fut[0];
+  const daFatt = L.giornate.filter(g => statoDi(g) === 'da'), senzaNave = fut.filter(g => !g.nave);
+  const mp = p && moloDi(p);
+  const quando = p ? (giorni(p.d) === 0 ? 'oggi' : giorni(p.d) === 1 ? 'domani' : new Date(p.d + 'T12:00').toLocaleDateString('it-IT', {weekday: 'long', day: 'numeric', month: 'long'})) : '';
+  return `${p ? `<section class="card glass prossima" onclick="modifica('${p.id}')" style="cursor:pointer">
+      <div class="quando">${quando} · ${esc(p.agenzia || '')}</div>
+      <div class="nave">${p.nave ? esc(p.nave) : '<span class="manca">Nave da inserire</span>'}</div>
+      <div class="riga">${badgeMolo(mp, true)}${p.tipo ? `<span class="chip">${esc(p.tipo)}</span>` : ''}<span class="chip mono">${eur(totale(p))}</span></div>
+      ${!p.nave && naviDelGiorno(p.d).length ? `<p class="nota">In porto quel giorno: ${esc(naviDelGiorno(p.d).map(titolo).join(', '))}</p>` : ''}
+    </section>` : '<section class="card glass"><h2>Nessuna giornata in programma</h2><p class="nota">Aggiungile con il "+".</p></section>'}
+    ${daFatt.length ? `<section class="card glass" onclick="tab='fatture';disegna()" style="cursor:pointer"><h2>${daFatt.length} ${daFatt.length === 1 ? 'giornata' : 'giornate'} da fatturare</h2><p class="nota">${eur(somma(daFatt, totale))} · tocca per fatturare</p></section>` : ''}
+    <div class="sez"><h2>In programma</h2><small>${fut.length} ${fut.length === 1 ? 'giornata' : 'giornate'}${senzaNave.length ? ` · <span class="manca">${senzaNave.length} senza nave</span>` : ''}</small></div>
+    ${fut.slice(1).map(rigaG).join('') || '<p class="vuoto">Nient\'altro in programma.</p>'}`;
+}
+function vistaMesi(){
+  const ags = agenzie(), lista = ordinate().reverse().filter(g => !filtroAg || g.agenzia === filtroAg);
+  const perMese = new Map(); lista.forEach(g => { const k = g.d.slice(0, 7); if (!perMese.has(k)) perMese.set(k, []); perMese.get(k).push(g); });
+  return `<div class="filtri">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" onclick="filtroAg=${esc(JSON.stringify(a))};disegna()">${a ? esc(a) : 'Tutte'}</button>`).join('')}</div>
+    ${[...perMese].map(([k, l]) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>${l.map(rigaG).join('')}`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`;
+}
+function vistaFatture(){
+  const da = ordinate().filter(g => statoDi(g) === 'da'), fatt = ordinate().filter(g => statoDi(g) === 'fatturato');
+  const perAg = new Map(); da.forEach(g => { const k = g.agenzia || '–'; if (!perAg.has(k)) perAg.set(k, []); perAg.get(k).push(g); });
+  const perFatt = new Map(); fatt.forEach(g => { const k = (g.agenzia || '–') + '|' + (g.fattura || ''); if (!perFatt.has(k)) perFatt.set(k, []); perFatt.get(k).push(g); });
+  const pagate = ordinate().filter(g => g.stato === 'pagato');
+  return `<div class="sez" style="margin-top:0"><h2>Da fatturare</h2><small>${eur(somma(da, totale))}</small></div>
+    ${[...perAg].map(([a, l]) => `<section class="gruppo glass"><div class="testa"><b>${esc(a)}</b><span class="mono">${eur(somma(l, totale))}</span></div>
+      <div class="sotto">${l.length} ${l.length === 1 ? 'giornata' : 'giornate'}: ${l.map(g => fmtD(g.d)).join(', ')}</div>
+      <div class="azioni"><button class="btn piccolo" type="button" onclick="fattura(${esc(JSON.stringify(a))})">Fattura…</button></div></section>`).join('') || '<p class="vuoto">Niente da fatturare.</p>'}
+    <div class="sez"><h2>Fatturate, da incassare</h2><small>${eur(somma(fatt, totale))}</small></div>
+    ${[...perFatt].map(([k, l]) => { const [a, n] = k.split('|'); return `<section class="gruppo glass"><div class="testa"><b>${esc(a)}${n ? ' · fattura n. ' + esc(n) : ''}</b><span class="mono">${eur(somma(l, totale))}</span></div>
+      <div class="sotto">${l.length} ${l.length === 1 ? 'giornata' : 'giornate'}${l[0].dataFattura ? ' · fatturata il ' + fmtD(l[0].dataFattura) : ''}: ${l.map(g => fmtD(g.d)).join(', ')}</div>
+      <div class="azioni"><button class="btn piccolo" type="button" onclick="pagata(${esc(JSON.stringify(k))})">Segna pagata</button></div></section>`; }).join('') || '<p class="vuoto">Nessuna fattura da incassare.</p>'}
+    <div class="sez"><h2>Pagate</h2><small>${eur(somma(pagate, totale))} · ${pagate.length} giornate</small></div>
+    <p class="nota" style="margin:0 2px">Le giornate pagate sono in Giornate, con il numero di fattura.</p>`;
+}
+function vistaRiepilogo(){
+  const anno = String(new Date().getFullYear()), l = L.giornate.filter(g => g.d.startsWith(anno)), oggi = oggiISO();
+  const per = s => l.filter(g => statoDi(g) === s);
+  const mesi = Array.from({length: 12}, (_, i) => { const k = anno + '-' + String(i + 1).padStart(2, '0'); const m = l.filter(g => g.d.startsWith(k)); return {i, tot: somma(m, totale), fut: k > oggi.slice(0, 7)}; });
+  const mx = Math.max(1, ...mesi.map(m => m.tot));
+  return `<section class="card glass"><h2>${anno}</h2>
+      <div class="kpi" style="margin-top:10px">
+        <div><b>${l.length}</b><small>giornate (${l.filter(g => g.d <= oggi).length} fatte)</small></div>
+        <div><b class="mono">${eur0(somma(l, totale))}</b><small>totale (netto + extra)</small></div>
+        <div><b class="mono">${eur0(somma(l, g => num(g.lordo)))}</b><small>lordo</small></div>
+        <div><b class="mono">${eur0(somma(l, netto))}</b><small>netto · extra ${eur0(somma(l, g => num(g.extra)))}</small></div>
+        <div><b class="mono" style="color:var(--ok)">${eur0(somma(per('pagato'), totale))}</b><small>incassato</small></div>
+        <div><b class="mono" style="color:var(--blu)">${eur0(somma(per('fatturato'), totale))}</b><small>fatturato da incassare</small></div>
+        <div><b class="mono" style="color:var(--warn)">${eur0(somma(per('da'), totale))}</b><small>da fatturare</small></div>
+        <div><b class="mono">${eur0(somma(per('futura'), totale))}</b><small>in programma</small></div>
+      </div>
+      <div class="barre" aria-label="Totale per mese">${mesi.map(m => `<div><i class="${m.fut ? 'fut' : ''}" style="height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>
+    </section>
+    <section class="card glass"><h2>Per agenzia</h2>
+      <table class="tab-ag"><tr><th>Agenzia</th><th class="n">Giornate</th><th class="n">Totale</th><th class="n">Da incassare</th></tr>
+      ${agenzie().map(a => { const x = l.filter(g => g.agenzia === a); return `<tr><td><b>${esc(a)}</b></td><td class="n">${x.length}</td><td class="n mono">${eur0(somma(x, totale))}</td><td class="n mono">${eur0(somma(x.filter(g => g.stato !== 'pagato' && g.d <= oggi), totale))}</td></tr>`; }).join('')}</table>
+    </section>
+    <section class="card glass"><h2>Conti</h2>
+      <p class="nota">Netto = lordo − ritenuta del ${Math.round(L.aliquote.ritenuta * 100)}% sull'${Math.round(L.aliquote.imponibile * 100)}% + rivalsa del ${Math.round(L.aliquote.rivalsa * 100)}%. Totale = netto + extra.</p>
+      <div class="azioni"><button class="btn ghost piccolo" type="button" onclick="modificaAliquote()">Cambia percentuali</button><button class="btn ghost piccolo" type="button" onclick="$('imp-file').click()">Importa giornate</button></div>
+    </section>`;
+}
+
+/* ---------------- Modifica ---------------- */
+function modifica(id){
+  const g = id ? L.giornate.find(x => x.id === id) : { d: oggiISO(), agenzia: '', nave: '', tipo: '', lordo: '', extra: '', stato: '', fattura: '', note: '' };
+  if (!g) return;
+  const navi = [...new Set([...naviDelGiorno(g.d).map(titolo), ...L.giornate.map(x => x.nave).filter(Boolean)])];
+  const tipi = [...new Set(L.giornate.map(x => x.tipo).filter(Boolean))];
+  apri(id ? 'Giornata' : 'Nuova giornata', `<div class="campi">
+    <label>Data<input id="m-d" type="date" value="${esc(g.d)}" onchange="aggiornaNavi(this.value)"></label>
+    <label>Agenzia<input id="m-a" list="m-al" value="${esc(g.agenzia)}" autocapitalize="characters" placeholder="Es. CFFT"></label>
+    <label class="tutta">Nave<input id="m-n" list="m-nl" value="${esc(g.nave)}" placeholder="Es. Costa Toscana"></label>
+    <label class="tutta">Servizio<input id="m-t" list="m-tl" value="${esc(g.tipo)}" placeholder="Es. AM/PM GO, PS, Spiaggia"></label>
+    <label>Lordo €<input id="m-l" inputmode="decimal" value="${esc(g.lordo)}" oninput="ricalcola()"></label>
+    <label>Extra €<input id="m-e" inputmode="decimal" value="${esc(g.extra)}" oninput="ricalcola()"></label>
+    <label>Stato<select id="m-s"><option value=""${!g.stato ? ' selected' : ''}>Da fatturare</option><option value="fatturato"${g.stato === 'fatturato' ? ' selected' : ''}>Fatturata</option><option value="pagato"${g.stato === 'pagato' ? ' selected' : ''}>Pagata</option></select></label>
+    <label>N. fattura<input id="m-f" value="${esc(g.fattura || '')}" placeholder="Es. 12/2026"></label>
+    <label class="tutta">Note<textarea id="m-no">${esc(g.note || '')}</textarea></label></div>
+    <div class="conti" id="m-c"></div>
+    <datalist id="m-al">${agenzie().map(a => `<option value="${esc(a)}">`).join('')}</datalist>
+    <datalist id="m-nl">${navi.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <datalist id="m-tl">${tipi.map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    <div class="azioni">${id ? `<button class="btn rosso" type="button" onclick="elimina('${id}')">Elimina</button>` : ''}<button class="btn" type="button" onclick="salvaGiornata('${id || ''}')">Salva</button></div>`);
+  ricalcola();
+}
+function aggiornaNavi(d){ $('m-nl').innerHTML = [...new Set([...naviDelGiorno(d).map(titolo), ...L.giornate.map(x => x.nave).filter(Boolean)])].map(n => `<option value="${esc(n)}">`).join(''); }
+function ricalcola(){ const g = { lordo: $('m-l').value, extra: $('m-e').value }; $('m-c').innerHTML = `<span>Netto<br><b class="mono">${eur(netto(g))}</b></span><span>Extra<br><b class="mono">${eur(num(g.extra) || 0)}</b></span><span>Totale<br><b class="mono">${eur(totale(g))}</b></span>`; }
+function salvaGiornata(id){
+  const d = $('m-d').value; if (!d) return toast('Scegli la data');
+  const g = { id: id || nuovoId(), d, agenzia: $('m-a').value.trim().toUpperCase(), nave: $('m-n').value.trim(), tipo: $('m-t').value.trim(),
+    lordo: num($('m-l').value) ?? '', extra: num($('m-e').value) ?? '', stato: $('m-s').value, fattura: $('m-f').value.trim(), note: $('m-no').value.trim() };
+  const vecchia = L.giornate.find(x => x.id === id);
+  if (vecchia) { g.dataFattura = vecchia.dataFattura; g.dataPagamento = vecchia.dataPagamento; }
+  if (g.stato && !g.dataFattura) g.dataFattura = oggiISO();
+  if (g.stato === 'pagato' && !g.dataPagamento) g.dataPagamento = oggiISO();
+  L.giornate = [...L.giornate.filter(x => x.id !== g.id), g];
+  salva(); chiudi(); disegna();
+}
+function elimina(id){ if (!confirm('Eliminare questa giornata?')) return; L.giornate = L.giornate.filter(x => x.id !== id); salva(); chiudi(); disegna(); }
+
+// fattura: le giornate da fatturare di un'agenzia, con il numero della fattura
+function fattura(ag){
+  const l = ordinate().filter(g => statoDi(g) === 'da' && (g.agenzia || '–') === ag);
+  apri('Fattura · ' + ag, `<div class="campi"><label>N. fattura<input id="f-n" placeholder="Es. 12/2026"></label><label>Data<input id="f-d" type="date" value="${oggiISO()}"></label></div>
+    <div class="scelte">${l.map(g => `<label><input type="checkbox" value="${g.id}" checked onchange="totFattura()"><span style="flex:1">${fmtD(g.d)} · ${esc(g.nave || 'nave da inserire')}${g.tipo ? ' · ' + esc(g.tipo) : ''}</span><b class="mono">${eur(totale(g))}</b></label>`).join('')}</div>
+    <div class="conti" id="f-c"></div>
+    <div class="azioni"><button class="btn" type="button" onclick="confermaFattura()">Segna fatturate</button></div>`);
+  totFattura();
+}
+function totFattura(){
+  const ids = [...document.querySelectorAll('.scelte input:checked')].map(i => i.value), l = L.giornate.filter(g => ids.includes(g.id));
+  $('f-c').innerHTML = `<span>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'}</span><span>Lordo <b class="mono">${eur(somma(l, g => num(g.lordo)))}</b></span><span>Totale <b class="mono">${eur(somma(l, totale))}</b></span>`;
+}
+function confermaFattura(){
+  const ids = [...document.querySelectorAll('.scelte input:checked')].map(i => i.value); if (!ids.length) return toast('Scegli almeno una giornata');
+  const n = $('f-n').value.trim(), d = $('f-d').value || oggiISO();
+  L.giornate.forEach(g => { if (ids.includes(g.id)) Object.assign(g, { stato: 'fatturato', fattura: n, dataFattura: d }); });
+  salva(); chiudi(); toast(`${ids.length} ${ids.length === 1 ? 'giornata fatturata' : 'giornate fatturate'}${n ? ' · n. ' + n : ''}`); disegna();
+}
+function pagata(k){
+  const [a, n] = k.split('|'), l = L.giornate.filter(g => g.stato === 'fatturato' && (g.agenzia || '–') === a && (g.fattura || '') === n);
+  if (!confirm(`Segnare come pagata${n ? ' la fattura n. ' + n : ''} (${l.length} giornate, ${eur(somma(l, totale))})?`)) return;
+  l.forEach(g => Object.assign(g, { stato: 'pagato', dataPagamento: oggiISO() }));
+  salva(); toast('Segnata come pagata'); disegna();
+}
+function modificaAliquote(){
+  const a = L.aliquote, pc = v => String(Math.round(v * 10000) / 100).replace('.', ',');
+  apri('Percentuali', `<div class="campi"><label>Ritenuta %<input id="a-r" inputmode="decimal" value="${pc(a.ritenuta)}"></label><label>Imponibile %<input id="a-i" inputmode="decimal" value="${pc(a.imponibile)}"></label><label>Rivalsa %<input id="a-v" inputmode="decimal" value="${pc(a.rivalsa)}"></label></div>
+    <p class="nota">Netto = lordo − (lordo × imponibile × ritenuta) + (lordo × rivalsa).</p>
+    <div class="azioni"><button class="btn" type="button" onclick="salvaAliquote()">Salva</button></div>`);
+}
+function salvaAliquote(){
+  const r = num($('a-r').value), i = num($('a-i').value), v = num($('a-v').value);
+  if ([r, i, v].some(x => x == null || x < 0 || x > 100)) return toast('Percentuali non valide');
+  L.aliquote = { ritenuta: r / 100, imponibile: i / 100, rivalsa: v / 100 }; salva(); chiudi(); disegna();
+}
+
+// importazione delle giornate da file (preparato dal foglio Numbers): i dati restano solo nella cassaforte
+async function importa(file){
+  if (!file) return;
+  let d; try { d = JSON.parse(await file.text()); } catch(e){ return toast('File non leggibile'); }
+  if (!d || d.tipo !== 'lavoro-porto' || !Array.isArray(d.giornate)) return toast('Non è un file delle giornate di lavoro');
+  const t = v => String(v ?? '').trim().slice(0, 80);
+  const nuove = d.giornate.filter(g => /^\d{4}-\d{2}-\d{2}$/.test(g.d)).map(g => ({ id: nuovoId(), d: g.d, agenzia: t(g.agenzia).toUpperCase(), nave: t(g.nave), tipo: t(g.tipo),
+    lordo: num(g.lordo) ?? '', extra: num(g.extra) ?? '', stato: ['fatturato', 'pagato'].includes(g.stato) ? g.stato : '', fattura: t(g.fattura), note: t(g.note) }));
+  // stessa data e agenzia già presente: non si duplica
+  const chiave = g => g.d + '|' + g.agenzia, ci = new Set(L.giornate.map(chiave)), da = nuove.filter(g => !ci.has(chiave(g)));
+  if (!confirm(`Importo ${da.length} giornate${nuove.length - da.length ? ` (${nuove.length - da.length} già presenti, saltate)` : ''}. Continuare?`)) return;
+  L.giornate.push(...da); salva(); toast(`Importate ${da.length} giornate`); disegna();
+}
+
+/* finestra */
+function apri(t, html){ $('foglio').innerHTML = `<div class="foglio-h"><h3>${esc(t)}</h3><button class="tondo" type="button" onclick="chiudi()" aria-label="Chiudi">✕</button></div>${html}`; $('velo').classList.add('on'); }
+function chiudi(){ $('velo').classList.remove('on'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudi(); });
+
+/* ---------------- Avvio ---------------- */
+(async () => {
+  await Cassaforte.porta({ nome: 'il Lavoro', bilancio: '../bilancio/', torna: 'lavoro/' });
+  try { await carica(); }
+  catch(e) {
+    console.error(e);
+    $('vista').innerHTML = `<section class="card glass"><h2>Non riesco a leggere i dati</h2><p class="nota">${esc(e.code === 'permission-denied' ? 'Accesso negato dalle regole Firestore: pubblica le regole con la voce "dashboard".' : (e.code || e.message))}</p></section>`;
+    return;
+  }
+  const t = new URLSearchParams(location.search).get('t'); if (['prossime', 'mesi', 'fatture', 'riepilogo'].includes(t)) tab = t;
+  disegna(); leggiPorto();
+})();
+</script>
+</body>
+</html>

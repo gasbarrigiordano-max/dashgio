@@ -286,7 +286,7 @@
       const u = new URL(a.getAttribute('href'), location.href), base = new URL('../', location.href);
       if (u.origin !== location.origin || !u.pathname.startsWith(base.pathname)) return;
       const resto = u.pathname.slice(base.pathname.length);
-      if (!/^(bilancio|giornale|palestra)\/|^$/.test(resto)) return;
+      if (!/^(bilancio|giornale|palestra|lavoro)\/|^$/.test(resto)) return;
       e.preventDefault();
       d.dashVai(resto + u.search + u.hash);
     }, true);

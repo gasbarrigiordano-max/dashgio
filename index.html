@@ -366,6 +366,7 @@ main{container-type:inline-size}
     <a class="p" href="bilancio/" aria-label="Bilancio"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/></svg>Bilancio</a>
     <a class="p" href="giornale/" aria-label="Mezzi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0"/></svg>Mezzi</a>
     <a class="p" href="palestra/" aria-label="Palestra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>Palestra</a>
+    <a class="p" href="lavoro/" aria-label="Lavoro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg>Lavoro</a>
     <button class="p" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Impostazioni</button>
   </div>
   <div class="grp">
@@ -383,6 +384,7 @@ main{container-type:inline-size}
   <a class="navbtn" href="bilancio/" aria-label="Bilancio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M5 6l9-3 2 3"/></svg><span class="tip">Bilancio</span></a>
   <a class="navbtn giornale-link" href="#" aria-label="Mezzi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Mezzi</span></a>
   <a class="navbtn" href="palestra/" aria-label="Palestra"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg><span class="tip">Palestra</span></a>
+  <a class="navbtn" href="lavoro/" aria-label="Lavoro"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg><span class="tip">Lavoro</span></a>
   <button class="navbtn" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Calendario</span></button>
   <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
   <div class="nav-spazio"></div>
@@ -1167,7 +1169,7 @@ function controlla(){
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on');
       // Mezzi e Palestra si preparano in sottofondo: aprendoli dopo, il cambio di vista è immediato
-      setTimeout(() => { frameDi('mezzi'); frameDi('palestra'); }, 800); }
+      setTimeout(() => { frameDi('mezzi'); frameDi('palestra'); frameDi('lavoro'); }, 800); }
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
@@ -1179,12 +1181,12 @@ async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 
 /* ---- Le app si aprono qui dentro (#bilancio, #mezzi, #palestra): la barra a sinistra resta ---- */
 let vista = 'panoramica';
-const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/' };
+const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/', lavoro: 'lavoro/' };
 const frames = {};
 function frameDi(v, extra){
   if(!frames[v]){
     const f = document.createElement('iframe');
-    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra'}[v];
+    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro'}[v];
     $('app-vista').appendChild(f); frames[v] = f;
   }
   return frames[v];
@@ -1207,7 +1209,7 @@ function mostraVista(v, extra = ''){
   vista = PERCORSI[v] ? v : 'panoramica';
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
   document.body.classList.toggle('in-app', vista !== 'panoramica');
-  const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra'}[vista];
+  const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro'}[vista];
   document.querySelectorAll('nav .navbtn, .v5top .p').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
@@ -1226,9 +1228,9 @@ function mostraVista(v, extra = ''){
   const t = new URLSearchParams((extra.split('#')[0] || '').replace(/^\?/, '')).get('t');
   if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
 }
-const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra'})[location.hash] || 'panoramica';
+const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra', '#lavoro':'lavoro'})[location.hash] || 'panoramica';
 function dashVai(dest){
-  const m = String(dest || '').match(/^(bilancio|giornale|palestra)\/(.*)$/);
+  const m = String(dest || '').match(/^(bilancio|giornale|palestra|lavoro)\/(.*)$/);
   const v = m ? (m[1] === 'giornale' ? 'mezzi' : m[1]) : 'panoramica';
   const h = v === 'panoramica' ? '' : '#' + v;
   if(location.hash !== h) history.pushState(null, '', location.pathname + h);
@@ -1241,7 +1243,7 @@ addEventListener('resize', dimensiona);
 document.addEventListener('click', e => {
   const a = e.target.closest('a[href]'); if(!a || a.target === '_blank' || e.defaultPrevented || a.closest('.cf-porta')) return; // la porta (prima volta) apre Bilancio da solo
   const h = a.getAttribute('href');
-  if(/^(bilancio|giornale|palestra)\//.test(h)){
+  if(/^(bilancio|giornale|palestra|lavoro)\//.test(h)){
     e.preventDefault();
     // di nuovo Mezzi dalla barra mentre si è dentro un mezzo: si torna alla scelta del mezzo
     if(h.startsWith('giornale/') && vista === 'mezzi' && (a.closest('nav') || a.closest('.v5top')) && frames.mezzi){
@@ -1258,7 +1260,7 @@ document.addEventListener('click', e => {
   bil.src = 'bilancio/index.html';
   // arrivato da un'app aperta da sola (?torna=…): si apre qui dentro
   const torna = new URLSearchParams(location.search).get('torna');
-  if(['bilancio/', 'giornale/', 'palestra/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
+  if(['bilancio/', 'giornale/', 'palestra/', 'lavoro/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
   else if(vistaDaHash() !== 'panoramica') mostraVista(vistaDaHash());
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);
