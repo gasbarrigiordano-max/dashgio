@@ -1,9 +1,12 @@
-/* Moli delle navi nel porto di Civitavecchia, dalla programmazione accosti settimanale (pagina pubblica di Port Mobility).
-   La pagina permette la lettura da altri siti, quindi la legge direttamente il browser: nessun dato esce, si scarica solo la tabella.
+/* Moli delle navi nel porto di Civitavecchia, dalle pagine pubbliche di Port Mobility:
+   - la programmazione accosti settimanale (aggiornata ogni giorno, vale per i giorni che copre);
+   - le crociere del mese in corso e del mese dopo (una pagina per mese, per i giorni oltre la settimana).
+   Le pagine permettono la lettura da altri siti, quindi le legge direttamente il browser: nessun dato esce.
    Porto.leggi() → {dal, al, navi:[{d:'AAAA-MM-GG', nave:'COSTA TOSCANA', banchina:'25', orari:'07:15/19:00'}]}
    Porto.trova(dati, 'Costa Toscana', '2026-10-29') → la riga della nave nominata nel titolo, quel giorno (o null) */
 (function () {
   const URL_PORTO = 'https://civitavecchia.portmobility.it/it/porto-di-civitavecchia-arrivi-e-partenze-tempo-reale';
+  const URL_MESE = m => 'https://civitavecchia.portmobility.it/it/crociere-partenza-al-porto-di-civitavecchia-' + MESI[m];
   const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   const CHIAVE = 'dg:porto', DURATA = 30 * 60e3;
 
@@ -45,11 +48,35 @@
     return { dal: giorni[0] || null, al: giorni.at(-1) || null, navi };
   }
 
-  async function leggi() {
+  // pagina di un mese: "Crociere … : Ottobre 2026", righe gio | 1 | 10 | 05:30 | 17:00 | NAVE | BANCHINA.
+  // La pagina di un mese viene riusata ogni anno: se il titolo non è dell'anno atteso (ancora quella vecchia) non vale
+  function analizzaMese(html, mese, anno) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const h1 = norm(doc.querySelector('h1') ? doc.querySelector('h1').textContent : '').toLowerCase().match(/([a-z]+) (\d{4})/);
+    if (!h1 || MESI.indexOf(h1[1]) !== mese || +h1[2] !== anno) return [];
+    const navi = [];
+    doc.querySelectorAll('table tr').forEach(tr => {
+      const c = [...tr.children].map(testo);
+      if (c.length < 7 || !/^\d{1,2}$/.test(c[1]) || +c[2] !== mese + 1) return;
+      const nave = norm(c[5]); if (!nave) return;
+      const banchina = /^(tbc|tbd|\/|-)?$/i.test(c[6]) ? '' : c[6];
+      navi.push({ d: `${anno}-${pad(mese + 1)}-${pad(+c[1])}`, nave, banchina, orari: [c[3], c[4]].filter(x => x && x !== '/').join('/') });
+    });
+    return navi;
+  }
+
+  const scarica = async url => { const r = await fetch(url, { cache: 'no-cache' }); if (!r.ok) throw new Error('porto: ' + r.status); return r.text(); };
+  async function leggi(oggi = new Date()) {
     try { const c = JSON.parse(sessionStorage.getItem(CHIAVE)); if (c && Date.now() - c.ts < DURATA) return c.dati; } catch (e) {}
-    const r = await fetch(URL_PORTO, { cache: 'no-cache' });
-    if (!r.ok) throw new Error('porto: ' + r.status);
-    const dati = analizza(await r.text());
+    const mesi = [0, 1].map(k => { const d = new Date(oggi.getFullYear(), oggi.getMonth() + k, 1); return [d.getMonth(), d.getFullYear()]; });
+    const [sett, ...mens] = await Promise.allSettled([scarica(URL_PORTO), ...mesi.map(([m]) => scarica(URL_MESE(m)))]);
+    if (sett.status === 'rejected' && mens.every(x => x.status === 'rejected')) throw sett.reason;
+    const dati = sett.status === 'fulfilled' ? analizza(sett.value, oggi) : { dal: null, al: null, navi: [] };
+    // i giorni della settimana pubblicata valgono quella; i mesi completano gli altri giorni
+    const coperti = new Set(dati.navi.map(n => n.d));
+    mens.forEach((x, i) => { if (x.status === 'fulfilled') analizzaMese(x.value, ...mesi[i]).forEach(n => { if (!coperti.has(n.d)) dati.navi.push(n); }); });
+    const giorni = dati.navi.map(n => n.d).sort();
+    Object.assign(dati, { dal: giorni[0] || null, al: giorni.at(-1) || null });
     try { sessionStorage.setItem(CHIAVE, JSON.stringify({ ts: Date.now(), dati })); } catch (e) {}
     return dati;
   }
@@ -73,5 +100,5 @@
     return [...new Set(dati.navi.map(n => n.nave))].filter(n => t.includes(' ' + n + ' ')).sort((a, b) => b.length - a.length)[0] || null;
   }
 
-  window.Porto = { URL: URL_PORTO, analizza, leggi, trova, nave, norm };
+  window.Porto = { URL: URL_PORTO, URL_MESE, analizza, analizzaMese, leggi, trova, nave, norm };
 })();

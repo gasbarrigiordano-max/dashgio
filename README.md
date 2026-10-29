@@ -10,7 +10,7 @@ Le mie app personali in un solo sito, con un solo account e una sola cassaforte 
 | `/palestra/` | Palestra: schede, registro degli allenamenti e record, progressi del corpo, abbonamento e ingressi. |
 | `/comune/cassaforte.js` | Accesso e cifratura condivisi (login, sblocco, lettura e scrittura cifrata). |
 | `/comune/programma.js` | Calcoli del programma della Palestra (coppie di muscoli, blocchi), usati da Palestra e Dashboard. |
-| `/comune/porto.js` | Legge i moli delle navi dalla programmazione accosti del porto di Civitavecchia. |
+| `/comune/porto.js` | Legge i moli delle navi dal porto di Civitavecchia (settimana e pagine dei mesi). |
 
 Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
 
@@ -26,7 +26,7 @@ Stessa linea del Bilancio, ora per tutto:
 - **Regole Firestore** (`firestore.rules`): solo il proprio UID legge e scrive; ogni scrittura deve portare il sale attuale (`kid`), così un dispositivo con la passphrase vecchia viene fermato.
 - **Ricorda su questo dispositivo**: la chiave (non esportabile, mai la passphrase) resta in IndexedDB. Le tre pagine stanno sullo stesso indirizzo, quindi sbloccare una sblocca tutte; "Blocca" la dimentica ovunque.
 - **Google Calendar**: i permessi brevi (un'ora) restano solo in memoria. Con l'accesso automatico (facoltativo, Impostazioni → Google) la chiave segreta del client e i permessi di lunga durata stanno solo nella cassaforte (`dashboard/google`), cifrati: a ogni apertura, dopo lo sblocco, la Dashboard chiede a Google un permesso fresco senza clic. Perché quelli lunghi non scadano dopo 7 giorni, l'app in Google Auth Platform va pubblicata ("In produzione"), non lasciata "In test".
-- **Moli delle navi**: la Dashboard legge dal browser la programmazione accosti pubblica del porto di Civitavecchia (Port Mobility) e mette il molo accanto agli eventi Google che nominano una nave. Non manda nulla al sito del porto.
+- **Moli delle navi**: la Dashboard legge dal browser le pagine pubbliche del porto di Civitavecchia (Port Mobility): la programmazione accosti settimanale e le crociere del mese in corso e del mese dopo, e mette il molo accanto agli eventi Google che nominano una nave. Non manda nulla al sito del porto.
 - **Nessun dato nei file del repo**: `.gitignore` esclude CSV, JSON, Numbers ed Excel. I backup `.json` sono in chiaro: tenerli fuori da qui.
 
 ## Firestore
