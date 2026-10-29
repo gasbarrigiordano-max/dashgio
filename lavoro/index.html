@@ -71,22 +71,25 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .prossima .nave{font-size:24px;font-weight:800;margin:4px 0 2px;line-height:1.2}
 .prossima .riga{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.12);font-size:12px;font-weight:700}
-.molo{display:inline-flex;flex-direction:column;align-items:center;line-height:1;padding:6px 10px;border-radius:12px;background:var(--acc);color:#fff;min-width:52px}
+.molo{display:inline-flex;flex-direction:column;align-items:center;line-height:1;padding:6px 4px;border-radius:12px;background:var(--acc);color:#fff;width:68px;flex:none;box-sizing:border-box}
 .molo small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
 .molo b{font-size:20px;margin-top:3px}
 .molo.prev{outline:2px dotted rgba(255,255,255,.65);outline-offset:-4px}
+.molo.grande{width:auto;min-width:68px;padding:6px 10px}
 .molo.grande b{font-size:30px}
+.molo.lungo b{font-size:15px;margin-top:5px}
+.molo.grande.lungo b{font-size:22px}
 
 /* elenco giornate */
 .g{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);margin-bottom:8px;cursor:pointer;width:100%;text-align:left;color:#fff}
 .g:hover{background:rgba(255,255,255,.11)}
-.g .data{width:46px;flex:none;text-align:center;line-height:1.1}
+.g .data{width:50px;flex:none;text-align:center;line-height:1.1}
 .g .data b{display:block;font-size:19px}
-.g .data small{font-size:10.5px;color:var(--ink3);text-transform:uppercase;font-weight:700}
+.g .data small{font-size:10px;color:var(--ink3);text-transform:uppercase;font-weight:700;white-space:nowrap;letter-spacing:-.01em}
 .g .mid{flex:1 1 auto;min-width:0}
 .g .mid b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g .mid small{display:block;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.g .imp{text-align:right;flex:none}
+.g .imp{text-align:right;flex:none;min-width:84px} /* larghezza fissa: i moli accanto stanno tutti in colonna */
 .g .imp b{display:block;font-size:14px}
 .g .imp small{font-size:11px;color:var(--ink3)}
 .manca{color:#ffd98a;text-shadow:0 1px 4px rgba(50,25,0,.75)}
@@ -120,6 +123,11 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .barre div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--ink3);height:100%;justify-content:flex-end}
 .barre i{width:100%;max-width:30px;border-radius:7px 7px 3px 3px;background:var(--acc);min-height:3px}
 .barre i.fut{background:rgba(242,113,28,.35)}
+.barre div{cursor:pointer} .barre div.on{color:#fff;font-weight:800}
+.filtri{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 0 10px;padding-bottom:2px}
+.filtri::-webkit-scrollbar{display:none}
+.filtri button{flex:none;border:0;border-radius:99px;padding:7px 12px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer;text-transform:capitalize}
+.filtri button.on{background:var(--acc)}
 
 /* finestra */
 .velo{position:fixed;inset:0;z-index:50;background:rgba(10,8,6,.6);display:none;align-items:flex-end;justify-content:center}
@@ -238,13 +246,15 @@ function moloDi(g){
   if (!PORTO || !g.nave) return null;
   return Porto.trova(PORTO, g.nave, g.d);
 }
-const badgeMolo = (m, grande) => m ? `<span class="molo${m.fonte === 'mese' ? ' prev' : ''}${grande ? ' grande' : ''}" title="${esc(m.nave + ' · molo ' + (m.banchina || 'da definire') + (m.orari ? ' · ' + m.orari : '') + (m.fonte === 'mese' ? ' · previsione del mese' : ''))}"><small>molo</small><b class="mono">${esc(m.banchina || '–')}</b></span>` : '';
+const badgeMolo = (m, grande) => m ? `<span class="molo${m.fonte === 'mese' ? ' prev' : ''}${grande ? ' grande' : ''}${(m.banchina || '').length > 4 ? ' lungo' : ''}" title="${esc(m.nave + ' · molo ' + (m.banchina || 'da definire') + (m.orari ? ' · ' + m.orari : '') + (m.fonte === 'mese' ? ' · previsione del mese' : ''))}"><small>molo</small><b class="mono">${esc(m.banchina || '–')}</b></span>` : '';
 // navi in porto quel giorno (per scegliere la nave di una giornata)
 const naviDelGiorno = d => PORTO ? [...new Set(PORTO.navi.filter(n => n.d === d).map(n => n.nave))] : [];
 const titolo = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
 /* ---------------- Viste ---------------- */
 let tab = 'prossime', filtroAg = '';
+let riepMese = null, riepAg = '';   // riepilogo: mese scelto (0-11, null = anno intero) e, dentro il mese, l'agenzia
+function filtraRiep(m, ag){ riepMese = m; riepAg = ag || ''; disegna(); }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); });
 function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
@@ -299,11 +309,19 @@ function vistaFatture(){
     <p class="nota" style="margin:0 2px">Le giornate pagate sono in Giornate, con il numero di fattura.</p>`;
 }
 function vistaRiepilogo(){
-  const anno = String(new Date().getFullYear()), l = L.giornate.filter(g => g.d.startsWith(anno)), oggi = oggiISO();
+  const anno = String(new Date().getFullYear()), dellAnno = L.giornate.filter(g => g.d.startsWith(anno)), oggi = oggiISO();
+  const mk = riepMese == null ? null : anno + '-' + String(riepMese + 1).padStart(2, '0');
+  const delMese = mk ? dellAnno.filter(g => g.d.startsWith(mk)) : dellAnno;
+  const agMese = [...new Set(delMese.map(g => g.agenzia).filter(Boolean))].sort();
+  if (riepAg && !agMese.includes(riepAg)) riepAg = '';
+  const l = riepAg ? delMese.filter(g => g.agenzia === riepAg) : delMese;
   const per = s => l.filter(g => statoDi(g) === s);
-  const mesi = Array.from({length: 12}, (_, i) => { const k = anno + '-' + String(i + 1).padStart(2, '0'); const m = l.filter(g => g.d.startsWith(k)); return {i, tot: somma(m, totale), fut: k > oggi.slice(0, 7)}; });
+  const mesi = Array.from({length: 12}, (_, i) => { const k = anno + '-' + String(i + 1).padStart(2, '0'); const m = dellAnno.filter(g => g.d.startsWith(k)); return {i, tot: somma(m, totale), fut: k > oggi.slice(0, 7)}; });
   const mx = Math.max(1, ...mesi.map(m => m.tot));
-  return `<section class="card glass"><h2>${anno}</h2>
+  const titolo = mk ? MESI_L[riepMese] + ' ' + anno + (riepAg ? ' · ' + riepAg : '') : anno;
+  const filtri = `<div class="filtri" role="group" aria-label="Mese"><button type="button" class="${mk ? '' : 'on'}" onclick="filtraRiep(null)">Anno</button>${MESI.map((n, i) => `<button type="button" class="${riepMese === i ? 'on' : ''}" onclick="filtraRiep(${i})">${n}</button>`).join('')}</div>
+    ${mk && agMese.length ? `<div class="filtri" role="group" aria-label="Agenzia"><button type="button" class="${riepAg ? '' : 'on'}" onclick="filtraRiep(${riepMese})">Tutte</button>${agMese.map(a => `<button type="button" class="${riepAg === a ? 'on' : ''}" style="text-transform:none" onclick='filtraRiep(${riepMese}, ${esc(JSON.stringify(a))})'>${esc(a)}</button>`).join('')}</div>` : ''}`;
+  return `${filtri}<section class="card glass"><h2 style="text-transform:capitalize">${esc(titolo)}</h2>
       <div class="kpi" style="margin-top:10px">
         <div><b>${l.length}</b><small>giornate (${l.filter(g => g.d <= oggi).length} fatte)</small></div>
         <div><b class="mono">${eur0(somma(l, totale))}</b><small>totale (netto + extra)</small></div>
@@ -314,11 +332,12 @@ function vistaRiepilogo(){
         <div><b class="mono" style="color:var(--warn)">${eur0(somma(per('da'), totale))}</b><small>da fatturare</small></div>
         <div><b class="mono">${eur0(somma(per('futura'), totale))}</b><small>in programma</small></div>
       </div>
-      <div class="barre" aria-label="Totale per mese">${mesi.map(m => `<div><i class="${m.fut ? 'fut' : ''}" style="height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>
+      ${mk ? '' : `<div class="barre" aria-label="Totale per mese: tocca un mese per vederlo">${mesi.map(m => `<div onclick="filtraRiep(${m.i})" title="${MESI_L[m.i]}"><i class="${m.fut ? 'fut' : ''}" style="height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>`}
     </section>
+    ${mk ? `<section class="card glass"><h2>Giornate</h2>${l.length ? l.slice().sort((a, b) => a.d.localeCompare(b.d)).map(rigaG).join('') : '<p class="nota">Nessuna giornata in questo mese.</p>'}</section>` : ''}
     <section class="card glass"><h2>Per agenzia</h2>
       <table class="tab-ag"><tr><th>Agenzia</th><th class="n">Giornate</th><th class="n">Totale</th><th class="n">Da incassare</th></tr>
-      ${agenzie().map(a => { const x = l.filter(g => g.agenzia === a); return `<tr><td><b>${esc(a)}</b></td><td class="n">${x.length}</td><td class="n mono">${eur0(somma(x, totale))}</td><td class="n mono">${eur0(somma(x.filter(g => g.stato !== 'pagato' && g.d <= oggi), totale))}</td></tr>`; }).join('')}</table>
+      ${agenzie().filter(a => !mk || l.some(g => g.agenzia === a)).map(a => { const x = l.filter(g => g.agenzia === a); return `<tr><td><b>${esc(a)}</b></td><td class="n">${x.length}</td><td class="n mono">${eur0(somma(x, totale))}</td><td class="n mono">${eur0(somma(x.filter(g => g.stato !== 'pagato' && g.d <= oggi), totale))}</td></tr>`; }).join('')}</table>
     </section>
     <section class="card glass"><h2>Conti</h2>
       <p class="nota">Netto = lordo − ritenuta del ${Math.round(L.aliquote.ritenuta * 100)}% sull'${Math.round(L.aliquote.imponibile * 100)}% + rivalsa del ${Math.round(L.aliquote.rivalsa * 100)}%. Totale = netto + extra.</p>

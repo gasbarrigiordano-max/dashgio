@@ -339,14 +339,15 @@ body.cifre-nascoste :is(.tile:not(.testo) .v, .tile:not(.testo) .s, #gb-tot, #gb
 .molo-t{height:34px;display:flex;align-items:baseline;gap:8px}
 .molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}
 .molo-t b{font-size:34px;line-height:1;font-weight:700;color:#fff}
-.molo-b{flex:0 0 auto;min-width:52px;padding:6px 10px;border-radius:12px;background:#F2711C;color:#fff;display:flex;flex-direction:column;align-items:center;line-height:1}
+.molo-b{flex:0 0 auto;width:68px;box-sizing:border-box;padding:6px 4px;border-radius:12px;background:#F2711C;color:#fff;display:flex;flex-direction:column;align-items:center;line-height:1}
 .molo-b.prev{outline:2px dotted rgba(255,255,255,.65);outline-offset:-4px}
 .molo-b.attesa{background:rgba(242,113,28,.18);border:1px dashed rgba(255,176,122,.7);color:#ffd2ad}
 .molo-b small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
 .molo-b b{font-size:20px;margin-top:3px}
 .molo-ev{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:rgba(242,113,28,.14);border:1px solid rgba(242,113,28,.35)}
 .molo-ev b{display:block;font-size:14px} .molo-ev span{font-size:12px;color:var(--ink2)}
-.molo-ev .molo-b{min-width:62px} .molo-ev .molo-b b{font-size:26px}
+.molo-ev .molo-b{width:auto;min-width:68px;padding:6px 10px} .molo-ev .molo-b b{font-size:26px}
+.molo-b.lungo b{font-size:15px;margin-top:5px} .molo-ev .molo-b.lungo b{font-size:20px}
 
 /* rifiniture dal controllo a 1440 / 1024 / 768 / 390 px */
 main{container-type:inline-size}
@@ -869,7 +870,7 @@ async function gcalLeggi(){
 let PORTO = null, portoProvato = 0;
 const etichettaMolo = m => m.attesa ? 'molo non ancora pubblicato' : m.banchina ? `molo ${m.banchina}${m.fonte === 'mese' ? ' (previsione del mese)' : ''}` : 'molo non ancora indicato';
 // il molo ben visibile: etichetta a destra delle voci in agenda
-const badgeMolo = a => a.molo ? `<div class="molo-b${a.molo.attesa ? ' attesa' : a.molo.fonte === 'mese' ? ' prev' : ''}" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.attesa ? '…' : a.molo.banchina || '–')}</b></div>` : '';
+const badgeMolo = a => a.molo ? `<div class="molo-b${a.molo.attesa ? ' attesa' : a.molo.fonte === 'mese' ? ' prev' : ''}${(a.molo.banchina || '').length > 4 ? ' lungo' : ''}" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.attesa ? '…' : a.molo.banchina || '–')}</b></div>` : '';
 // la nave nel giorno dell'evento; dopo l'ultimo giorno pubblicato dal porto, se la nave è nota: molo in attesa
 function moloDi(e){
   const m = Porto.trova(PORTO, e.titolo, e.d); if(m) return m;
