@@ -67,6 +67,18 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .sez{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 2px 10px}
 .sez h2{margin:0;font-size:14px;font-weight:800;padding-left:10px;border-left:3px solid var(--acc)}
 .nota{font-size:12.5px;color:var(--ink2);margin:4px 0 0;line-height:1.45}
+/* storico del muscolo e proposta del bimestre dopo */
+.storico{margin:10px 0 14px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06)}
+.storico h3{margin:0 0 4px;font-size:13.5px;font-weight:800}
+.storico h3:not(:first-child){margin-top:14px}
+.giri{list-style:none;margin:0;padding:0;font-size:12.5px}
+.giri li{display:flex;gap:10px;padding:5px 0;border-top:1px solid var(--line)}
+.giri b{flex:none;width:52px}
+.giri span{color:var(--ink2);min-width:0}
+.quando{color:var(--ink3);font-size:11.5px}
+.prop-r{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px;line-height:1.45}
+.prop-r>b{flex:none;width:74px;color:#fff}
+.prop-r>span{color:var(--ink2);min-width:0}
 .vuoto{font-size:13px;color:var(--ink3);padding:14px 4px;text-align:center}
 .riga{display:flex;align-items:center;gap:10px}
 .cresce{flex:1 1 auto;min-width:0}
@@ -213,7 +225,7 @@ const MESI = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov',
 const fmtD = iso => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${MESI[m-1]}${y !== new Date().getFullYear() ? ' ' + y : ''}`; };
 const giorni = iso => Math.round((new Date(iso + 'T00:00:00') - new Date(oggiISO() + 'T00:00:00')) / 86400000);
 const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : null; };
-const kg = n => (Math.round(n * 10) / 10).toLocaleString('it-IT');
+const kg = n => (Math.round(n * 100) / 100).toLocaleString('it-IT'); // anche i quarti di chilo (18,25)
 const migliaia = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const chiave = s => String(s || '').trim().toLowerCase();
 function toast(m){ const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200); }
@@ -331,6 +343,94 @@ const inUso = m => (m.esercizi || []).filter(e => e.uso !== false);
 const pesoX5 = e => { const t = String(e.x5 || '').replace(',', '.').match(/\d+(?:\.\d+)?/); return t ? +t[0] : null; };
 const pesiSerie = e => { const p = pesoX5(e); return p ? METODO.rip.map((_, j) => Math.round(p * Math.pow(1 - METODO.calo, j) * 2) / 2) : null; };
 const freccia = ordine => ordine.map(nomeM).join(' → ');
+
+/* ---- storico per muscolo e proposta del bimestre dopo: gli esercizi cambiano ogni 2 mesi ----
+   Il periodo della scheda pesi ("O/N", "G/F"…) dice in che bimestre si è fatto un esercizio; con gli allenamenti
+   registrati si sa l'ultima volta. La proposta prende, per ogni muscolo, gli esercizi fermi da più tempo. */
+const LETTERE = ['G', 'F', 'M', 'A', 'M', 'G', 'L', 'A', 'S', 'O', 'N', 'D'];
+const MESI_L = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+// "O/N" → 9 (ottobre, il primo dei due mesi); null se non sono due mesi di fila
+function meseDaPeriodo(p){
+  const t = String(p || '').toUpperCase().replace(/\s/g, '').match(/^([A-Z])\/([A-Z])$/); if (!t) return null;
+  for (let i = 0; i < 12; i++) if (LETTERE[i] === t[1] && LETTERE[(i + 1) % 12] === t[2]) return i;
+  return null;
+}
+const periodoDa = i => LETTERE[i] + '/' + LETTERE[(i + 1) % 12];
+const nomeBimestre = i => MESI_L[i] + '–' + MESI_L[(i + 1) % 12];
+const fmtMese = iso => MESI[+iso.slice(5, 7) - 1] + ' ' + iso.slice(0, 4);
+const serieFatte = x => (x.serie || []).some(z => num(z.kg) || num(z.rip));
+// l'ultima volta di un esercizio: dagli allenamenti salvati o, se più recente, dal suo periodo nella scheda pesi
+function ultimoUso(e){
+  const k = chiave(e.nome); let d = '';
+  P.sessioni.forEach(s => { if (s.d > d && (s.esercizi || []).some(x => chiave(x.nome) === k && serieFatte(x))) d = s.d; });
+  if (e.usatiD && e.usatiD > d) d = e.usatiD;
+  const i = meseDaPeriodo(e.mesi);
+  if (i != null) { const oggi = oggiISO(), y = +oggi.slice(0, 4); let p = `${y}-${String(i + 1).padStart(2, '0')}-01`; if (p > oggi) p = `${y - 1}-${p.slice(5)}`; if (p > d) d = p; }
+  return d;
+}
+// gli allenamenti in cui il muscolo c'era: col programma ('prog:BD') o con uno dei suoi esercizi; il peso più alto di ogni esercizio
+function allenamentiDi(m){
+  const nomi = new Set((m.esercizi || []).map(e => chiave(e.nome)).filter(Boolean));
+  return P.sessioni.filter(s => (String(s.schedaId || '').startsWith('prog:') && s.schedaId.slice(5).includes(m.id)) || (s.esercizi || []).some(x => nomi.has(chiave(x.nome)) && serieFatte(x)))
+    .sort((a, b) => b.d.localeCompare(a.d))
+    .map(s => ({ d: s.d, es: (s.esercizi || []).filter(x => (nomi.has(chiave(x.nome)) || x.muscolo === m.id) && serieFatte(x)).map(x => ({ nome: x.nome, kg: Math.max(0, ...(x.serie || []).map(z => num(z.kg) || 0)) })) }));
+}
+// il bimestre in corso: quello scritto sugli esercizi in uso (il più frequente); se non c'è, quello di oggi (gen–feb, mar–apr…)
+function bimestreAttuale(){
+  const conta = {};
+  muscoli().forEach(m => inUso(m).forEach(e => { const i = meseDaPeriodo(e.mesi); if (i != null) conta[i] = (conta[i] || 0) + 1; }));
+  const su = Object.entries(conta).sort((a, b) => b[1] - a[1])[0];
+  if (su) return +su[0];
+  const m = new Date().getMonth(); return m - m % 2;
+}
+const bimestreDopo = () => (bimestreAttuale() + 2) % 12;
+// tanti esercizi quanti quelli in uso adesso, fra quelli già fatti e fermi da più tempo; niente due varianti dello stesso
+// ("Martello" e "Martello girati") se ce ne sono abbastanza di diversi
+function propostaBimestre(m){
+  const ora = new Set(inUso(m).map(e => chiave(e.nome))), n = inUso(m).length || 2;
+  const cand = (m.esercizi || []).filter(e => e.nome && !ora.has(chiave(e.nome))).map(e => ({ e, u: ultimoUso(e) }))
+    .sort((a, b) => (a.u ? 0 : 1) - (b.u ? 0 : 1) || a.u.localeCompare(b.u) || (pesoX5(b.e) ? 1 : 0) - (pesoX5(a.e) ? 1 : 0)); // prima i già fatti, fermi da più tempo; poi i mai fatti
+  const parola = e => chiave(e.nome).split(/\s+/)[0], scelti = [];
+  for (const c of cand) if (scelti.length < n && !scelti.some(x => parola(x.e) === parola(c.e)) && !inUso(m).some(e => parola(e) === parola(c.e))) scelti.push(c);
+  for (const c of cand) if (scelti.length < n && !scelti.includes(c)) scelti.push(c);
+  return scelti;
+}
+const testoProposta = l => l.map(c => `<b>${esc(c.e.nome)}</b>${pesoX5(c.e) ? ` <span class="mono">×5 ${kg(pesoX5(c.e))} kg</span>` : ''} <span class="quando">(${c.u ? 'ultima volta ' + fmtMese(c.u) : 'mai fatto'})</span>`).join(' · ');
+// gli esercizi proposti diventano quelli in uso (prima, nell'ordine della proposta); quelli di adesso vanno in archivio
+function conProposta(m, prop){
+  const lab = periodoDa(bimestreDopo()), scelti = prop.map(c => chiave(c.e.nome));
+  const es = (m.esercizi || []).map(e => scelti.includes(chiave(e.nome)) ? {...e, uso: true, mesi: lab} : {...e, uso: false});
+  return {...m, esercizi: [...scelti.map(k => es.find(e => chiave(e.nome) === k)), ...es.filter(e => !scelti.includes(chiave(e.nome)))]};
+}
+function cardBimestre(){
+  const righe = muscoli().map(m => ({m, p: propostaBimestre(m)})).filter(x => x.p.length);
+  if (!righe.length) return '';
+  return `<section class="card glass"><h2>Proposta per ${nomeBimestre(bimestreDopo())}</h2>
+    <p class="nota" style="margin:0 0 6px">Per ogni muscolo gli esercizi fermi da più tempo, tanti quanti ne usi adesso. Si parte dal peso ×5 della scheda.</p>
+    ${righe.map(x => `<div class="prop-r"><b>${esc(x.m.nome)}</b><span>${testoProposta(x.p)}</span></div>`).join('')}
+    <div class="azioni"><button class="btn" type="button" onclick="applicaBimestre()">Usa la proposta</button></div></section>`;
+}
+function applicaBimestre(){
+  const i = bimestreDopo();
+  if (!confirm(`Da ${nomeBimestre(i)}: in uso gli esercizi proposti, quelli di adesso vanno in archivio (restano nella scheda, col loro periodo). Continuare?`)) return;
+  P.muscoli = muscoli().map(m => { const p = propostaBimestre(m); return p.length ? conProposta(m, p) : m; });
+  salva('muscoli'); disegna(); toast('Scheda di ' + nomeBimestre(i) + ' pronta');
+}
+function usaPropostaBozza(){
+  const p = propostaBimestre(bozza); if (!p.length) return;
+  bozza = conProposta(bozza, p); disegnaBozza(false); toast('Tocca Salva per confermare');
+}
+function storicoMuscolo(m){
+  const a = allenamentiDi(m), p = propostaBimestre(m);
+  return `<div class="storico">
+    <h3>Allenamenti</h3>
+    ${a.length ? `<p class="nota" style="margin:0 0 6px">${a.length} ${a.length === 1 ? 'volta' : 'volte'} · l'ultima ${esc(giornoLungo(a[0].d))}</p>
+      <ul class="giri">${a.slice(0, 8).map(x => `<li><b>${esc(fmtD(x.d))}</b><span>${esc(x.es.map(e => e.nome + (e.kg ? ' ' + kg(e.kg) + ' kg' : '')).join(' · ') || 'col programma')}</span></li>`).join('')}</ul>`
+      : '<p class="nota" style="margin:0">Ancora nessuno: compaiono qui quando salvi un allenamento con questo muscolo.</p>'}
+    ${p.length ? `<h3>Proposta per ${nomeBimestre(bimestreDopo())}</h3><p class="nota" style="margin:0 0 8px">${testoProposta(p)}</p>
+      <button class="btn ghost" type="button" onclick="usaPropostaBozza()">Usa questi dal prossimo bimestre</button>` : ''}
+  </div>`;
+}
 const giornoLungo = iso => `${PR.GIORNI[PR.dow(iso)]} ${fmtD(iso)}`;
 function cardOggiProgramma(){
   const pr = prog(); if (!pr.blocchi.length) return '';
@@ -391,11 +491,12 @@ function vistaProgramma(){
       <div class="azioni"><button class="btn ghost" type="button" onclick="altraProposta()">Un'altra</button><button class="btn ghost" type="button" onclick="modificaBlocco(null, true)">Modifica</button><button class="btn" type="button" onclick="accettaProposta()">Accetta</button></div></section>` : ''}
     <div class="sez"><h2>Blocchi</h2><button class="link" type="button" onclick="modificaBlocco(null)">+ Blocco a mano</button></div>
     ${altri.map(b => `<section class="sess glass" onclick="modificaBlocco('${b.id}')"><div class="t">${periodo(b)}${b.dal > oggi ? ' · in arrivo' : ''}</div><small>${b.coppie.map(c => esc(PR.scriviCoppia(c)) || '–').join(' · ')}</small></section>`).join('') || (cur ? '' : '<p class="vuoto">Nessun blocco: accetta la proposta o scrivine uno (es. B/S, T/P, D).</p>')}
+    ${cardBimestre()}
     <div class="sez"><h2>Muscoli ed esercizi</h2><button class="link" type="button" onclick="$('imp-scheda').click()">Importa scheda pesi</button></div>
     <input type="file" id="imp-scheda" accept=".json,application/json" hidden onchange="importaScheda(this.files[0]);this.value=''">
     <p class="nota" style="margin:-4px 2px 10px">Per ogni muscolo gli esercizi in uso, in ordine: il primo è quello da fare all'inizio quando il muscolo ha la priorità. Ognuno ${METODO.rip.length} serie da ${METODO.rip.join('-')}: la prima col peso ×5, poi il 10–15% in meno a ogni serie.</p>
     ${muscoli().map(m => { const u = inUso(m), altri = (m.esercizi || []).length - u.length;
-      return `<button class="scelta" type="button" onclick="modificaMuscolo('${esc(m.id)}')"><span class="ico">${esc(m.id)}</span><span class="cresce"><b>${esc(m.nome)}</b><small>${u.length ? esc(u.map(e => e.nome + (pesoX5(e) ? ' ' + kg(pesoX5(e)) + ' kg' : '')).join(' · ')) : (m.esercizi || []).length ? 'nessun esercizio in uso' : 'nessun esercizio: tocca per aggiungerli'}${altri ? ` · altri ${altri} in archivio` : ''}</small></span></button>`; }).join('')}
+      return `<button class="scelta" type="button" onclick="modificaMuscolo('${esc(m.id)}')"><span class="ico">${esc(m.id)}</span><span class="cresce"><b>${esc(m.nome)}</b><small>${u.length ? esc(u.map(e => e.nome + (pesoX5(e) ? ' ' + kg(pesoX5(e)) + ' kg' : '')).join(' · ')) : (m.esercizi || []).length ? 'nessun esercizio in uso' : 'nessun esercizio: tocca per aggiungerli'}${altri ? ` · altri ${altri} in archivio` : ''}${(ul => ul ? `<br>allenato l'ultima volta ${esc(fmtD(ul.d))}` : '')(allenamentiDi(m)[0])}</small></span></button>`; }).join('')}
     <div class="sez"><h2>Giorni</h2><button class="link" type="button" onclick="modificaGiorni()">Cambia</button></div>
     <p class="nota" style="margin:-4px 2px 0">${pr.slot.map(sl => esc(PR.etichettaSlot(sl))).join(' · ')}: con due giorni di fila la coppia si ripete e la priorità si inverte.</p>
     <div class="sez"><h2>Schede libere</h2><button class="link" type="button" onclick="modificaScheda(null)">+ Nuova scheda</button></div>
@@ -563,6 +664,7 @@ function disegnaBozza(nuova){
   const mu = bozza.tipo === 'muscolo';
   apri(mu ? 'Esercizi · ' + bozza.nome : nuova ? 'Nuova scheda' : 'Modifica scheda', `<div class="campi"><label class="tutta">Nome<input id="sc-n" value="${esc(bozza.nome)}" placeholder="Es. Giorno A · Petto e tricipiti" oninput="bozza.nome=this.value"></label></div>
     ${mu ? `<p class="nota">In ordine: il primo in uso è quello da fare per primo quando questo muscolo ha la priorità. Peso ×5: il massimale, la prima serie (${METODO.rip[0]} ripetizioni); le altre scendono da sole del 10–15%. Togli "in uso" per tenere un esercizio in archivio.</p>
+    ${storicoMuscolo(bozza)}
     <div class="ese-tit mu"><span>Esercizio</span><span>×5 kg</span><span>In uso</span><span></span></div>
     ${bozza.esercizi.map((e, i) => `<div class="ese-ed mu">
       <input aria-label="Esercizio ${i + 1}" list="sc-lista" value="${esc(e.nome)}" placeholder="Esercizio" oninput="bozza.esercizi[${i}].nome=this.value">
