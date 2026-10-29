@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="../dashboard-180.png">
 <title>Palestra</title>
 <script src="../comune/fisso.js"></script>
+<script src="../comune/moto.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com">
@@ -285,15 +286,17 @@ function linea(punti, unita){
   const d = punti.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(' ');
   const area = `${d} L${x(punti.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
   return `<div class="grafico"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Andamento da ${kg(punti[0].y)} a ${kg(punti.at(-1).y)} ${unita}">
-    <path d="${area}" fill="rgba(242,113,28,.16)"/><path d="${d}" fill="none" stroke="#F2711C" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-    ${punti.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4" fill="#ffb07a" vector-effect="non-scaling-stroke"/>`).join('')}</svg>
+    <g class="moto-traccia"><path d="${area}" fill="rgba(242,113,28,.16)"/><path d="${d}" fill="none" stroke="#F2711C" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></g>
+    ${punti.map((p, i) => `<circle class="moto-punto" cx=""${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4" fill="#ffb07a" vector-effect="non-scaling-stroke"/>`).join('')}</svg>
     <div class="ass"><span>${fmtD(punti[0].d)} · ${kg(punti[0].y)} ${unita}</span><span>min ${kg(mn)} · max ${kg(mx)}</span><span>${fmtD(punti.at(-1).d)} · ${kg(punti.at(-1).y)} ${unita}</span></div></div>`;
 }
 
 /* ---------------- Viste ---------------- */
 let tab = 'oggi';
 const aperti = new Set();
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); });
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); Moto.entra($('vista')); });
+// la scheda scelta scivola sotto la voce; la Dashboard fa entrare la vista quando si apre l'app
+Moto.pillola(document.querySelector('.tabs')); window.motoVista = () => $('vista');
 function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('titolo').textContent = {oggi: P.inCorso ? P.inCorso.nome : 'Palestra', schede: 'Programma', storico: 'Storico', corpo: 'Corpo', abbo: 'Abbonamento'}[tab];

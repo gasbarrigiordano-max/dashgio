@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="../dashboard-180.png">
 <title>Lavoro</title>
 <script src="../comune/fisso.js"></script>
+<script src="../comune/moto.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com">
@@ -254,8 +255,10 @@ const titolo = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUppe
 /* ---------------- Viste ---------------- */
 let tab = 'prossime', filtroAg = '';
 let riepMese = null, riepAg = '';   // riepilogo: mese scelto (0-11, null = anno intero) e, dentro il mese, l'agenzia
-function filtraRiep(m, ag){ riepMese = m; riepAg = ag || ''; disegna(); }
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); });
+function filtraRiep(m, ag){ riepMese = m; riepAg = ag || ''; disegna(); Moto.entra($('vista')); }
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); Moto.entra($('vista')); });
+// la scheda scelta scivola sotto la voce; la Dashboard fa entrare la vista quando si apre l'app
+Moto.pillola(document.querySelector('.tabs')); window.motoVista = () => $('vista');
 function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('titolo').textContent = {prossime: 'Lavoro', mesi: 'Giornate', fatture: 'Fatture', riepilogo: 'Riepilogo'}[tab];
@@ -332,7 +335,7 @@ function vistaRiepilogo(){
         <div><b class="mono" style="color:var(--warn)">${eur0(somma(per('da'), totale))}</b><small>da fatturare</small></div>
         <div><b class="mono">${eur0(somma(per('futura'), totale))}</b><small>in programma</small></div>
       </div>
-      ${mk ? '' : `<div class="barre" aria-label="Totale per mese: tocca un mese per vederlo">${mesi.map(m => `<div onclick="filtraRiep(${m.i})" title="${MESI_L[m.i]}"><i class="${m.fut ? 'fut' : ''}" style="height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>`}
+      ${mk ? '' : `<div class="barre" aria-label="Totale per mese: tocca un mese per vederlo">${mesi.map(m => `<div onclick="filtraRiep(${m.i})" title="${MESI_L[m.i]}"><i class="moto-barra${m.fut ? ' fut' : ''}" style="--i:${m.i};height:${Math.round(m.tot / mx * 80)}%"></i>${MESI[m.i].slice(0, 1).toUpperCase()}</div>`).join('')}</div>`}
     </section>
     ${mk ? `<section class="card glass"><h2>Giornate</h2>${l.length ? l.slice().sort((a, b) => a.d.localeCompare(b.d)).map(rigaG).join('') : '<p class="nota">Nessuna giornata in questo mese.</p>'}</section>` : ''}
     <section class="card glass"><h2>Per agenzia</h2>

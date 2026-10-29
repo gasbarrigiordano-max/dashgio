@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="dashboard-180.png">
 <title>Dashboard di Giordano</title>
 <script src="comune/fisso.js"></script>
+<script src="comune/moto.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com">
@@ -616,10 +617,12 @@ function disegna(){
   const mx = Math.max(1, ...D.serieU, ...D.serieE), x = i => 25 + i*(550/11), y = v => 165 - v/mx*145;
   const linea = s => s.map((v, i) => `${i?'L':'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
   $('g').innerHTML = `<g stroke="#ece7e2" stroke-width="1"><line x1="0" y1="20" x2="600" y2="20"/><line x1="0" y1="92" x2="600" y2="92"/><line x1="0" y1="165" x2="600" y2="165"/></g>
-    <path d="${linea(D.serieU)} L${x(11)} 165 L${x(0)} 165 Z" fill="#F2711C" opacity=".10"/>
+    <g class="moto-traccia"><path d="${linea(D.serieU)} L${x(11)} 165 L${x(0)} 165 Z" fill="#F2711C" opacity=".10"/>
     <path d="${linea(D.serieU)}" fill="none" stroke="#F2711C" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    <path d="${linea(D.serieE)}" fill="none" stroke="#8a7f77" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    <circle cx="${x(D.mese)}" cy="${y(D.serieU[D.mese])}" r="5" fill="#F2711C" stroke="#fff" stroke-width="2"/>`;
+    <path d="${linea(D.serieE)}" fill="none" stroke="#8a7f77" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/></g>
+    <circle class="moto-punto" cx="${x(D.mese)}" cy="${y(D.serieU[D.mese])}" r="5" fill="#F2711C" stroke="#fff" stroke-width="2"/>`;
+  // la prima volta che arrivano i dati il grafico si disegna; gli aggiornamenti dopo restano fermi
+  if(!graficoVisto && D.serieU.concat(D.serieE).some(v => v > 0)){ graficoVisto = true; Moto.disegna($('g')); }
   // Mezzi
   $('gb-tot').textContent = eur0(D.spesaMezzi);
   $('gb-sub').textContent = `spese dei mezzi nel ${D.anno}` + (D.bordo==='ok' ? '' : D.bordo==='carico' ? ' · leggo Mezzi…' : ' · Mezzi non si legge ancora: aprilo una volta');
@@ -1203,6 +1206,7 @@ async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 
 /* ---- Le app si aprono qui dentro (#bilancio, #mezzi, #palestra): la barra a sinistra resta ---- */
 let vista = 'panoramica';
+var graficoVisto; // il grafico della panoramica si è già disegnato una volta
 const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/', lavoro: 'lavoro/' };
 const frames = {};
 // la prossima parte solo quando la precedente ha finito di caricarsi e il telefono è libero (Mezzi, la più pesante, per ultima)
@@ -1243,12 +1247,14 @@ function mostraVista(v, extra = ''){
   document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
   liberaBil();
-  if(vista === 'panoramica'){ if(pronto) leggi(); return; }
+  Moto.aggiorna(); // la barra in alto e il dock cambiano forma: le pillole si rimettono al loro posto
+  if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto) leggi(); return; }
   scrollTo(0, 0); // dalla panoramica scorsa in giù: l'app parte sotto la barra, non nascosta dietro
   if(vista === 'bilancio'){
     bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; dimensiona();
     // bilancio/#passphrase e #impostazioni: la finestra giusta di Bilancio
     if(/#(passphrase|impostazioni)/.test(extra)){ try { W().openSettings(); if(extra.includes('passphrase')) W().openPass(); } catch(e){} }
+    entraApp(bil);
     return;
   }
   bil.setAttribute('aria-hidden', 'true'); bil.tabIndex = -1;
@@ -1256,7 +1262,12 @@ function mostraVista(v, extra = ''){
   // palestra/?t=abbo: la scheda giusta anche se la Palestra è già aperta
   const t = new URLSearchParams((extra.split('#')[0] || '').replace(/^\?/, '')).get('t');
   if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
+  if(!nuovo) entraApp(f);
 }
+// l'app aperta fa entrare la sua schermata come quando si cambia scheda al suo interno
+function entraApp(f){ try { const w = f.contentWindow; if(w.Moto && w.motoVista) w.Moto.entra(w.motoVista()); } catch(e){} }
+// l'evidenziazione della voce attiva scivola da una voce all'altra (dock e barra in alto)
+Moto.pillola(document.querySelector('nav.glass')); Moto.pillola(document.querySelector('.v5top .centro'));
 const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra', '#lavoro':'lavoro'})[location.hash] || 'panoramica';
 function dashVai(dest){
   const m = String(dest || '').match(/^(bilancio|giornale|palestra|lavoro)\/(.*)$/);

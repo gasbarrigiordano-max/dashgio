@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#1a1411">
 <title>Mezzi</title>
 <script src="../comune/fisso.js"></script>
+<script src="../comune/moto.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com">
@@ -4076,6 +4077,8 @@ function vaShowTab(tab) {
   if (tab === 'statistiche') vaRenderStatistiche();
   if (tab === 'viaggio') vgRenderViaggioTab();
   if (tab === 'impostazioni') vaRenderImpostazioni();
+  // solo cambiando scheda (non quando la stessa scheda si ridisegna coi dati nuovi)
+  if (tab !== vaShowTab.ultima) { vaShowTab.ultima = tab; Moto.entra(document.getElementById('va-view-' + tab)); }
 }
 
 /* ---- Riepilogo ---- */
@@ -6082,7 +6085,13 @@ function showTab(name) {
   if (name === 'carrello') renderCarrello();
   if (name === 'statistiche') renderStatistiche();
   if (name === 'impostazioni') renderImpostazioni();
+  if (name !== showTab.ultima) { showTab.ultima = name; Moto.entra(view); }
 }
+// la scheda scelta scivola sotto la voce, in tutte e due le barre (gommone e auto/scooter)
+document.querySelectorAll('.tabbar').forEach(t => Moto.pillola(t, '.tab-btn.active'));
+// la schermata aperta: la Dashboard la fa entrare quando si apre Mezzi
+window.motoVista = () => [...document.querySelectorAll('#vehicle-app [id^="va-view-"]:not([hidden]), main[id^="view-"]:not([hidden]), #launcher-screen')]
+  .find(el => getComputedStyle(el).display !== 'none' && el.getClientRects().length && !el.closest('[hidden]'));
 
 /* ---------------- Masthead ---------------- */
 function renderMasthead() {
