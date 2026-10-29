@@ -328,6 +328,7 @@ a.p{text-decoration:none}
 .molo-t small{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#ffd2ad}
 .molo-t b{font-size:34px;line-height:1;font-weight:700;color:#fff}
 .molo-b{flex:0 0 auto;min-width:52px;padding:6px 10px;border-radius:12px;background:#F2711C;color:#fff;display:flex;flex-direction:column;align-items:center;line-height:1}
+.molo-b.prev{outline:2px dotted rgba(255,255,255,.65);outline-offset:-4px}
 .molo-b.attesa{background:rgba(242,113,28,.18);border:1px dashed rgba(255,176,122,.7);color:#ffd2ad}
 .molo-b small{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.9}
 .molo-b b{font-size:20px;margin-top:3px}
@@ -851,9 +852,9 @@ async function gcalLeggi(){
 }
 // moli del porto di Civitavecchia: le navi nominate nei titoli degli eventi Google (comune/porto.js)
 let PORTO = null, portoProvato = 0;
-const etichettaMolo = m => m.attesa ? 'molo non ancora pubblicato' : m.banchina ? `molo ${m.banchina}` : 'molo non ancora indicato';
+const etichettaMolo = m => m.attesa ? 'molo non ancora pubblicato' : m.banchina ? `molo ${m.banchina}${m.fonte === 'mese' ? ' (previsione del mese)' : ''}` : 'molo non ancora indicato';
 // il molo ben visibile: etichetta a destra delle voci in agenda
-const badgeMolo = a => a.molo ? `<div class="molo-b${a.molo.attesa ? ' attesa' : ''}" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.attesa ? '…' : a.molo.banchina || '–')}</b></div>` : '';
+const badgeMolo = a => a.molo ? `<div class="molo-b${a.molo.attesa ? ' attesa' : a.molo.fonte === 'mese' ? ' prev' : ''}" title="${esc(a.molo.nave + ' · ' + etichettaMolo(a.molo) + (a.molo.orari ? ' · ' + a.molo.orari : ''))}"><small>molo</small><b class="mono">${esc(a.molo.attesa ? '…' : a.molo.banchina || '–')}</b></div>` : '';
 // la nave nel giorno dell'evento; dopo l'ultimo giorno pubblicato dal porto, se la nave è nota: molo in attesa
 function moloDi(e){
   const m = Porto.trova(PORTO, e.titolo, e.d); if(m) return m;
@@ -1027,7 +1028,7 @@ function apriEvento(ev){
   const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
   const cal = gcalAttivi().flatMap(c => c.calendari.filter(k => k.scrivibile).map(k => ({ v: c.email + '|' + k.id, nome: k.nome + (GC.conti.length > 1 ? ' — ' + c.email : '') })));
   const scelto = ev.conto ? ev.conto + '|' + ev.cal : gcalAttivi()[0].email + '|primary';
-  box.innerHTML = `${ev.molo ? `<div class="molo-ev">${badgeMolo(ev)}<div><b>${esc(ev.molo.nave)}</b><span>Porto di Civitavecchia${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}</span></div></div>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
+  box.innerHTML = `${ev.molo ? `<div class="molo-ev">${badgeMolo(ev)}<div><b>${esc(ev.molo.nave)}</b><span>Porto di Civitavecchia${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}${ev.molo.fonte === 'mese' ? ' · previsione del mese: si conferma con la tabella settimanale' : ''}</span></div></div>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
     <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
     <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
     <label>Dal<input type="date" id="ev-di" value="${esc(di)}" required></label><label class="ev-ora" ${ev.tutto ? 'style="display:none"' : ''}>Ore<input type="time" id="ev-oi" value="${esc(oi || '09:00')}"></label>

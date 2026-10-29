@@ -1,6 +1,7 @@
 /* Moli delle navi nel porto di Civitavecchia, dalle pagine pubbliche di Port Mobility:
-   - la programmazione accosti settimanale (aggiornata ogni giorno, vale per i giorni che copre);
-   - le crociere del mese in corso e del mese dopo (una pagina per mese, per i giorni oltre la settimana).
+   - prima la programmazione accosti settimanale: è la più aggiornata (i moli possono cambiare in settimana);
+   - se lì la nave non c'è (o non ha ancora la banchina), le crociere del mese in corso e del mese dopo:
+     una previsione, giusta quasi sempre (fonte: 'mese').
    Le pagine permettono la lettura da altri siti, quindi le legge direttamente il browser: nessun dato esce.
    Porto.leggi() → {dal, al, navi:[{d:'AAAA-MM-GG', nave:'COSTA TOSCANA', banchina:'25', orari:'07:15/19:00'}]}
    Porto.trova(dati, 'Costa Toscana', '2026-10-29') → la riga della nave nominata nel titolo, quel giorno (o null) */
@@ -60,7 +61,7 @@
       if (c.length < 7 || !/^\d{1,2}$/.test(c[1]) || +c[2] !== mese + 1) return;
       const nave = norm(c[5]); if (!nave) return;
       const banchina = /^(tbc|tbd|\/|-)?$/i.test(c[6]) ? '' : c[6];
-      navi.push({ d: `${anno}-${pad(mese + 1)}-${pad(+c[1])}`, nave, banchina, orari: [c[3], c[4]].filter(x => x && x !== '/').join('/') });
+      navi.push({ d: `${anno}-${pad(mese + 1)}-${pad(+c[1])}`, nave, banchina, orari: [c[3], c[4]].filter(x => x && x !== '/').join('/'), fonte: 'mese' });
     });
     return navi;
   }
@@ -72,9 +73,9 @@
     const [sett, ...mens] = await Promise.allSettled([scarica(URL_PORTO), ...mesi.map(([m]) => scarica(URL_MESE(m)))]);
     if (sett.status === 'rejected' && mens.every(x => x.status === 'rejected')) throw sett.reason;
     const dati = sett.status === 'fulfilled' ? analizza(sett.value, oggi) : { dal: null, al: null, navi: [] };
-    // i giorni della settimana pubblicata valgono quella; i mesi completano gli altri giorni
-    const coperti = new Set(dati.navi.map(n => n.d));
-    mens.forEach((x, i) => { if (x.status === 'fulfilled') analizzaMese(x.value, ...mesi[i]).forEach(n => { if (!coperti.has(n.d)) dati.navi.push(n); }); });
+    // si tengono entrambe le fonti: trova() sceglie, nave per nave, prima la settimana e poi il mese
+    dati.navi.forEach(n => { n.fonte = 'settimana'; });
+    mens.forEach((x, i) => { if (x.status === 'fulfilled') dati.navi.push(...analizzaMese(x.value, ...mesi[i])); });
     const giorni = dati.navi.map(n => n.d).sort();
     Object.assign(dati, { dal: giorni[0] || null, al: giorni.at(-1) || null });
     try { sessionStorage.setItem(CHIAVE, JSON.stringify({ ts: Date.now(), dati })); } catch (e) {}
@@ -83,14 +84,18 @@
 
   // la nave nominata nel titolo dell'evento: il nome intero ("Costa Toscana", "imbarco MSC Divina"),
   // oppure il titolo è parte del nome ("Toscana") se quel giorno c'è una nave sola che va bene
+  // doppio controllo: tra le righe di quel giorno per quella nave, prima la settimana con la banchina, poi il mese con la banchina,
+  // poi quella che c'è (banchina ancora vuota)
+  const ordine = n => (n.fonte === 'mese' ? 2 : 0) + (n.banchina ? 0 : 4);
   function trova(dati, titolo, d) {
     if (!dati || !titolo) return null;
     const t = ' ' + norm(titolo) + ' ', delGiorno = dati.navi.filter(n => n.d === d);
-    const interi = delGiorno.filter(n => t.includes(' ' + n.nave + ' ')).sort((a, b) => b.nave.length - a.nave.length);
-    if (interi.length) return interi[0];
+    const interi = delGiorno.filter(n => t.includes(' ' + n.nave + ' '));
+    if (interi.length) { const lung = Math.max(...interi.map(n => n.nave.length)); return interi.filter(n => n.nave.length === lung).sort((a, b) => ordine(a) - ordine(b))[0]; }
     const tt = t.trim(); if (tt.length < 4) return null;
     const parti = delGiorno.filter(n => (' ' + n.nave + ' ').includes(' ' + tt + ' '));
-    return parti.length === 1 ? parti[0] : null;
+    const nomi = [...new Set(parti.map(n => n.nave))];
+    return nomi.length === 1 ? parti.sort((a, b) => ordine(a) - ordine(b))[0] : null;
   }
 
   // una nave della tabella (in qualsiasi giorno) nominata nel titolo: per i giorni che il porto non ha ancora pubblicato
