@@ -1114,6 +1114,8 @@
   </main>
 
   <main id="va-view-spese" hidden>
+    <div class="chip-row" id="va-spese-anni"></div>
+    <div class="chip-row" id="va-spese-mesi"></div>
     <div class="chip-row" id="va-spese-filter"></div>
     <div id="va-spese-filter-total" style="display:none; text-align:right; margin-bottom:10px;"></div>
     <div id="va-spese-list"></div>
@@ -1903,6 +1905,8 @@
 
   <!-- ============ SPESE ============ -->
   <main id="view-spese" hidden>
+    <div class="chip-row" id="spese-anni"></div>
+    <div class="chip-row" id="spese-mesi"></div>
     <div class="chip-row" id="spese-filter"></div>
     <div id="spese-filter-total" style="display:none; text-align:right; margin-bottom:10px;"></div>
     <div id="spese-list"></div>
@@ -4032,6 +4036,7 @@ const VA_VEHICLE_DEFS = {
   moto: { type: 'moto', prefix: 'moto_', label: 'Moto', icon: '🏍️', possessive: 'La mia' },
 };
 async function vaBoot(type) {
+  vaPeriodo = { anno: '', mese: '' }; // un altro mezzo: filtri del periodo da capo
   currentVehicle = VA_VEHICLE_DEFS[type];
   vaSetCategorie(type);
   vgResetViaggioState();
@@ -4167,6 +4172,23 @@ function vaRenderDeadlines() {
 }
 
 /* ---- Spese ---- */
+/* Spese: filtro per anno e, scelto l'anno, per mese (gommone e auto/scooter/moto), insieme alla categoria */
+let spesePeriodo = { anno: '', mese: '' }, vaPeriodo = { anno: '', mese: '' };
+const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const MESI_LUNGHI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const nelPeriodo = (e, p) => (!p.anno || e.date.startsWith(p.anno)) && (!p.mese || e.date.slice(5, 7) === p.mese);
+const nomePeriodo = p => p.mese ? MESI_LUNGHI[+p.mese - 1] + ' ' + p.anno : p.anno;
+function righePeriodo(spese, p, fn, idAnni, idMesi) {
+  const anni = [...new Set(spese.map(e => e.date.slice(0, 4)))].sort().reverse();
+  if (p.anno && !anni.includes(p.anno)) { p.anno = ''; p.mese = ''; }
+  document.getElementById(idAnni).innerHTML = anni.length < 2 && !p.anno ? '' :
+    `<div class="chip ${p.anno ? '' : 'active'}" onclick="${fn}('','')">Tutti gli anni</div>` + anni.map(a => `<div class="chip ${p.anno === a ? 'active' : ''}" onclick="${fn}('${a}','')">${a}</div>`).join('');
+  const mesi = p.anno ? [...new Set(spese.filter(e => e.date.startsWith(p.anno)).map(e => e.date.slice(5, 7)))].sort() : [];
+  document.getElementById(idMesi).innerHTML = !p.anno ? '' :
+    `<div class="chip ${p.mese ? '' : 'active'}" onclick="${fn}('${p.anno}','')">Tutto il ${p.anno}</div>` + mesi.map(m => `<div class="chip ${p.mese === m ? 'active' : ''}" onclick="${fn}('${p.anno}','${m}')">${MESI_BREVI[+m - 1]}</div>`).join('');
+}
+function vaSetPeriodo(a, m) { vaPeriodo = { anno: a, mese: m }; vaRenderSpese(); }
+function setSpesePeriodo(a, m) { spesePeriodo = { anno: a, mese: m }; renderSpese(); }
 function vaRenderSpese() {
   const grid = document.getElementById('va-cat-grid');
   if (!grid.dataset.built) {
@@ -4184,22 +4206,23 @@ function vaRenderSpese() {
   }
   document.querySelectorAll('#va-spese-filter .chip').forEach(c => c.classList.toggle('active', c.dataset.cat === (vaActiveFilter || 'tutte')));
 
+  righePeriodo(vState.expenses, vaPeriodo, 'vaSetPeriodo', 'va-spese-anni', 'va-spese-mesi');
   const filtered = vState.expenses
-    .filter(e => (vaActiveFilter || 'tutte') === 'tutte' || e.category === vaActiveFilter)
+    .filter(e => ((vaActiveFilter || 'tutte') === 'tutte' || e.category === vaActiveFilter) && nelPeriodo(e, vaPeriodo))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const totalEl = document.getElementById('va-spese-filter-total');
-  if ((vaActiveFilter || 'tutte') === 'tutte') {
+  if ((vaActiveFilter || 'tutte') === 'tutte' && !vaPeriodo.anno) {
     totalEl.style.display = 'none';
   } else {
     const catTotal = filtered.filter(e => !e.excluded).reduce((s, e) => s + e.amount, 0);
     totalEl.style.display = 'block';
-    totalEl.innerHTML = `<span style="font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Totale ${VEHICLE_CAT_MAP[vaActiveFilter]?.label || ''}</span><br><span style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--paper);">${fmtEUR(catTotal)}</span>`;
+    totalEl.innerHTML = `<span style="font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Totale ${[VEHICLE_CAT_MAP[vaActiveFilter]?.label, nomePeriodo(vaPeriodo)].filter(Boolean).join(' · ')}</span><br><span style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--paper);">${fmtEUR(catTotal)}</span>`;
   }
 
   const list = document.getElementById('va-spese-list');
   if (!filtered.length) {
-    list.innerHTML = `<div class="empty-state"><p>Nessuna spesa in questa categoria.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><p>Nessuna spesa con questi filtri.</p></div>`;
     return;
   }
   const groups = {};
@@ -8319,23 +8342,24 @@ function renderSpese() {
     return `<div class="chip ${active}" onclick="setSpeseFilter('${id}')">${label}</div>`;
   }).join('');
 
+  righePeriodo(state.expenses, spesePeriodo, 'setSpesePeriodo', 'spese-anni', 'spese-mesi');
   const filtered = state.expenses
-    .filter(e => state.activeFilter === 'tutte' || e.category === state.activeFilter)
+    .filter(e => (state.activeFilter === 'tutte' || e.category === state.activeFilter) && nelPeriodo(e, spesePeriodo))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const totalEl = document.getElementById('spese-filter-total');
-  if (state.activeFilter === 'tutte') {
+  if (state.activeFilter === 'tutte' && !spesePeriodo.anno) {
     totalEl.style.display = 'none';
   } else {
     const catTotal = filtered.filter(e => !e.excluded).reduce((s, e) => s + e.amount, 0);
     totalEl.style.display = 'block';
-    totalEl.innerHTML = `<span style="font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Totale ${CAT_MAP[state.activeFilter]?.label || ''}</span><br><span style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--paper);">${fmtEUR(catTotal)}</span>`;
+    totalEl.innerHTML = `<span style="font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint);">Totale ${[CAT_MAP[state.activeFilter]?.label, nomePeriodo(spesePeriodo)].filter(Boolean).join(' · ')}</span><br><span style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--paper);">${fmtEUR(catTotal)}</span>`;
   }
 
   const list = document.getElementById('spese-list');
   if (!filtered.length) {
     list.innerHTML = `<div class="empty-state">
-      <p>Nessuna spesa in questa categoria.<br>Tocca "+" per aggiungerne una.</p>
+      <p>Nessuna spesa con questi filtri.<br>Tocca "+" per aggiungerne una.</p>
     </div>`;
     return;
   }
