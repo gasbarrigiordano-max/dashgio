@@ -2558,6 +2558,36 @@ const catMezzi = (m, det) => Object.keys(m.det).find(k=>m.det[k]===det && !CAT_V
 // le voci da proporre in Bilancio per un mezzo: tutte le categorie che si scelgono anche in Mezzi
 const vociMezzo = m => [...new Set(Object.entries(m.det).filter(([k])=>!CAT_VECCHIE.includes(k)).map(([,v])=>v))];
 async function listaMezzi(ek){ try { const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; } catch(e){ if(e && e.code==='permission-denied') throw e; return []; } }
+/* Registri di manutenzione di Mezzi: una spesa di manutenzione registrata qui va anche lì (come se fatta in Mezzi):
+   gommone, Manutenzione straordinaria → ricambi "Altro" del motore (engineParts.altro); auto/SH/moto, Manutenzione
+   ordinaria o straordinaria → voci di manutenzione del mezzo (<mezzo>_manutenzione). La voce è collegata alla spesa
+   (expenseId), quindi in Mezzi prezzo e data cambiano insieme. t.mzReg = registro in cui sta. */
+function registroDi(m, cat){
+  if(m.mezzo==='gommone') return cat==='manutenzione' ? 'engineParts' : null;
+  return ['manutenzione','manutenzione_str'].includes(cat) ? m.mezzo + '_manutenzione' : null;
+}
+async function leggiMotore(){ const v = await Cassaforte.leggi('giornale', 'engineParts'); return v ? JSON.parse(v) : null; }
+async function registroTogli(k, id){
+  if(k==='engineParts'){ const ep = await leggiMotore(); if(!ep || !(ep.altro||[]).some(x=>x.id===id)) return; ep.altro = ep.altro.filter(x=>x.id!==id); await Cassaforte.scrivi('giornale', k, JSON.stringify(ep)); }
+  else { const l = await listaMezzi(k); if(l.some(x=>x.id===id)) await Cassaforte.scrivi('giornale', k, JSON.stringify(l.filter(x=>x.id!==id))); }
+}
+async function registroScrivi(t, m, e){
+  const id = 'bil_' + t.id, k = m && e ? registroDi(m, e.category) : null;
+  if(t.mzReg && t.mzReg!==k){ await registroTogli(t.mzReg, id); delete t.mzReg; }
+  if(!k) return;
+  if(k==='engineParts'){
+    const ep = await leggiMotore(); if(!ep) return; // Mezzi non ha ancora il motore: niente da fare
+    ep.altro = ep.altro || [];
+    const voce = {id, bil:t.id, name:t.note || 'Manutenzione straordinaria', lastChangeDate:t.d, price:e.amount, expenseId:id};
+    const i = ep.altro.findIndex(x=>x.id===id); if(i>=0) ep.altro[i] = {...ep.altro[i], ...voce}; else ep.altro.push({productCode:'', oemCode:'', torqueNm:null, note:'', ...voce});
+    await Cassaforte.scrivi('giornale', k, JSON.stringify(ep));
+  } else {
+    const l = await listaMezzi(k), voce = {id, bil:t.id, name:t.note || t.det || 'Manutenzione', date:t.d, price:e.amount, expenseId:id};
+    const i = l.findIndex(x=>x.id===id); if(i>=0) l[i] = {...l[i], ...voce}; else l.push({km:null, note:'', ...voce});
+    await Cassaforte.scrivi('giornale', k, JSON.stringify(l));
+  }
+  t.mzReg = k;
+}
 async function mezziSync(t, eliminata){
   if(!CLOUD || !cloud.key || bordo.stato!=='ok' || !t) return;
   const m = eliminata ? null : mezzoDi(t), id = 'bil_' + t.id;
@@ -2568,8 +2598,9 @@ async function mezziSync(t, eliminata){
       const l = await listaMezzi(m.ek), e = {id, bil:t.id, date:t.d, amount:round2(spesa(t)), category:catMezzi(m, t.det), note:t.note || t.det || '', excluded:false};
       const i = l.findIndex(x=>x.id===id); if(i>=0) l[i] = {...l[i], ...e}; else l.push(e);
       await Cassaforte.scrivi('giornale', m.ek, JSON.stringify(l));
+      await registroScrivi(t, m, e);
       if(!eliminata){ t.mz = m.ek; t.mzT = Date.now(); }
-    } else if(!eliminata){ delete t.mz; delete t.mzT; }
+    } else if(!eliminata){ if(t.mzReg){ await registroTogli(t.mzReg, id); delete t.mzReg; } delete t.mz; delete t.mzT; }
     if(!eliminata) save();
     // Mezzi aperto nella Dashboard rilegge le spese (se no salvando le sue sovrascriverebbe questa)
     try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
@@ -2581,20 +2612,34 @@ async function mezziTogli(list){
   if(!CLOUD || !cloud.key || bordo.stato!=='ok') return;
   const via = {};   // lista → id da togliere
   const metti = (ek, id) => (via[ek] = via[ek] || new Set()).add(id);
+  const registri = [];
   list.forEach(t=>{
     if(t.mz) metti(t.mz, 'bil_' + t.id);
+    if(t.mzReg) registri.push([t.mzReg, 'bil_' + t.id]);
     const m = /^bf_([^:]+):(.+)$/.exec(t.id); if(t.bf && m) metti(m[1], m[2]);
   });
-  if(!Object.keys(via).length) return;
+  if(!Object.keys(via).length && !registri.length) return;
+  const scollega = x => { const c = {...x}; c.expenseId = null; return c; };
   try {
+    for(const [k, id] of registri) await registroTogli(k, id);
     for(const [ek, ids] of Object.entries(via)){
       const l = await listaMezzi(ek), resta = l.filter(e=>!ids.has(e.id));
       if(resta.length!==l.length) await Cassaforte.scrivi('giornale', ek, JSON.stringify(resta));
-      const imp = BORDO_IMP.find(x=>x.ek===ek);
-      for(const lk of Object.keys(imp ? imp.link : {})){
-        const r = await listaMezzi(lk), tieni = r.filter(x=>!ids.has(x.expenseId));
-        if(tieni.length!==r.length) await Cassaforte.scrivi('giornale', lk, JSON.stringify(tieni));
+      const imp = BORDO_IMP.find(x=>x.ek===ek); if(!imp) continue;
+      // schede collegate: il rifornimento si elimina, le altre (assicurazione, bollo, revisione, manutenzioni) restano scollegate
+      const altre = imp.mezzo==='gommone' ? [] : [imp.mezzo + '_manutenzione'];
+      for(const lk of [...Object.keys(imp.link), ...altre]){
+        const r = await listaMezzi(lk); if(!r.some(x=>ids.has(x.expenseId))) continue;
+        const nuova = /refuels$/i.test(lk) ? r.filter(x=>!ids.has(x.expenseId)) : r.map(x=>ids.has(x.expenseId) ? scollega(x) : x);
+        await Cassaforte.scrivi('giornale', lk, JSON.stringify(nuova));
       }
+      // pezzi e ricambi del motore (gommone) o pezzi e tagliandi (auto/SH/moto): scollegati
+      const kp = imp.mezzo==='gommone' ? 'engineParts' : imp.mezzo + '_parts';
+      const v = await Cassaforte.leggi('giornale', kp).catch(()=>null);
+      if(v){ const o = JSON.parse(v); let k = 0;
+        const giro = h => (h||[]).forEach(x=>{ if(ids.has(x.expenseId)){ x.expenseId = null; k++; } });
+        if(imp.mezzo==='gommone'){ Object.values(o.standard||{}).forEach(p=>giro(p.history)); giro(o.altro); } else Object.values(o).forEach(p=>giro(p && p.history));
+        if(k) await Cassaforte.scrivi('giornale', kp, JSON.stringify(o)); }
     }
     try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
   } catch(e){ console.warn('Mezzi', e); toast('Eliminato qui, ma non in Mezzi: ' + (e.code||e.message)); }
@@ -2649,6 +2694,10 @@ async function copiaMezziVecchi(dati){
 async function correggiCategorie(dati){
   if(!CLOUD || !cloud.key) return;
   try {
+    for(const t of S.tx.filter(t=>t.mz && !t.mzReg)){
+      const m = BORDO_IMP.find(x=>x.ek===t.mz), e = m && (Array.isArray(dati[m.ek]) ? dati[m.ek] : []).find(x=>x && x.bil===t.id);
+      if(e && registroDi(m, e.category)){ await registroScrivi(t, m, e); save(); try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(x){} }
+    }
     for(const m of BORDO_IMP){
       if(!(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).some(e=>e && e.bil)) continue;
       const l = await listaMezzi(m.ek); let k = 0; // letta adesso: non si riscrive una lista vecchia
@@ -2665,7 +2714,7 @@ function bordoRientro(dati){
   BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{ if(e && e.bil) inMezzi.set(e.bil, {e, m}); }));
   S.tx.filter(t=>t.mz).forEach(t=>{
     const x = inMezzi.get(t.id);
-    if(!x){ if(t.mzT && bordo.agg > t.mzT + 2000 && !estrattoChiuso(t)){ applyPag(t,-1); S.tx = S.tx.filter(y=>y!==t); k++; } return; } // eliminata in Mezzi
+    if(!x){ if(t.mzT && bordo.agg > t.mzT + 2000 && !estrattoChiuso(t)){ applyPag(t,-1); S.tx = S.tx.filter(y=>y!==t); if(t.mzReg) registroTogli(t.mzReg, 'bil_' + t.id).catch(()=>{}); k++; } return; } // eliminata in Mezzi (anche dal registro)
     const {e, m} = x, det = m.det[e.category] || t.det;
     if(e.excluded || estrattoChiuso(t)) return;
     if(round2(spesa(t))!==round2(e.amount) || t.d!==e.date || t.det!==det || t.sub!==m.voce || t.mz!==m.ek){
