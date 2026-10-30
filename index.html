@@ -1093,14 +1093,16 @@ async function salvaEvento(){
    l'evento di quella giornata si sposta, si aggiorna o si elimina; se non c'è, si crea nel calendario di lavoro.
    L'evento si riconosce dal segno che l'app gli lascia (dglav = id della giornata); la prima volta dalla data e dal titolo. */
 const normT = s => window.Porto ? Porto.norm(s) : String(s || '').toUpperCase();
-async function eventiGoogleDelGiorno(d){
+const eventiGoogleDelGiorno = async d => (await eventiGoogleTra(d, d)).filter(e => e.d === d);
+// gli eventi Google (calendari visti e di lavoro) dal giorno daIso al giorno aIso compresi
+async function eventiGoogleTra(daIso, aIso){
   const lav = calLavoro(), [lavConto, ...r] = lav ? lav.split('|') : [null], lavId = r.join('|'), out = [];
-  const da = new Date(d + 'T00:00'), a = new Date(da.getTime() + 864e5);
+  const da = new Date(daIso + 'T00:00'), a = new Date(new Date(aIso + 'T00:00').getTime() + 864e5);
   for(const c of gcalAttivi()){
     const ids = new Set(vistiDi(c.email)); if(lavConto === c.email) ids.add(lavId);
     for(const id of ids){ try { out.push(...await leggiEventi(c, id, da, a, false, lavConto === c.email && id === lavId)); } catch(e){ console.warn('calendario', e); } }
   }
-  return out.filter(e => e.d === d);
+  return out;
 }
 function puntiEvento(e, g){
   if(e.dglav === g.id) return 100;
@@ -1116,7 +1118,7 @@ async function eventoDellaGiornata(g){
   return l[0].e;
 }
 const reTesto = s => new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-async function aggiornaEventoLavoro(e, prima, dopo){
+async function aggiornaEventoLavoro(e, prima, dopo, soloSegno){
   const giorni = Math.round((new Date(dopo.d + 'T12:00') - new Date(prima.d + 'T12:00')) / 864e5), tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome';
   const sposta = iso => { const [d, t] = iso.split('T'); return piuGiorno(d, giorni) + (t ? 'T' + t : ''); };
   const corpo = { extendedProperties: { private: { dglav: dopo.id, ...(e.dgid ? {dgid: e.dgid} : {}) } } };
@@ -1127,7 +1129,7 @@ async function aggiornaEventoLavoro(e, prima, dopo){
     if(prima[k] && dopo[k] !== prima[k] && reTesto(prima[k]).test(tit)) tit = tit.replace(reTesto(prima[k]), dopo[k] || '').replace(/\s*·\s*$|^\s*·\s*/g, '').trim();
     if(dopo[k] && !(' ' + normT(tit) + ' ').includes(' ' + normT(dopo[k]) + ' ')) tit += sep + dopo[k];
   });
-  if(tit !== e.titolo) corpo.summary = tit;
+  if(tit !== e.titolo && !soloSegno) corpo.summary = tit;
   await gcalFetch(contoDi(e.conto), apiEventi(e.cal) + '/' + encodeURIComponent(e.gid), { method: 'PATCH', body: JSON.stringify(corpo) });
 }
 async function creaEventoLavoro(g){
@@ -1136,6 +1138,57 @@ async function creaEventoLavoro(g){
     summary: [g.nave || 'Lavoro', g.agenzia].filter(Boolean).join(' · '), description: 'Da Lavoro · Dashboard di Giordano' + (g.tipo ? ' · ' + g.tipo : ''),
     start: {date: g.d}, end: {date: piuGiorno(g.d, 1)}, extendedProperties: { private: { dglav: g.id } } }) });
 }
+/* Allinea calendario (da Lavoro → Giornate): le giornate da un mese fa in poi confrontate con gli eventi di lavoro di Google.
+   Giornata con il suo evento: a posto (si segna il collegamento). Senza: l'evento di lavoro rimasto a un'altra data (stessa nave,
+   se no stessa agenzia, il più vicino entro 10 giorni) si sposta; se non c'è si crea. Gli eventi di lavoro senza giornata si segnalano soltanto. */
+async function pianoAllinea(giornate){
+  const oggi = isoLocale(new Date()), gg = giornate.filter(g => g.d >= piuGiorno(oggi, -30)).sort((a, b) => a.d.localeCompare(b.d));
+  if(!gg.length) return null;
+  const ev = await eventiGoogleTra(piuGiorno(gg[0].d, -10), piuGiorno(gg.at(-1).d, 10));
+  const navi = [...new Set(gg.map(g => normT(g.nave)).filter(Boolean))], ags = [...new Set([...gg.map(g => normT(g.agenzia)), ...agenzie().map(normT)].filter(Boolean))];
+  const diLavoro = e => { const t = ' ' + normT(e.titolo) + ' '; return !!e.dglav || e.tag === 'LAV' || navi.some(n => t.includes(' ' + n + ' ')) || ags.some(x => t.includes(' ' + x + ' ')); };
+  // l'evento nomina un'altra nave delle giornate: non è di questa giornata, anche se l'agenzia è la stessa
+  // e vale lo stesso se si riconosce solo dall'agenzia ma tolta l'agenzia il titolo dice altro (due parole o più: una nave)
+  const resto = (e, g) => (' ' + normT(e.titolo) + ' ').replace(' ' + normT(g.agenzia) + ' ', ' ').trim().split(/\s+/).filter(Boolean).length;
+  const altraNave = (e, g) => !!g.nave && (navi.some(n => n !== normT(g.nave) && (' ' + normT(e.titolo) + ' ').includes(' ' + n + ' ')) || (puntiEvento(e, g) === 5 && resto(e, g) >= 2));
+  const libero = (e, g) => !e.dglav || e.dglav === g.id || !gg.some(x => x.id === e.dglav); // già collegato a un'altra giornata: no
+  const usati = new Set(), passi = [], senza = [];
+  gg.forEach(g => {
+    const e = ev.filter(x => !usati.has(x) && x.d === g.d && puntiEvento(x, g) > 0 && libero(x, g) && !altraNave(x, g)).sort((x, y) => puntiEvento(y, g) - puntiEvento(x, g))[0];
+    if(e){ usati.add(e); if(e.dglav !== g.id) passi.push({tipo: 'segna', e, g}); } else senza.push(g);
+  });
+  senza.forEach(g => {
+    const giorni = e => Math.abs(new Date(e.d + 'T12:00') - new Date(g.d + 'T12:00')) / 864e5;
+    const c = ev.filter(e => !usati.has(e) && diLavoro(e) && giorni(e) <= 10 && puntiEvento(e, g) >= 5 && libero(e, g) && !altraNave(e, g)) // nave, agenzia o collegamento: mai un evento qualsiasi
+      .sort((x, y) => puntiEvento(y, g) - puntiEvento(x, g) || giorni(x) - giorni(y))[0];
+    if(c){ usati.add(c); passi.push({tipo: 'sposta', e: c, g}); } else passi.push({tipo: 'crea', g});
+  });
+  const orfani = ev.filter(e => !usati.has(e) && diLavoro(e) && e.d >= piuGiorno(oggi, -30) && !(e.dglav && gg.some(g => g.id === e.dglav)));
+  return {passi, orfani};
+}
+async function allineaLavoro(giornate){
+  const p = await pianoAllinea(giornate);
+  if(!p) return 'Nessuna giornata da controllare';
+  const visibili = p.passi.filter(x => x.tipo !== 'segna');
+  const righe = visibili.map(x => x.tipo === 'sposta' ? `• Sposto "${x.e.titolo}" dal ${fmtD(x.e.d)} al ${fmtD(x.g.d)}` : `• Aggiungo "${[x.g.nave || 'Lavoro', x.g.agenzia].filter(Boolean).join(' · ')}" il ${fmtD(x.g.d)}`);
+  const extra = p.orfani.length ? `\n\nEventi di lavoro senza giornata (non li tocco): ${p.orfani.slice(0, 6).map(e => fmtD(e.d) + ' "' + e.titolo + '"').join(', ')}${p.orfani.length > 6 ? '…' : ''}` : '';
+  if(visibili.length && !confirm(`Allineo il calendario alle giornate di Lavoro:\n\n${righe.slice(0, 15).join('\n')}${righe.length > 15 ? `\n… e altre ${righe.length - 15}` : ''}${extra}`)) return 'Calendario non toccato';
+  let fatti = 0;
+  for(const x of p.passi){
+    if(!visibili.length && x.tipo !== 'segna') continue;
+    if(x.tipo === 'segna') await aggiornaEventoLavoro(x.e, x.g, x.g, true);
+    else if(x.tipo === 'sposta'){ await aggiornaEventoLavoro(x.e, {id: x.g.id, d: x.e.d, nave: '', agenzia: ''}, x.g); fatti++; }
+    else { await creaEventoLavoro(x.g); fatti++; }
+  }
+  await gcalLeggi();
+  return (fatti ? `Calendario allineato: ${visibili.filter(x => x.tipo === 'sposta').length} spostati, ${visibili.filter(x => x.tipo === 'crea').length} aggiunti` : 'Il calendario era già allineato') + (p.orfani.length ? ` · ${p.orfani.length} eventi di lavoro senza giornata` : '');
+}
+addEventListener('message', async e => {
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea') return;
+  const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
+  if(!gcalAttivi().length) return rispondi('Collega Google nella Dashboard per allineare il calendario');
+  try { rispondi(await allineaLavoro(e.data.giornate || [])); } catch(err){ rispondi('Calendario non allineato: ' + err.message); }
+});
 addEventListener('message', async e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-cal') return;
   const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };

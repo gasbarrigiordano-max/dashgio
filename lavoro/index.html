@@ -144,7 +144,7 @@ html.largo .wrap{max-width:100%}
 .vista-tog{flex:none;display:flex;gap:2px;padding:3px;border-radius:99px;background:rgba(255,255,255,.08)}
 .vista-tog button{border:0;border-radius:99px;padding:5px 10px;background:transparent;color:var(--ink2);font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
 .vista-tog button.on{background:var(--acc);color:#fff}
-@media (max-width:600px){ .filtri-testa{flex-direction:column-reverse;align-items:stretch;gap:6px} .vista-tog{align-self:flex-end} } /* telefono: il pulsante sopra, i mesi su tutta la riga */
+@media (max-width:600px){ .filtri-testa{flex-direction:column-reverse;align-items:stretch;gap:6px} .vista-tog,.filtri-testa>.btn{align-self:flex-end} } /* telefono: il pulsante sopra, i mesi su tutta la riga */
 /* calendario del mese nel riepilogo: stessi colori delle etichette di stato */
 .cal-int,.cal-griglia{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal-int{margin:8px 0 4px;font-size:10.5px;font-weight:800;color:var(--ink3);text-align:center}
@@ -350,6 +350,7 @@ function vistaMesi(){
   const nomeMese = k => MESI[+k.slice(5) - 1] + (k.startsWith(anno) ? '' : ' ' + k.slice(2, 4));
   const testa = (k, l) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>`;
   return `<div class="filtri-testa"><div class="filtri" role="group" aria-label="Mese"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutti</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${nomeMese(k)}</button>`).join('')}</div>
+      <button type="button" class="btn ghost piccolo" style="flex:none;min-height:32px" onclick="allineaCalendario()" title="Controlla che gli eventi del calendario siano alle date delle giornate">↻ Allinea calendario</button>
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? esc(a) : 'Tutte'}</button>`).join('')}</div>
     ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.slice().reverse().map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi dal più recente, giorni del mese in ordine (2, 3… 28)
@@ -496,6 +497,11 @@ function elimina(id){
   if (g) avvisaCalendario('elimina', {...g}, null);
 }
 // il calendario (Google) lo aggiorna la Dashboard, che ha l'accesso; qui arriva l'esito da mostrare
+function allineaCalendario(){
+  if (parent === window) return toast('Apri Lavoro dalla Dashboard per allineare il calendario');
+  toast('Controllo il calendario…');
+  parent.postMessage({ tipo: 'lavoro-allinea', giornate: L.giornate.map(g => ({ id: g.id, d: g.d, nave: g.nave || '', agenzia: g.agenzia || '' })) }, location.origin);
+}
 function avvisaCalendario(azione, prima, dopo){ try { if (parent !== window) parent.postMessage({ tipo: 'lavoro-cal', azione, prima, dopo }, location.origin); } catch (e) {} }
 addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.tipo === 'lavoro-cal-esito' && e.data.testo) toast(e.data.testo); });
 
