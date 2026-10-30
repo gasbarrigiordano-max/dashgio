@@ -807,15 +807,29 @@ const pfCosto = f => f.commTipo==='eur' ? round2(f.comm||0) : round2(f.imp*(f.co
 const pfRata = (f,i) => round2(pfCap(f,i) + pfFee(f,i));
 const pfResiduo = f => round2(sum(Array.from({length:f.n-f.done}, (_,j)=>pfCap(f, f.done+j))));
 const settled = (c,ym) => ym < c.dal || (c.es||[]).some(e=>e.m===ym);
+// l'estratto conto (ciclo) di una spesa con carta: il mese della spesa. Le carte addebitate a fine mese (BBVA) chiudono
+// l'estratto il giorno prima: la spesa dell'ultimo giorno va nell'estratto del mese dopo (30 settembre → ottobre).
+// t.ciclo: estratto fissato (spese dell'ultimo giorno già addebitate col loro mese prima di questa regola)
+const cicloDi = (c,t) => t.ciclo || (c && c.tipo==='fine' && t.d===lastDay(t.d.slice(0,7)) ? addYM(t.d.slice(0,7),1) : t.d.slice(0,7));
+const cicloTx = t => cicloDi(carte().find(x=>x.id===t.carta), t);
+// una volta sola: le spese dell'ultimo giorno già comprese in un estratto addebitato (il totale torna) restano in quell'estratto
+function fissaCicliVecchi(){
+  let k = 0;
+  carte().filter(c=>c.tipo==='fine').forEach(c=>(c.es||[]).forEach(e=>{
+    const mese = S.tx.filter(t=>t.carta===c.id && !t.pf && t.d.slice(0,7)===e.m), ult = mese.filter(t=>t.d===lastDay(e.m) && !t.ciclo);
+    if(ult.length && Math.abs(round2(sum(mese.map(t=>t.amt))) - e.spese) < 0.005){ ult.forEach(t=>{ t.ciclo = e.m; k++; }); }
+  }));
+  if(k) save();
+}
 // spese della carta nel ciclo ym (escluse quelle passate a PagoFlex)
-const cartaSpese = (c,ym) => S.tx.filter(t=>t.carta===c.id && !t.pf && t.d.slice(0,7)===ym);
+const cartaSpese = (c,ym) => S.tx.filter(t=>t.carta===c.id && !t.pf && cicloDi(c,t)===ym);
 const mdiff = (a,b) => (+b.slice(0,4) - +a.slice(0,4))*12 + (+b.slice(5,7) - +a.slice(5,7)); // mesi da a a b ('YYYY-MM')
 // rate PagoFlex che cadono nel ciclo ym
 const pfDelCiclo = (c,ym) => (c.flex||[]).map(f=>({f, i:mdiff(f.m0,ym)})).filter(x=>x.i>=0 && x.i<x.f.n);
 // cicli non ancora addebitati che hanno qualcosa da addebitare, dal più vecchio
 function cicliAperti(c){
   const m = new Set();
-  S.tx.forEach(t=>{ if(t.carta===c.id && !t.pf) m.add(t.d.slice(0,7)); });
+  S.tx.forEach(t=>{ if(t.carta===c.id && !t.pf) m.add(cicloDi(c,t)); });
   (c.flex||[]).forEach(f=>{ for(let i=f.done;i<f.n;i++) m.add(addYM(f.m0,i)); });
   return [...m].filter(ym=>!settled(c,ym)).sort();
 }
@@ -974,7 +988,7 @@ function afterLoad(){
   if(!S.opz.invIbks){ unisciIbks(); S.opz.invIbks = true; save(); }
   if(!S.opz.invGruppi){ invGruppi(); S.opz.invGruppi = true; save(); }
   if(!S.opz.mezziPerMezzo){ migraMezzi(); S.opz.mezziPerMezzo = true; save(); }
-  payDueRate(); payAbbo(); bordoImporta(); settleCards(); autoStorico();
+  payDueRate(); payAbbo(); bordoImporta(); fissaCicliVecchi(); settleCards(); autoStorico();
   aggiornaCripto(true);
 }
 const txMonth = t => +t.d.slice(5,7)-1;
@@ -2084,7 +2098,7 @@ function openPF(cid, tid){
       <div class="f"><label>${eurC?'Commissione totale (€)':'Commissione mensile (%)'}</label><input id="pf-c" inputmode="decimal" value="${eurC ? (c.pfComm?String(c.pfComm).replace('.',','):'') : String(c.pfComm??0.5).replace('.',',')}" placeholder="${eurC?'es. 10,00':''}" oninput="pfPrev()"></div>
     </div>
     <p class="note" id="pf-prev" style="margin:0 0 12px"></p>
-    <p class="note" style="margin:-4px 0 12px">La spesa esce dall'estratto conto di ${MESI[+t.d.slice(5,7)-1].toLowerCase()}: ogni mese viene addebitata una rata${eurC?' (la commissione è divisa sulle rate)':''}. Il capitale ancora da restituire resta impegnato sul plafond. Verifica nell'app della banca rate e commissione del tuo piano.</p>
+    <p class="note" style="margin:-4px 0 12px">La spesa esce dall'estratto conto di ${MESI[+cicloDi(c,t).slice(5,7)-1].toLowerCase()}: ogni mese viene addebitata una rata${eurC?' (la commissione è divisa sulle rate)':''}. Il capitale ancora da restituire resta impegnato sul plafond. Verifica nell'app della banca rate e commissione del tuo piano.</p>
     <button class="btn" onclick="savePF('${cid}','${tid}')">Attiva ${pfNome(c)}</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Annulla</button>`);
   pfPrev = ()=>{ const f={imp:t.amt, n:parseInt($('pf-n').value)||0, comm:num($('pf-c').value), commTipo:eurC?'eur':'perc'}; if(f.n<2){ $('pf-prev').textContent=''; return; }
@@ -2097,7 +2111,7 @@ function savePF(cid, tid){
   if(n<2) return toast('Almeno 2 rate');
   const id = uid();
   c.flex = c.flex || [];
-  c.flex.push({id, tx:tid, desc:t.sub||t.cat, imp:t.amt, n, comm:num($('pf-c').value), commTipo:pfEur(c)?'eur':'perc', m0:t.d.slice(0,7), done:0});
+  c.flex.push({id, tx:tid, desc:t.sub||t.cat, imp:t.amt, n, comm:num($('pf-c').value), commTipo:pfEur(c)?'eur':'perc', m0:cicloDi(c,t), done:0});
   t.pf = id;
   save(); closeSheet(); render(); toast(pfNome(c)+' attivato');
 }
@@ -2307,9 +2321,10 @@ function saveTx(id){
     Object.assign(o, {carta:'', pag:'', conto:''});
   }
   // una spesa di un estratto conto già addebitato non può cambiare carta né importo: il conto è già stato scalato
-  const chiuso = t => t && t.carta && (()=>{ const c=carte().find(x=>x.id===t.carta); return c && (c.es||[]).some(e=>e.m===t.d.slice(0,7)); })();
-  if(chiuso(old) && (o.carta!==old.carta || o.amt!==old.amt || o.d.slice(0,7)!==old.d.slice(0,7))) return toast('Estratto conto già addebitato: importo, mese e carta non si possono più cambiare');
-  if(chiuso({...o, carta:o.carta}) && !(old && old.carta===o.carta && old.d.slice(0,7)===o.d.slice(0,7))) return toast('L\'estratto conto di quel mese è già stato addebitato');
+  const chiuso = t => t && t.carta && (()=>{ const c=carte().find(x=>x.id===t.carta); return c && (c.es||[]).some(e=>e.m===cicloDi(c,t)); })();
+  if(chiuso(old) && (o.carta!==old.carta || o.amt!==old.amt || cicloTx(o.d===old.d && o.carta===old.carta ? {...o, ciclo:old.ciclo} : o)!==cicloTx(old))) return toast('Estratto conto già addebitato: importo, mese e carta non si possono più cambiare');
+  if(chiuso({...o, carta:o.carta}) && !(old && old.carta===o.carta && cicloTx(o)===cicloTx(old))) return toast('L\'estratto conto di quel mese è già stato addebitato');
+  if(old && old.ciclo && (o.d!==old.d || o.carta!==old.carta)) delete old.ciclo; // data o carta cambiate: l'estratto lo decide di nuovo la regola
   if(old && old.pf){ const f=carte().flatMap(c=>c.flex||[]).find(f=>f.id===old.pf); if(f && o.amt!==old.amt){ if(f.done) return toast('Rateizzazione già in corso: l\'importo non si può cambiare'); f.imp=o.amt; } }
   // carta di debito / conto / contanti: l'importo esce subito dal conto (prima tolgo l'effetto della versione vecchia)
   if(old) applyPag(old, -1);
@@ -2434,7 +2449,7 @@ function bordoImpVoci(dati){
   return out;
 }
 // estratto conto della carta già addebitato per il mese della spesa: l'importo non si tocca più
-const estrattoChiuso = t => !!t.carta && (()=>{ const c = carte().find(x=>x.id===t.carta); return !!c && (c.es||[]).some(e=>e.m===t.d.slice(0,7)); })();
+const estrattoChiuso = t => !!t.carta && (()=>{ const c = carte().find(x=>x.id===t.carta); return !!c && (c.es||[]).some(e=>e.m===cicloDi(c,t)); })();
 function bordoImporta(){
   if(bordo.stato!=='ok' || !S.carte) return 0;
   if(!S.opz.bordoImp){ S.opz.bordoImp = {on:true, dal:`${now.getFullYear()}-01-01`, pag:'', pagDal:today(), fatti:[]}; save(); }
