@@ -2292,7 +2292,8 @@ function fillCats(sel){
 // dettagli già usati per categoria e voce (es. Mezzi › Auto › Gasolio)
 function detChange(){
   const cat = $('t-c').value, sub = $('t-s').value.trim();
-  const d = [...new Set(S.tx.filter(t=>t.cat===cat && (t.sub||'')===sub && t.det).map(t=>t.det))].sort();
+  const mz = /^mezzi$/i.test(cat) && BORDO_IMP.find(x=>x.voce===sub); // un mezzo: anche le categorie di Mezzi mai usate qui (Bollo carrello…)
+  const d = [...new Set([...S.tx.filter(t=>t.cat===cat && (t.sub||'')===sub && t.det).map(t=>t.det), ...(mz ? vociMezzo(mz) : [])])].sort();
   $('t-dl').innerHTML = d.map(x=>`<option value="${esc(x)}">`).join('');
 }
 function catChange(){
@@ -2427,7 +2428,7 @@ const BORDO_IMP = [
     link:{[m+'_refuels']:m, [m+'_bollo']:m, [m+'_insurances']:m, [m+'_revisioni']:m}})),
   {ek:'expenses', mezzo:'gommone', voce:'Gommone',
     det:{acquisto:'Acquisti', carburante:'Benzina', ormeggio:'Ormeggio', manutenzione:'Manutenzione straordinaria', lavori:'Lavori',
-      assicurazione:'Assicurazione', bollo:'Bollo', rimessaggio:'Ormeggio', dotazioni:'Acquisti', ricambi:'Manutenzione straordinaria',
+      assicurazione:'Assicurazione', bollo:'Bollo', bollo_carrello:'Bollo carrello', rimessaggio:'Ormeggio', dotazioni:'Acquisti', ricambi:'Manutenzione straordinaria',
       spese_carrello:'Lavori', revisione:'Revisione', documenti:'Spese varie', altro:'Spese varie'},
     link:{refuels:'gommone', insurances:'gommone', carrelloInsurances:'carrello', carrelloRevisioni:'carrello', carrelloBollo:'carrello'}}];
 const BORDO_CHIAVI = [...new Set([...BORDO_FONTI.map(x=>x[0]), ...BORDO_IMP.flatMap(x=>[x.ek, ...Object.keys(x.link)]), 'bilancioPagamenti'])];
@@ -2550,7 +2551,12 @@ function bordoAggiorna(){
    con la categoria di Mezzi corrispondente alla voce (Benzina → carburante…). Modificata o eliminata qui, Mezzi segue;
    modificata o eliminata in Mezzi, si allinea qui (bordoRientro). t.mz = lista di Mezzi in cui sta, t.mzT = quando è stata scritta. */
 const mezzoDi = t => t && t.t==='u' && t.cat==='Mezzi' && !t.bf && BORDO_IMP.find(x=>x.voce===t.sub) || null;
-const catMezzi = (m, det) => Object.keys(m.det).find(k=>m.det[k]===det) || 'altro';
+// dalla voce di Bilancio alla categoria di Mezzi: le categorie vecchie che confluiscono in una voce (Documenti → Spese varie,
+// Rimessaggio → Ormeggio…) non si scelgono mai al ritorno, vale quella con lo stesso nome
+const CAT_VECCHIE = ['documenti', 'ricambi', 'rimessaggio', 'dotazioni', 'spese_carrello'];
+const catMezzi = (m, det) => Object.keys(m.det).find(k=>m.det[k]===det && !CAT_VECCHIE.includes(k)) || Object.keys(m.det).find(k=>m.det[k]===det) || 'altro';
+// le voci da proporre in Bilancio per un mezzo: tutte le categorie che si scelgono anche in Mezzi
+const vociMezzo = m => [...new Set(Object.entries(m.det).filter(([k])=>!CAT_VECCHIE.includes(k)).map(([,v])=>v))];
 async function listaMezzi(ek){ try { const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; } catch(e){ if(e && e.code==='permission-denied') throw e; return []; } }
 async function mezziSync(t, eliminata){
   if(!CLOUD || !cloud.key || bordo.stato!=='ok' || !t) return;
@@ -2639,6 +2645,20 @@ async function copiaMezziVecchi(dati){
     if(copiate){ toast(`${copiate} spese dei mezzi copiate in Mezzi` + (saltate ? ` (${saltate} c'erano già)` : '')); try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){} }
   } catch(e){ console.warn('copia Mezzi', e); }
 }
+// spese nate qui finite in Mezzi con una categoria vecchia dallo stesso nome in Bilancio (Spese varie → Documenti/Tasse): si correggono
+async function correggiCategorie(dati){
+  if(!CLOUD || !cloud.key) return;
+  try {
+    for(const m of BORDO_IMP){
+      if(!(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).some(e=>e && e.bil)) continue;
+      const l = await listaMezzi(m.ek); let k = 0; // letta adesso: non si riscrive una lista vecchia
+      l.forEach(e=>{ if(!e || !e.bil) return; const t = S.tx.find(x=>x.id===e.bil); if(!t) return;
+        const giusta = catMezzi(m, t.det); if(e.category!==giusta && m.det[e.category]===m.det[giusta]){ e.category = giusta; k++; } });
+      if(k) await Cassaforte.scrivi('giornale', m.ek, JSON.stringify(l));
+      if(k) try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
+    }
+  } catch(e){ console.warn('categorie Mezzi', e); }
+}
 // spese nate qui e cambiate o eliminate in Mezzi: si allineano (importo, data, voce); non se l'estratto conto è già addebitato
 function bordoRientro(dati){
   const inMezzi = new Map(); let k = 0;
@@ -2663,7 +2683,9 @@ async function bordoLeggi(){
     Object.entries(testi).forEach(([k,v])=>{ try{ dati[k] = JSON.parse(v); }catch(e){} });
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
-    bordoImporta(); bordoRientro(dati); copiaMezziVecchi(dati).then(()=>pulisciMezzi(dati));
+    bordoImporta(); bordoRientro(dati);
+    // uno dopo l'altro: scrivono le stesse liste di Mezzi
+    correggiCategorie(dati).then(()=>copiaMezziVecchi(dati)).then(()=>pulisciMezzi(dati));
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))
