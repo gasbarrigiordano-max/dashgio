@@ -1286,8 +1286,17 @@ function mxElimina(r, m, tutti){
   save(); closeSheet(); render();
   toast(`${list.length} movimenti eliminati` + (salt ? ` · ${salt} collegati a rate lasciati` : ''));
 }
+// spesa aperta da una cella del Mensile: salvata o eliminata si torna alla cella (aggiornata), pronta per la prossima
+let ritornoCella = null;
+function versoCella(){ ritornoCella = mxCella.ultima; }
+function tornaAllaCella(rit){
+  if(!rit || ui.tab!=='mx') return;
+  const r = mxRighe.findIndex(x=>x.cat===rit.cat && x.sub===rit.sub && x.det===rit.det && !!x.fuel===!!rit.fuel);
+  if(r>=0) mxCella(r, rit.m);
+}
 function mxCella(r, m){
   const {cat, sub, det, fuel} = mxRighe[r], tipo = ui.mxTipo;
+  mxCella.ultima = {cat, sub, det, fuel, m};
   const list = mxMov(r, m, false).sort((a,b)=>b.d.localeCompare(a.d));
   const nDel = list.filter(t=>!mxBloccato(t)).length, nTutti = mxMov(r, m, true).filter(t=>!mxBloccato(t)).length;
   const oggi = today(), d = m<0 ? (ui.year===now.getFullYear() ? oggi : `${ui.year}-01-01`)
@@ -1295,9 +1304,9 @@ function mxCella(r, m){
   const pre = JSON.stringify({t:tipo, cat, sub: sub && sub!=='—' ? sub : '', det: det && det!=='—' ? det : '', d}).replace(/"/g,'&quot;');
   sheet(`<h3>${esc(cat)}${fuel ? ' · Carburante, tutti i mezzi' : ''}${sub && sub!=='—' ? ' · '+esc(sub) : ''}${det && det!=='—' ? ' · '+esc(det) : ''}</h3>
     <p class="note" style="margin:-6px 0 12px">${tipo==='u'?'Uscite':'Entrate'} · ${m<0 ? ui.year : MESI[m]+' '+ui.year} · <b class="mono" style="color:var(--ink)">${eur(sum(list.map(spesa)))}</b></p>
-    ${list.map(t=>`<div class="tx" onclick="openTx('${t.id}')"><div class="mid"><b>${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([fmtD(t.d), t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t), t.quota!=null?`gruppo: pagati ${eur(t.amt)}`:''].filter(Boolean).join(' · '))}</small></div>
+    ${list.map(t=>`<div class="tx" onclick="versoCella();openTx('${t.id}')"><div class="mid"><b>${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([fmtD(t.d), t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t), t.quota!=null?`gruppo: pagati ${eur(t.amt)}`:''].filter(Boolean).join(' · '))}</small></div>
       <b class="mono ${t.t==='e'?'pos':''}">${t.t==='e'?'+':'-'}${eur(spesa(t))}</b></div>`).join('') || '<div class="empty">Nessun movimento.</div>'}
-    <button class="btn" style="margin-top:12px" onclick="openTx('', '', ${pre})">+ Aggiungi ${tipo==='u'?'uscita':'entrata'}</button>
+    <button class="btn" style="margin-top:12px" onclick="versoCella();openTx('', '', ${pre})">+ Aggiungi ${tipo==='u'?'uscita':'entrata'}</button>
     ${nDel ? `<button class="btn danger" style="margin-top:8px" onclick="mxElimina(${r},${m},false)">Elimina ${nDel===1?'questo movimento':'questi '+nDel+' movimenti'}</button>` : ''}
     ${nTutti > nDel ? `<button class="btn danger" style="margin-top:8px" onclick="mxElimina(${r},${m},true)">Elimina in tutti gli anni (${nTutti})</button>` : ''}`);
 }
@@ -2290,6 +2299,7 @@ function catChange(){
   detChange();
 }
 function saveTx(id){
+  const rit = ritornoCella;
   const o = { t:$('t-t').value, amt:num($('t-a').value), d:$('t-d').value,
     cat: $('t-c').value==='__new' ? $('t-newc').value.trim() : $('t-c').value, sub:$('t-s').value.trim(), det:$('t-dt').value.trim(), note:$('t-n').value.trim() };
   if(!o.det) delete o.det;
@@ -2339,9 +2349,10 @@ function saveTx(id){
     addServizio(pr.tipo || (pianoOld||{}).tipo);
   } else if(pianoOld){ S.rate = S.rate.filter(r=>r!==pianoOld); delete tx.rata; } // spunta tolta (nessuna rata ancora pagata)
   if(rateOn) payDueRate();
-  save(); closeSheet(); render(); toast('Movimento salvato');
+  save(); closeSheet(); render(); toast('Movimento salvato'); tornaAllaCella(rit);
 }
 function delTx(id){
+  const rit = ritornoCella;
   const t = S.tx.find(x=>x.id===id);
   if(t.pf) return toast('Spesa rateizzata: annulla prima la rateizzazione nella sezione Carte');
   const pr = t.rata && S.rate.find(r=>r.id===t.rata);
@@ -2353,7 +2364,7 @@ function delTx(id){
   if(rb.length && !confirm(`Eliminare anche i ${rb.length} rimborsi ricevuti per questo acquisto (${eur(sum(rb.map(x=>x.amt)))})? Gli importi vengono tolti dai conti.`)) return;
   rb.forEach(x=>applyPag(x, -1));
   applyPag(t, -1); // restituisce l'importo al conto
-  S.tx=S.tx.filter(x=>x.id!==id && x.gid!==id); save(); closeSheet(); render(); toast('Eliminato');
+  S.tx=S.tx.filter(x=>x.id!==id && x.gid!==id); save(); closeSheet(); render(); toast('Eliminato'); tornaAllaCella(rit);
 }
 // rimborso ricevuto per un acquisto di gruppo: entra nel conto scelto, non è un'entrata
 function openRimb(gid, id){
@@ -2668,7 +2679,7 @@ function importJSON(f){ if(!f) return; const r=new FileReader(); r.onload=()=>{ 
 
 /* ============ SHEET ============ */
 function sheet(h){ $('sheet').innerHTML = `<button class="sheet-x" onclick="closeSheet()" aria-label="Chiudi">✕</button>` + h; $('ov').classList.add('on'); }
-function closeSheet(){ $('ov').classList.remove('on'); }
+function closeSheet(){ $('ov').classList.remove('on'); ritornoCella = null; }
 $('ov').addEventListener('click',e=>{ if(e.target.id==='ov') closeSheet(); });
 
 /* ============ ACCESSO: email/password → passphrase → dati ============ */
