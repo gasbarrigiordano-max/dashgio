@@ -1402,6 +1402,7 @@ function mostraVista(v, extra = ''){
     // bilancio/#passphrase e #impostazioni: la finestra giusta di Bilancio
     if(/#(passphrase|impostazioni)/.test(extra)){ try { W().openSettings(); if(extra.includes('passphrase')) W().openPass(); } catch(e){} }
     entraApp(bil);
+    try { bil.contentWindow.postMessage({tipo: 'bilancio-visibile'}, location.origin); } catch(e){} // domande in sospeso di Bilancio (es. pulizia di Mezzi)
     return;
   }
   bil.setAttribute('aria-hidden', 'true'); bil.tabIndex = -1;

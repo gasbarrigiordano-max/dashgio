@@ -147,6 +147,7 @@ table.mx{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-
 /* le cifre dei totali (del mese e delle categorie) più grandi e in corsivo; i nomi restano dritti */
 .mx tr.tot td:not(:first-child){font-size:15px;font-style:italic}
 .mx tr.grp td:not(:first-child){font-size:14px;font-style:italic}
+.mx tr.grp td:first-child{font-size:14px} .mx tr.tot td:first-child{font-size:15px} /* nomi delle categorie principali e "Totale mese" grandi come le loro cifre */
 .mx td.t{font-weight:700;background:var(--solid2)}
 
 /* lists */
@@ -1286,7 +1287,7 @@ function mxElimina(r, m, tutti){
   const ids = new Set(list.map(t=>t.id));
   list.forEach(t=>applyPag(t, -1)); // come l'eliminazione singola: l'importo torna sul conto
   S.tx = S.tx.filter(t=>!ids.has(t.id));
-  save(); closeSheet(); render();
+  save(); closeSheet(); render(); mezziTogli(list);
   toast(`${list.length} movimenti eliminati` + (salt ? ` · ${salt} collegati a rate lasciati` : ''));
 }
 // spesa aperta da una cella del Mensile: salvata o eliminata si torna alla cella (aggiornata), pronta per la prossima
@@ -2369,7 +2370,7 @@ function delTx(id){
   rb.forEach(x=>applyPag(x, -1));
   applyPag(t, -1); // restituisce l'importo al conto
   S.tx=S.tx.filter(x=>x.id!==id && x.gid!==id); save(); closeSheet(); render(); toast('Eliminato'); tornaAllaCella(rit);
-  if(t.mz) mezziSync(t, true);
+  mezziTogli([t]);
 }
 // rimborso ricevuto per un acquisto di gruppo: entra nel conto scelto, non è un'entrata
 function openRimb(gid, id){
@@ -2568,6 +2569,55 @@ async function mezziSync(t, eliminata){
     try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
   } catch(e){ console.warn('Mezzi', e); toast('Spesa salvata, ma non in Mezzi: ' + (e.code||e.message)); }
 }
+// movimenti eliminati qui (uno o tanti dal Mensile): via anche da Mezzi. Nati qui (t.mz): la loro copia;
+// nati in Mezzi (bf_<lista>:<id>): la spesa e la scheda collegata (rifornimento, bollo, assicurazione, revisione), come in Mezzi
+async function mezziTogli(list){
+  if(!CLOUD || !cloud.key || bordo.stato!=='ok') return;
+  const via = {};   // lista → id da togliere
+  const metti = (ek, id) => (via[ek] = via[ek] || new Set()).add(id);
+  list.forEach(t=>{
+    if(t.mz) metti(t.mz, 'bil_' + t.id);
+    const m = /^bf_([^:]+):(.+)$/.exec(t.id); if(t.bf && m) metti(m[1], m[2]);
+  });
+  if(!Object.keys(via).length) return;
+  try {
+    for(const [ek, ids] of Object.entries(via)){
+      const l = await listaMezzi(ek), resta = l.filter(e=>!ids.has(e.id));
+      if(resta.length!==l.length) await Cassaforte.scrivi('giornale', ek, JSON.stringify(resta));
+      const imp = BORDO_IMP.find(x=>x.ek===ek);
+      for(const lk of Object.keys(imp ? imp.link : {})){
+        const r = await listaMezzi(lk), tieni = r.filter(x=>!ids.has(x.expenseId));
+        if(tieni.length!==r.length) await Cassaforte.scrivi('giornale', lk, JSON.stringify(tieni));
+      }
+    }
+    try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
+  } catch(e){ console.warn('Mezzi', e); toast('Eliminato qui, ma non in Mezzi: ' + (e.code||e.message)); }
+}
+// una volta: spese eliminate qui prima che l'eliminazione arrivasse a Mezzi. Le copie nate qui senza più il movimento si tolgono;
+// quelle nate in Mezzi (importate ed eliminate qui) si tolgono dopo conferma, quando si apre Bilancio (non se qui c'è ancora una
+// spesa dei mezzi con la stessa data e importo: era un doppione tolto apposta)
+let mezziPendenti = null;
+async function pulisciMezzi(dati){
+  if(S.opz.mezziPulizia || !CLOUD || !cloud.key) return;
+  const o = S.opz.bordoImp || {fatti:[]}, ids = new Set(S.tx.map(t=>t.id)), bil = [], mz = [];
+  BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{
+    if(!e) return;
+    if(e.bil){ if(!ids.has(e.bil)) bil.push({id:e.bil, mz:m.ek}); return; }
+    const bid = `bf_${m.ek}:${e.id}`;
+    if((o.fatti||[]).includes(bid) && !ids.has(bid) && !e.excluded && !S.tx.some(t=>t.cat==='Mezzi' && t.d===e.date && Math.abs(spesa(t)-(e.amount||0)) < 0.01))
+      mz.push({id:bid, bf:1, d:e.date, amt:e.amount, sub:m.voce, note:e.note||''});
+  }));
+  if(bil.length) await mezziTogli(bil);
+  if(mz.length){ mezziPendenti = mz; if(parent===window) chiediPulizia(); } // dentro la Dashboard: quando si apre Bilancio
+  else { S.opz.mezziPulizia = today(); save(); }
+}
+async function chiediPulizia(){
+  const mz = mezziPendenti; if(!mz) return; mezziPendenti = null;
+  const righe = mz.slice(0, 12).map(x=>`• ${fmtD(x.d)} · ${x.sub} · ${eur(x.amt)}${x.note ? ' · ' + x.note : ''}`).join('\n');
+  if(confirm(`Hai eliminato qui ${mz.length} ${mz.length===1?'spesa che è':'spese che sono'} ancora in Mezzi:\n\n${righe}${mz.length>12 ? '\n…' : ''}\n\nLe tolgo anche da Mezzi?`)){ await mezziTogli(mz); toast('Tolte anche da Mezzi'); }
+  S.opz.mezziPulizia = today(); save();
+}
+addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile' && mezziPendenti) setTimeout(chiediPulizia, 400); });
 // una volta: le spese dei mezzi registrate qui prima del collegamento vanno anche in Mezzi
 // (non quelle che Mezzi ha già: stessa data e stesso importo, per esempio arrivate due volte dal foglio)
 async function copiaMezziVecchi(dati){
@@ -2613,7 +2663,7 @@ async function bordoLeggi(){
     Object.entries(testi).forEach(([k,v])=>{ try{ dati[k] = JSON.parse(v); }catch(e){} });
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
-    bordoImporta(); bordoRientro(dati); copiaMezziVecchi(dati);
+    bordoImporta(); bordoRientro(dati); copiaMezziVecchi(dati).then(()=>pulisciMezzi(dati));
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))
