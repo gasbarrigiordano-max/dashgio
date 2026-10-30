@@ -144,6 +144,9 @@ table.mx{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-
 .mx td.z{color:var(--ink3)}
 .mx tr.grp td, .mx tr.sub td, .mx tr.det td, .mx tr.fuel td{cursor:pointer}
 .mx tr.tot td{font-weight:800;border-top:2px solid var(--line)}
+/* le cifre dei totali (del mese e delle categorie) più grandi e in corsivo; i nomi restano dritti */
+.mx tr.tot td:not(:first-child){font-size:15px;font-style:italic}
+.mx tr.grp td:not(:first-child){font-size:14px;font-style:italic}
 .mx td.t{font-weight:700;background:var(--solid2)}
 
 /* lists */
