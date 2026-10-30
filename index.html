@@ -1357,12 +1357,19 @@ function mostraVista(v, extra = ''){
   const t = new URLSearchParams((extra.split('#')[0] || '').replace(/^\?/, '')).get('t');
   if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
   if(!nuovo) entraApp(f);
+  if(vista === 'mezzi' && !nuovo) avvisaMezzi(); // le spese dei mezzi possono essere arrivate da Bilancio
 }
 // Bilancio ha scritto una spesa nella lista di un mezzo: Mezzi (se è già aperto) la rilegge
 addEventListener('message', e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'mezzi-ricarica' || e.source !== bil.contentWindow) return;
-  try { if(frames.mezzi) frames.mezzi.contentWindow.postMessage({tipo: 'mezzi-ricarica'}, location.origin); } catch(x){}
+  avvisaMezzi();
 });
+// anche quando Mezzi finisce di caricarsi (l'avviso arrivato prima andrebbe perso) e ogni volta che lo si apre
+function avvisaMezzi(){
+  const f = frames.mezzi; if(!f) return;
+  const manda = () => { try { f.contentWindow.postMessage({tipo: 'mezzi-ricarica'}, location.origin); } catch(x){} };
+  manda(); f.addEventListener('load', manda, {once: true});
+}
 // l'app aperta chiede più larghezza (o la restituisce) cambiando scheda; vale solo se è quella in vista
 addEventListener('message', e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'moto-largo') return;

@@ -2568,6 +2568,27 @@ async function mezziSync(t, eliminata){
     try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
   } catch(e){ console.warn('Mezzi', e); toast('Spesa salvata, ma non in Mezzi: ' + (e.code||e.message)); }
 }
+// una volta: le spese dei mezzi registrate qui prima del collegamento vanno anche in Mezzi
+// (non quelle che Mezzi ha già: stessa data e stesso importo, per esempio arrivate due volte dal foglio)
+async function copiaMezziVecchi(dati){
+  if(S.opz.mezziCopiati || !CLOUD || !cloud.key) return;
+  const daCopiare = S.tx.filter(t=>!t.mz && mezzoDi(t));
+  let copiate = 0, saltate = 0;
+  try {
+    for(const m of BORDO_IMP){
+      const mie = daCopiare.filter(t=>mezzoDi(t).ek===m.ek); if(!mie.length) continue;
+      const l = await listaMezzi(m.ek), ora = Date.now();
+      mie.forEach(t=>{
+        if(l.some(e=>e.date===t.d && Math.abs((e.amount||0) - spesa(t)) < 0.01 && !e.bil)){ saltate++; return; }
+        l.push({id:'bil_'+t.id, bil:t.id, date:t.d, amount:round2(spesa(t)), category:catMezzi(m, t.det), note:t.note || t.det || '', excluded:false});
+        t.mz = m.ek; t.mzT = ora; copiate++;
+      });
+      await Cassaforte.scrivi('giornale', m.ek, JSON.stringify(l));
+    }
+    S.opz.mezziCopiati = {il: today(), copiate, saltate}; save();
+    if(copiate){ toast(`${copiate} spese dei mezzi copiate in Mezzi` + (saltate ? ` (${saltate} c'erano già)` : '')); try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){} }
+  } catch(e){ console.warn('copia Mezzi', e); }
+}
 // spese nate qui e cambiate o eliminate in Mezzi: si allineano (importo, data, voce); non se l'estratto conto è già addebitato
 function bordoRientro(dati){
   const inMezzi = new Map(); let k = 0;
@@ -2592,7 +2613,7 @@ async function bordoLeggi(){
     Object.entries(testi).forEach(([k,v])=>{ try{ dati[k] = JSON.parse(v); }catch(e){} });
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
-    bordoImporta(); bordoRientro(dati);
+    bordoImporta(); bordoRientro(dati); copiaMezziVecchi(dati);
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))
