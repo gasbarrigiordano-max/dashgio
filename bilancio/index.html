@@ -2353,6 +2353,7 @@ function saveTx(id){
   } else if(pianoOld){ S.rate = S.rate.filter(r=>r!==pianoOld); delete tx.rata; } // spunta tolta (nessuna rata ancora pagata)
   if(rateOn) payDueRate();
   save(); closeSheet(); render(); toast('Movimento salvato'); tornaAllaCella(rit);
+  if(tx.mz || mezzoDi(tx)) mezziSync(tx);
 }
 function delTx(id){
   const rit = ritornoCella;
@@ -2368,6 +2369,7 @@ function delTx(id){
   rb.forEach(x=>applyPag(x, -1));
   applyPag(t, -1); // restituisce l'importo al conto
   S.tx=S.tx.filter(x=>x.id!==id && x.gid!==id); save(); closeSheet(); render(); toast('Eliminato'); tornaAllaCella(rit);
+  if(t.mz) mezziSync(t, true);
 }
 // rimborso ricevuto per un acquisto di gruppo: entra nel conto scelto, non è un'entrata
 function openRimb(gid, id){
@@ -2444,6 +2446,7 @@ function bordoImpVoci(dati){
   const out = [], lista = k => Array.isArray(dati[k]) ? dati[k] : [];
   BORDO_IMP.forEach(({ek, mezzo, voce, det, link})=>lista(ek).forEach(e=>{
     if(!e || e.excluded || !e.date || !(e.amount>0)) return;
+    if(e.bil) return; // nata in Bilancio: c'è già (si allinea con bordoRientro)
     // scheda collegata (rifornimento, bollo, assicurazione, revisione): dà il mezzo giusto (gommone o carrello) e i dettagli
     const lk = Object.keys(link).find(k=>lista(k).some(x=>x.expenseId===e.id)), r = lk && lista(lk).find(x=>x.expenseId===e.id), m = lk ? link[lk] : mezzo;
     const scad = r && r.scadenza ? 'scadenza '+fmtD(r.scadenza) : '';
@@ -2541,6 +2544,45 @@ function bordoAggiorna(){
   // solo se cambia: non cancella email e password mentre le scrivi
   const b = $('bordo-box'), h = bordoBox(); if(b && bordoBoxH!==h){ b.innerHTML = bordoBoxH = h; }
 }
+/* ---- Spese dei mezzi registrate in Bilancio → anche in Mezzi ----
+   Una spesa Mezzi › Gommone/Auto/SH/Moto salvata qui va nella lista spese di quel mezzo in Mezzi (bil = id del movimento),
+   con la categoria di Mezzi corrispondente alla voce (Benzina → carburante…). Modificata o eliminata qui, Mezzi segue;
+   modificata o eliminata in Mezzi, si allinea qui (bordoRientro). t.mz = lista di Mezzi in cui sta, t.mzT = quando è stata scritta. */
+const mezzoDi = t => t && t.t==='u' && t.cat==='Mezzi' && !t.bf && BORDO_IMP.find(x=>x.voce===t.sub) || null;
+const catMezzi = (m, det) => Object.keys(m.det).find(k=>m.det[k]===det) || 'altro';
+async function listaMezzi(ek){ try { const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; } catch(e){ if(e && e.code==='permission-denied') throw e; return []; } }
+async function mezziSync(t, eliminata){
+  if(!CLOUD || !cloud.key || bordo.stato!=='ok' || !t) return;
+  const m = eliminata ? null : mezzoDi(t), id = 'bil_' + t.id;
+  try {
+    // tolta dalla lista dove stava (eliminata, spostata su un altro mezzo o non più dei mezzi)
+    if(t.mz && (!m || m.ek!==t.mz)){ const l = await listaMezzi(t.mz); await Cassaforte.scrivi('giornale', t.mz, JSON.stringify(l.filter(e=>e.id!==id))); }
+    if(m){
+      const l = await listaMezzi(m.ek), e = {id, bil:t.id, date:t.d, amount:round2(spesa(t)), category:catMezzi(m, t.det), note:t.note || t.det || '', excluded:false};
+      const i = l.findIndex(x=>x.id===id); if(i>=0) l[i] = {...l[i], ...e}; else l.push(e);
+      await Cassaforte.scrivi('giornale', m.ek, JSON.stringify(l));
+      if(!eliminata){ t.mz = m.ek; t.mzT = Date.now(); }
+    } else if(!eliminata){ delete t.mz; delete t.mzT; }
+    if(!eliminata) save();
+    // Mezzi aperto nella Dashboard rilegge le spese (se no salvando le sue sovrascriverebbe questa)
+    try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){}
+  } catch(e){ console.warn('Mezzi', e); toast('Spesa salvata, ma non in Mezzi: ' + (e.code||e.message)); }
+}
+// spese nate qui e cambiate o eliminate in Mezzi: si allineano (importo, data, voce); non se l'estratto conto è già addebitato
+function bordoRientro(dati){
+  const inMezzi = new Map(); let k = 0;
+  BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{ if(e && e.bil) inMezzi.set(e.bil, {e, m}); }));
+  S.tx.filter(t=>t.mz).forEach(t=>{
+    const x = inMezzi.get(t.id);
+    if(!x){ if(t.mzT && bordo.agg > t.mzT + 2000 && !estrattoChiuso(t)){ applyPag(t,-1); S.tx = S.tx.filter(y=>y!==t); k++; } return; } // eliminata in Mezzi
+    const {e, m} = x, det = m.det[e.category] || t.det;
+    if(e.excluded || estrattoChiuso(t)) return;
+    if(round2(spesa(t))!==round2(e.amount) || t.d!==e.date || t.det!==det || t.sub!==m.voce || t.mz!==m.ek){
+      applyPag(t,-1); Object.assign(t, {d:e.date, det, sub:m.voce, mz:m.ek}); if(t.quota==null) t.amt = round2(e.amount); else t.quota = round2(e.amount); applyPag(t); k++;
+    }
+  });
+  if(k){ save(); render(); }
+}
 async function bordoLeggi(){
   if(!CLOUD || !cloud.key) return;
   bordo.stato = 'carico'; bordoAggiorna();
@@ -2550,7 +2592,7 @@ async function bordoLeggi(){
     Object.entries(testi).forEach(([k,v])=>{ try{ dati[k] = JSON.parse(v); }catch(e){} });
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
-    bordoImporta();
+    bordoImporta(); bordoRientro(dati);
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))

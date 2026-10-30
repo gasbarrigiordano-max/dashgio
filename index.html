@@ -1358,6 +1358,11 @@ function mostraVista(v, extra = ''){
   if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
   if(!nuovo) entraApp(f);
 }
+// Bilancio ha scritto una spesa nella lista di un mezzo: Mezzi (se è già aperto) la rilegge
+addEventListener('message', e => {
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'mezzi-ricarica' || e.source !== bil.contentWindow) return;
+  try { if(frames.mezzi) frames.mezzi.contentWindow.postMessage({tipo: 'mezzi-ricarica'}, location.origin); } catch(x){}
+});
 // l'app aperta chiede più larghezza (o la restituisce) cambiando scheda; vale solo se è quella in vista
 addEventListener('message', e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'moto-largo') return;

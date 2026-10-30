@@ -4187,6 +4187,18 @@ function righePeriodo(spese, p, fn, idAnni, idMesi) {
   document.getElementById(idMesi).innerHTML = !p.anno ? '' :
     `<div class="chip ${p.mese ? '' : 'active'}" onclick="${fn}('${p.anno}','')">Tutto il ${p.anno}</div>` + mesi.map(m => `<div class="chip ${p.mese === m ? 'active' : ''}" onclick="${fn}('${p.anno}','${m}')">${MESI_BREVI[+m - 1]}</div>`).join('');
 }
+// Bilancio ha aggiunto, cambiato o tolto una spesa di un mezzo: si rileggono le spese (se no salvando qui si perderebbe)
+async function ricaricaSpese() {
+  try {
+    const g = await storageGet('expenses'); if (g && g.value) state.expenses = JSON.parse(g.value);
+    Object.keys(vStateCache || {}).forEach(k => { if (!currentVehicle || k !== currentVehicle.type) delete vStateCache[k]; });
+    if (currentVehicle) { const v = await storageGet(currentVehicle.prefix + 'expenses'); if (v && v.value) vState.expenses = JSON.parse(v.value); }
+    const vapp = document.getElementById('vehicle-app');
+    if (currentVehicle && vapp && !vapp.hidden && getComputedStyle(vapp).display !== 'none') vaRefreshCurrentTab();
+    else { const b = document.querySelector('nav.tabbar .tab-btn.active[data-tab]'); if (b && typeof showTab === 'function' && document.getElementById('view-' + b.dataset.tab)) showTab(b.dataset.tab); }
+  } catch (e) { console.warn('ricarica spese', e); }
+}
+addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.tipo === 'mezzi-ricarica') ricaricaSpese(); });
 function vaSetPeriodo(a, m) { vaPeriodo = { anno: a, mese: m }; vaRenderSpese(); }
 function setSpesePeriodo(a, m) { spesePeriodo = { anno: a, mese: m }; renderSpese(); }
 function vaRenderSpese() {
