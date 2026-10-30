@@ -1308,9 +1308,9 @@ function mxCella(r, m){
   const pre = JSON.stringify({t:tipo, cat, sub: sub && sub!=='—' ? sub : '', det: det && det!=='—' ? det : '', d}).replace(/"/g,'&quot;');
   sheet(`<h3>${esc(cat)}${fuel ? ' · Carburante, tutti i mezzi' : ''}${sub && sub!=='—' ? ' · '+esc(sub) : ''}${det && det!=='—' ? ' · '+esc(det) : ''}</h3>
     <p class="note" style="margin:-6px 0 12px">${tipo==='u'?'Uscite':'Entrate'} · ${m<0 ? ui.year : MESI[m]+' '+ui.year} · <b class="mono" style="color:var(--ink)">${eur(sum(list.map(spesa)))}</b></p>
+    <button class="btn" style="margin-bottom:12px" onclick="versoCella();openTx('', '', ${pre})">+ Aggiungi ${tipo==='u'?'uscita':'entrata'}</button>
     ${list.map(t=>`<div class="tx" onclick="versoCella();openTx('${t.id}')"><div class="mid"><b>${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([fmtD(t.d), t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t), t.quota!=null?`gruppo: pagati ${eur(t.amt)}`:''].filter(Boolean).join(' · '))}</small></div>
       <b class="mono ${t.t==='e'?'pos':''}">${t.t==='e'?'+':'-'}${eur(spesa(t))}</b></div>`).join('') || '<div class="empty">Nessun movimento.</div>'}
-    <button class="btn" style="margin-top:12px" onclick="versoCella();openTx('', '', ${pre})">+ Aggiungi ${tipo==='u'?'uscita':'entrata'}</button>
     ${nDel ? `<button class="btn danger" style="margin-top:8px" onclick="mxElimina(${r},${m},false)">Elimina ${nDel===1?'questo movimento':'questi '+nDel+' movimenti'}</button>` : ''}
     ${nTutti > nDel ? `<button class="btn danger" style="margin-top:8px" onclick="mxElimina(${r},${m},true)">Elimina in tutti gli anni (${nTutti})</button>` : ''}`);
 }
