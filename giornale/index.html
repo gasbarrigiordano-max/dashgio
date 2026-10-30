@@ -3475,11 +3475,14 @@ const VEHICLE_CAT_ALL = [
   { id: 'acquisto',         label: 'Acquisti',                   icon: '🛒' },
   { id: 'documenti',        label: 'Documenti/Tasse',            icon: '🗂️' },
   { id: 'altro',            label: 'Spese varie',                icon: '🚗' },
+  { id: 'lavori',           label: 'Lavori',                     icon: '🔩' },
 ];
 // categorie da scegliere per mezzo, con il loro nome (le stesse dell'app Bilancio: Mezzi › Auto / SH / Gommone)
 const VEHICLE_CAT_SCELTE = {
-  auto: [['carburante', 'Gasolio'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['altro']],
-  scooter: [['carburante', 'Benzina'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['altro']],
+  // tutte le categorie dei mezzi (controllo incrociato con il gommone e con Bilancio): carburante, manutenzioni, tagliando,
+  // revisione, assicurazione, bollo, acquisti, lavori, spese varie
+  auto: [['carburante', 'Gasolio'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['lavori'], ['altro']],
+  scooter: [['carburante', 'Benzina'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['lavori'], ['altro']],
 };
 VEHICLE_CAT_SCELTE.moto = VEHICLE_CAT_SCELTE.scooter;
 let VEHICLE_CATEGORIES = [], VEHICLE_CAT_MAP = {};
@@ -5522,9 +5525,11 @@ const CAT_ALL = [
   { id: 'altro',       label: 'Spese varie',        icon: '⛵' },
   { id: 'lavori',      label: 'Lavori',             icon: '🛠️' },
   { id: 'bollo_carrello', label: 'Bollo carrello',  icon: '🚛' },
+  { id: 'manutenzione_ord', label: 'Manutenzione ordinaria', icon: '🪛' },
+  { id: 'tagliando',   label: 'Tagliando',          icon: '🧴' },
 ];
 // categorie da scegliere (le stesse dell'app Bilancio: Mezzi › Gommone)
-const CATEGORIES = ['acquisto', 'carburante', 'ormeggio', 'manutenzione', 'lavori', 'assicurazione', 'bollo', 'bollo_carrello', 'revisione', 'altro'].map(id => CAT_ALL.find(c => c.id === id));
+const CATEGORIES = ['acquisto', 'carburante', 'ormeggio', 'manutenzione_ord', 'manutenzione', 'tagliando', 'lavori', 'assicurazione', 'bollo', 'bollo_carrello', 'revisione', 'altro'].map(id => CAT_ALL.find(c => c.id === id));
 const CAT_MAP = Object.fromEntries(CAT_ALL.map(c => [c.id, c]));
 
 const EQUIPMENT_TYPES = {

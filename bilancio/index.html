@@ -2421,14 +2421,14 @@ const BORDO_FONTI = [ // [chiave, mezzo, cosa]
 // revisioni) col loro mezzo, e da categoria di Mezzi a dettaglio (Mezzi › Auto › Gasolio). Le categorie che non si scelgono
 // più in Mezzi vanno nel dettaglio più vicino.
 const DET_SH = {carburante:'Benzina', manutenzione:'Manutenzione ordinaria', manutenzione_str:'Manutenzione straordinaria', tagliando:'Tagliando',
-  revisione:'Revisione', assicurazione:'Assicurazione', bollo:'Bollo', ricambi:'Manutenzione ordinaria', acquisto:'Acquisti', documenti:'Spese varie', altro:'Spese varie'};
+  revisione:'Revisione', assicurazione:'Assicurazione', bollo:'Bollo', ricambi:'Manutenzione ordinaria', acquisto:'Acquisti', lavori:'Lavori', documenti:'Spese varie', altro:'Spese varie'};
 const BORDO_IMP = [
   ...[['auto','Auto'],['scooter','SH'],['moto','Moto']].map(([m,voce])=>({ek:m+'_expenses', mezzo:m, voce,
     det: m==='auto' ? {...DET_SH, carburante:'Gasolio'} : DET_SH,
     link:{[m+'_refuels']:m, [m+'_bollo']:m, [m+'_insurances']:m, [m+'_revisioni']:m}})),
   {ek:'expenses', mezzo:'gommone', voce:'Gommone',
     det:{acquisto:'Acquisti', carburante:'Benzina', ormeggio:'Ormeggio', manutenzione:'Manutenzione straordinaria', lavori:'Lavori',
-      assicurazione:'Assicurazione', bollo:'Bollo', bollo_carrello:'Bollo carrello', rimessaggio:'Ormeggio', dotazioni:'Acquisti', ricambi:'Manutenzione straordinaria',
+      assicurazione:'Assicurazione', bollo:'Bollo', bollo_carrello:'Bollo carrello', manutenzione_ord:'Manutenzione ordinaria', tagliando:'Tagliando', rimessaggio:'Ormeggio', dotazioni:'Acquisti', ricambi:'Manutenzione straordinaria',
       spese_carrello:'Lavori', revisione:'Revisione', documenti:'Spese varie', altro:'Spese varie'},
     link:{refuels:'gommone', insurances:'gommone', carrelloInsurances:'carrello', carrelloRevisioni:'carrello', carrelloBollo:'carrello'}}];
 const BORDO_CHIAVI = [...new Set([...BORDO_FONTI.map(x=>x[0]), ...BORDO_IMP.flatMap(x=>[x.ek, ...Object.keys(x.link)]), 'bilancioPagamenti'])];
@@ -2554,7 +2554,23 @@ const mezzoDi = t => t && t.t==='u' && t.cat==='Mezzi' && !t.bf && BORDO_IMP.fin
 // dalla voce di Bilancio alla categoria di Mezzi: le categorie vecchie che confluiscono in una voce (Documenti → Spese varie,
 // Rimessaggio → Ormeggio…) non si scelgono mai al ritorno, vale quella con lo stesso nome
 const CAT_VECCHIE = ['documenti', 'ricambi', 'rimessaggio', 'dotazioni', 'spese_carrello'];
-const catMezzi = (m, det) => Object.keys(m.det).find(k=>m.det[k]===det && !CAT_VECCHIE.includes(k)) || Object.keys(m.det).find(k=>m.det[k]===det) || 'altro';
+// voci di Bilancio con un nome diverso da quello delle categorie (Gasolio per lo scooter, Posto barca, Varie…)
+const SINONIMI_MEZZI = [[/benzina|gasolio|diesel|carburante|rifornim|pieno/, 'carburante'], [/straordinar/, 'manutenzione_str'], [/tagliando/, 'tagliando'],
+  [/manutenz|ricamb|olio|gomme|pneumatic|pastiglie|freni|filtr/, 'manutenzione'], [/revision/, 'revisione'], [/ormeggi|posto barca|rimessagg|marina/, 'ormeggio'],
+  [/assicuraz|\brca\b|polizza/, 'assicurazione'], [/bollo.*carrello|carrello.*bollo/, 'bollo_carrello'], [/bollo|tass/, 'bollo'],
+  [/lavor|carrozzer|riparaz/, 'lavori'], [/acquist|accessori|dotazion/, 'acquisto'], [/varie|altro|document/, 'altro']];
+function catMezzi(m, det){
+  const esatta = Object.keys(m.det).find(k=>m.det[k]===det && !CAT_VECCHIE.includes(k)) || Object.keys(m.det).find(k=>m.det[k]===det);
+  if(esatta) return esatta;
+  const d = String(det||'').toLowerCase();
+  for(const [re, k] of SINONIMI_MEZZI){
+    if(!re.test(d)) continue;
+    // nel gommone la manutenzione senza "ordinaria" è la straordinaria (la categoria "manutenzione" di Mezzi)
+    if(m.mezzo==='gommone'){ if(k==='manutenzione_str') return 'manutenzione'; if(k==='manutenzione') return /ordinar/.test(d) ? 'manutenzione_ord' : 'manutenzione'; }
+    if(m.det[k]) return k;
+  }
+  return 'altro';
+}
 // le voci da proporre in Bilancio per un mezzo: tutte le categorie che si scelgono anche in Mezzi
 const vociMezzo = m => [...new Set(Object.entries(m.det).filter(([k])=>!CAT_VECCHIE.includes(k)).map(([,v])=>v))];
 async function listaMezzi(ek){ try { const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; } catch(e){ if(e && e.code==='permission-denied') throw e; return []; } }
@@ -2667,8 +2683,30 @@ async function chiediPulizia(){
   const righe = mz.slice(0, 12).map(x=>`• ${fmtD(x.d)} · ${x.sub} · ${eur(x.amt)}${x.note ? ' · ' + x.note : ''}`).join('\n');
   if(confirm(`Hai eliminato qui ${mz.length} ${mz.length===1?'spesa che è':'spese che sono'} ancora in Mezzi:\n\n${righe}${mz.length>12 ? '\n…' : ''}\n\nLe tolgo anche da Mezzi?`)){ await mezziTogli(mz); toast('Tolte anche da Mezzi'); }
   S.opz.mezziPulizia = today(); save();
+  if(vociDaDire) setTimeout(diciVoci, 300);
 }
-addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile' && mezziPendenti) setTimeout(chiediPulizia, 400); });
+// voci dei mezzi in Bilancio senza una categoria con lo stesso nome in Mezzi: si dice dove vanno (una volta per voce)
+let vociDaDire = null;
+function vociSenzaCategoria(){
+  const viste = new Set(S.opz.vociMezziViste || []), out = new Map();
+  S.tx.forEach(t=>{ const m = mezzoDi(t); if(!m || !t.det) return;
+    if(Object.values(m.det).includes(t.det)) return;
+    const k = m.voce + ' › ' + t.det; if(viste.has(k) || out.has(k)) return;
+    out.set(k, (CAT_MEZZI_NOMI[m.mezzo==='gommone' ? 'g' : 'v'][catMezzi(m, t.det)] || 'Spese varie')); });
+  if(out.size){ vociDaDire = out; if(parent===window) diciVoci(); }
+}
+const CAT_MEZZI_NOMI = { g:{acquisto:'Acquisti', carburante:'Benzina', ormeggio:'Ormeggio', manutenzione:'Manutenzione straordinaria', manutenzione_ord:'Manutenzione ordinaria', tagliando:'Tagliando', lavori:'Lavori', assicurazione:'Assicurazione', bollo:'Bollo', bollo_carrello:'Bollo carrello', revisione:'Revisione', altro:'Spese varie'},
+  v:{carburante:'Carburante', manutenzione:'Manutenzione ordinaria', manutenzione_str:'Manutenzione straordinaria', tagliando:'Tagliando', revisione:'Revisione', assicurazione:'Assicurazione', bollo:'Bollo', acquisto:'Acquisti', lavori:'Lavori', altro:'Spese varie'} };
+function diciVoci(){
+  const v = vociDaDire; if(!v) return; vociDaDire = null;
+  sheet(`<h3>Voci dei mezzi e categorie di Mezzi</h3>
+    <p class="note" style="margin:-6px 0 12px">Queste voci di Bilancio non hanno una categoria con lo stesso nome in Mezzi: le spese vanno nella categoria a destra.</p>
+    ${[...v].map(([k, c])=>`<div class="acct" style="cursor:default"><span>${esc(k)}</span><b>${esc(c)}</b></div>`).join('')}
+    <p class="note" style="margin-top:12px">Se una va altrove, rinomina la voce qui (per esempio "Gasolio" → "Benzina") e la categoria si allinea.</p>
+    <button class="btn" style="margin-top:12px" onclick="closeSheet()">Ok</button>`);
+  S.opz.vociMezziViste = [...new Set([...(S.opz.vociMezziViste||[]), ...v.keys()])]; save();
+}
+addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile'){ if(mezziPendenti) setTimeout(chiediPulizia, 400); else if(vociDaDire) setTimeout(diciVoci, 400); } });
 // una volta: le spese dei mezzi registrate qui prima del collegamento vanno anche in Mezzi
 // (non quelle che Mezzi ha già: stessa data e stesso importo, per esempio arrivate due volte dal foglio)
 async function copiaMezziVecchi(dati){
@@ -2734,7 +2772,7 @@ async function bordoLeggi(){
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
     bordoImporta(); bordoRientro(dati);
     // uno dopo l'altro: scrivono le stesse liste di Mezzi
-    correggiCategorie(dati).then(()=>copiaMezziVecchi(dati)).then(()=>pulisciMezzi(dati));
+    correggiCategorie(dati).then(()=>copiaMezziVecchi(dati)).then(()=>pulisciMezzi(dati)).then(vociSenzaCategoria);
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
     if(S.conti.length && JSON.stringify(pg)!==JSON.stringify(dati.bilancioPagamenti))
