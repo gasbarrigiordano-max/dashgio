@@ -954,8 +954,9 @@ function disegnaGoogleImp(){
   const opzioni = gcalAttivi().flatMap(c => c.calendari.map(k => [`${c.email}|${k.id}`, `${k.nome}${GC.conti.length > 1 ? ' — ' + c.email : ''}`]));
   box.innerHTML = `${conti || '<p>Nessun account collegato.</p>'}
     <div class="imp-az" style="margin:4px 0 10px"><button type="button" onclick="gcalCollega()">+ ${GC.conti.length ? 'Aggiungi un account Google' : 'Collega Google Calendar'}</button></div>
-    ${opzioni.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)">Calendario di lavoro (riquadro "Lavoro")
-      <select id="lav-sel" onchange="scegliLavoro(this.value)" style="${sel}"><option value="">Principale del primo account</option>${opzioni.map(([v, n]) => `<option value="${esc(v)}"${v === calLavoro() ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
+    ${opzioni.length ? `<label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)">Calendario di lavoro (riquadro "Lavoro", giornate della sezione Lavoro, nuovi eventi)
+      <select id="lav-sel" onchange="scegliLavoro(this.value)" style="${sel}"><option value="">Principale del primo account</option>${opzioni.map(([v, n]) => `<option value="${esc(v)}"${v === calLavoro() ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+    <p style="font-size:11.5px;margin:4px 0 0;color:var(--ink3)">Le giornate della sezione Lavoro si collegano solo agli eventi dell'account ${esc(contoLavoro() || '—')}: salvandole, spostandole o eliminandole si aggiorna il suo calendario.</p>` : ''}
     <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2);margin-top:10px">Agenzie (eventi di lavoro con questa parola nel titolo)
       <input id="ag-in" value="${esc(agenzie().join(', '))}" placeholder="Es. CFFT" onchange="salvaAgenzie(this.value)" autocapitalize="characters" style="${sel}"></label>
     <p style="font-size:11.5px;margin:4px 0 0;color:var(--ink3)">Contano nel riquadro Lavoro; aggiungendo la nave al titolo (es. "CFFT Costa Toscana") compare il molo.</p>
@@ -1057,7 +1058,8 @@ function apriEvento(ev){
   const [di, oi] = (ev.inizioL || (ev.d + 'T09:00')).split('T'), [df, of] = (ev.fineL || (ev.d + 'T10:00')).split('T');
   const fineGiorno = ev.tutto ? piuGiorno(df, -1) : df;
   const cal = gcalAttivi().flatMap(c => c.calendari.filter(k => k.scrivibile).map(k => ({ v: c.email + '|' + k.id, nome: k.nome + (GC.conti.length > 1 ? ' — ' + c.email : '') })));
-  const scelto = ev.conto ? ev.conto + '|' + ev.cal : gcalAttivi()[0].email + '|primary';
+  // nuovo evento: proposto il calendario di lavoro (le date di lavoro vanno sull'account del lavoro), se no il principale
+  const scelto = ev.conto ? ev.conto + '|' + ev.cal : cal.some(c => c.v === calLavoro()) ? calLavoro() : gcalAttivi()[0].email + '|primary';
   box.innerHTML = `${ev.molo ? `<div class="molo-ev">${badgeMolo(ev)}<div><b>${esc(ev.molo.nave)}</b><span>Porto di Civitavecchia${ev.molo.orari ? ' · ' + esc(ev.molo.orari) : ''}${ev.molo.fonte === 'mese' ? ' · previsione del mese: si conferma con la tabella settimanale' : ''}</span></div></div>` : ''}<form class="ev-form" onsubmit="event.preventDefault();salvaEvento()">
     <label class="tutta">Titolo<input id="ev-t" value="${esc(ev.titolo || '')}" required placeholder="Es. Riunione"></label>
     <label class="riga-chk tutta"><input type="checkbox" id="ev-tutto" ${ev.tutto ? 'checked' : ''} onchange="document.querySelectorAll('.ev-ora').forEach(x=>x.style.display=this.checked?'none':'')"> Tutto il giorno</label>
@@ -1094,11 +1096,15 @@ async function salvaEvento(){
    L'evento si riconosce dal segno che l'app gli lascia (dglav = id della giornata); la prima volta dalla data e dal titolo. */
 const normT = s => window.Porto ? Porto.norm(s) : String(s || '').toUpperCase();
 const eventiGoogleDelGiorno = async d => (await eventiGoogleTra(d, d)).filter(e => e.d === d);
-// gli eventi Google (calendari visti e di lavoro) dal giorno daIso al giorno aIso compresi
+// l'account Google del lavoro: quello del "Calendario di lavoro" scelto nelle Impostazioni (se no il primo collegato).
+// Le giornate di Lavoro si collegano solo ai suoi eventi: gli altri account non si leggono né si toccano
+const contoLavoro = () => (calLavoro().split('|')[0]) || (gcalAttivi()[0] || {}).email || '';
+const contoLavoroAttivo = () => { const e = contoLavoro(); return !!e && gcalAttivi().some(c => c.email === e); };
+// gli eventi Google dell'account del lavoro (calendari visti e di lavoro) dal giorno daIso al giorno aIso compresi
 async function eventiGoogleTra(daIso, aIso){
   const lav = calLavoro(), [lavConto, ...r] = lav ? lav.split('|') : [null], lavId = r.join('|'), out = [];
   const da = new Date(daIso + 'T00:00'), a = new Date(new Date(aIso + 'T00:00').getTime() + 864e5);
-  for(const c of gcalAttivi()){
+  for(const c of gcalAttivi().filter(c => c.email === contoLavoro())){
     const ids = new Set(vistiDi(c.email)); if(lavConto === c.email) ids.add(lavId);
     for(const id of ids){ try { out.push(...await leggiEventi(c, id, da, a, false, lavConto === c.email && id === lavId)); } catch(e){ console.warn('calendario', e); } }
   }
@@ -1186,31 +1192,42 @@ async function allineaLavoro(giornate){
 addEventListener('message', async e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea') return;
   const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
-  if(!gcalAttivi().length) return rispondi('Collega Google nella Dashboard per allineare il calendario');
+  if(!contoLavoroAttivo()) return rispondi(`Collega Google${contoLavoro() ? ' (' + contoLavoro() + ')' : ''} nella Dashboard per allineare il calendario`);
   try { rispondi(await allineaLavoro(e.data.giornate || [])); } catch(err){ rispondi('Calendario non allineato: ' + err.message); }
 });
+// modifiche di Lavoro arrivate con l'account del lavoro non ancora collegato (per esempio appena aperta l'app): partono appena si collega
+const codaLavoro = [];
+setInterval(async () => {
+  if(!codaLavoro.length || !contoLavoroAttivo() || codaLavoro.inCorso) return;
+  codaLavoro.inCorso = true;
+  try { while(codaLavoro.length){ const x = codaLavoro.shift(); const t = await calendarioLavoro(x.dati).catch(err => 'Calendario non aggiornato: ' + err.message); x.rispondi(t); } }
+  finally { codaLavoro.inCorso = false; }
+}, 3000);
 addEventListener('message', async e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-cal') return;
-  const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
-  if(!gcalAttivi().length) return rispondi('Calendario non aggiornato: Google non è collegato nella Dashboard');
-  const {azione, prima, dopo} = e.data;
-  try {
-    if(azione === 'elimina'){
-      const ev = await eventoDellaGiornata(prima);
-      if(!ev) return;
-      if(ev.ambiguo) return rispondi('Più eventi di lavoro quel giorno: il calendario non è stato toccato');
-      if(!confirm(`Eliminare anche "${ev.titolo}" del ${fmtD(prima.d)} da Google Calendar?`)) return;
-      await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' });
-      rispondi('Evento eliminato anche dal calendario');
-    } else {
-      const ev = await eventoDellaGiornata(prima || dopo);
-      if(ev && ev.ambiguo) return rispondi('Più eventi di lavoro quel giorno: sposta a mano quello giusto nel calendario');
-      if(ev){ await aggiornaEventoLavoro(ev, prima || dopo, dopo); rispondi(prima && prima.d !== dopo.d ? 'Calendario aggiornato: evento spostato al ' + fmtD(dopo.d) : 'Calendario aggiornato'); }
-      else { await creaEventoLavoro(dopo); rispondi('Evento aggiunto al calendario'); }
-    }
-    await gcalLeggi();
-  } catch(err){ rispondi('Calendario non aggiornato: ' + err.message); }
+  const rispondi = testo => { if(testo) try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
+  if(!contoLavoroAttivo()){ codaLavoro.push({dati: e.data, rispondi}); return rispondi('Il calendario si aggiorna appena Google' + (contoLavoro() ? ' (' + contoLavoro() + ')' : '') + ' è collegato'); }
+  try { rispondi(await calendarioLavoro(e.data)); } catch(err){ rispondi('Calendario non aggiornato: ' + err.message); }
 });
+// una giornata di Lavoro salvata o eliminata: il suo evento nel calendario dell'account del lavoro; restituisce l'esito da mostrare
+async function calendarioLavoro({azione, prima, dopo}){
+  if(azione === 'elimina'){
+    const ev = await eventoDellaGiornata(prima);
+    if(!ev) return '';
+    if(ev.ambiguo) return 'Più eventi di lavoro quel giorno: il calendario non è stato toccato';
+    if(!confirm(`Eliminare anche "${ev.titolo}" del ${fmtD(prima.d)} da Google Calendar?`)) return '';
+    await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' });
+    await gcalLeggi();
+    return 'Evento eliminato anche dal calendario';
+  }
+  const ev = await eventoDellaGiornata(prima || dopo);
+  if(ev && ev.ambiguo) return 'Più eventi di lavoro quel giorno: sposta a mano quello giusto nel calendario';
+  let esito;
+  if(ev){ await aggiornaEventoLavoro(ev, prima || dopo, dopo); esito = prima && prima.d !== dopo.d ? 'Calendario aggiornato: evento spostato al ' + fmtD(dopo.d) : 'Calendario aggiornato'; }
+  else { await creaEventoLavoro(dopo); esito = 'Evento aggiunto al calendario'; }
+  await gcalLeggi();
+  return esito;
+}
 async function eliminaEvento(){
   const ev = evAperto; if(!ev || !ev.gid || !confirm('Eliminare "' + ev.titolo + '" da Google Calendar?')) return;
   try { await gcalFetch(contoDi(ev.conto), apiEventi(ev.cal) + '/' + encodeURIComponent(ev.gid), { method: 'DELETE' }); chiudiEvento(); await gcalLeggi(); }
@@ -1413,6 +1430,8 @@ function mostraVista(v, extra = ''){
   if(!nuovo) entraApp(f);
   if(vista === 'mezzi' && !nuovo) avvisaMezzi(); // le spese dei mezzi possono essere arrivate da Bilancio
 }
+// un'app chiede di ricaricare (trascinata giù dall'alto): si ricarica tutta la Dashboard, che riapre la stessa app
+addEventListener('message', e => { if(e.origin === location.origin && e.data && e.data.tipo === 'ricarica' && Object.values(frames).concat(bil).some(f => f.contentWindow === e.source)) location.reload(); });
 // Bilancio ha scritto una spesa nella lista di un mezzo: Mezzi (se è già aperto) la rilegge
 addEventListener('message', e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'mezzi-ricarica' || e.source !== bil.contentWindow) return;
