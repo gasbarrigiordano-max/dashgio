@@ -5663,13 +5663,42 @@ let chartCategory = null, chartMonthly = null;
    (settings, expenses, auto_expenses…) è un documento cifrato in bilancio/{uid}/giornale/{voce}.
    Niente più dati in chiaro: né su Firebase né nel browser. */
 let firebaseUser = null;
+/* Liste di spese: Bilancio (o un altro dispositivo) può aggiungerne mentre qui sono aperte. Salvando si rilegge la lista:
+   quelle aggiunte altrove dopo l'ultima lettura si tengono (prima un salvataggio da una copia vecchia le cancellava),
+   quelle tolte qui si segnano in "eliminateMezzi", così Bilancio le toglie anche da sé (e solo quelle). */
+const VISTI = {};
+const listaSpese = key => /expenses$/.test(key);
+const idsDi = v => { try { const l = JSON.parse(v); return Array.isArray(l) ? new Set(l.filter(Boolean).map(e => e.id)) : null; } catch (e) { return null; } };
+async function segnaEliminate(key, ids) {
+  let l = []; try { const v = await Cassaforte.leggi('giornale', 'eliminateMezzi'); l = v ? JSON.parse(v) : []; } catch (e) {}
+  const oggi = new Date().toISOString().slice(0, 10);
+  ids.forEach(id => { if (!l.some(x => x.k === key && x.id === id)) l.push({ k: key, id, il: oggi }); });
+  await Cassaforte.scrivi('giornale', 'eliminateMezzi', JSON.stringify(l.slice(-1000)));
+}
+async function unisciPrimaDiSalvare(key, value) {
+  let lista; try { lista = JSON.parse(value); } catch (e) { return value; }
+  if (!Array.isArray(lista)) return value;
+  const ora = await Cassaforte.leggi('giornale', key).catch(() => null), dopo = ora ? JSON.parse(ora) : [];
+  const mie = new Set(lista.filter(Boolean).map(e => e.id)), visti = VISTI[key] || new Set();
+  const nuove = dopo.filter(e => e && !mie.has(e.id) && !visti.has(e.id));
+  const tolte = dopo.filter(e => e && !mie.has(e.id) && visti.has(e.id)).map(e => e.id);
+  if (nuove.length) {
+    lista = lista.concat(nuove);
+    if (key === 'expenses') state.expenses.push(...nuove);
+    else if (currentVehicle && key === currentVehicle.prefix + 'expenses') vState.expenses.push(...nuove);
+  }
+  if (tolte.length) await segnaEliminate(key, tolte);
+  return JSON.stringify(lista);
+}
 async function storageGet(key) {
   const value = await Cassaforte.leggi('giornale', key);
   if (value === null) throw new Error('not found');
+  if (listaSpese(key)) { const s = idsDi(value); if (s) VISTI[key] = s; }
   return { key, value, shared: false };
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function storageSet(key, value) {
+  if (listaSpese(key)) { try { value = await unisciPrimaDiSalvare(key, value); } catch (e) { console.warn('unisci', e); } const s = idsDi(value); if (s) VISTI[key] = s; }
   const delays = [400, 1200, 2500];
   for (let i = 0; i <= delays.length; i++) {
     try { await Cassaforte.scrivi('giornale', key, value); return { key, value, shared: false }; }

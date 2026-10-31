@@ -2524,7 +2524,10 @@ function bordoImporta(){
   // eliminati (o esclusi) in Mezzi: via anche qui, se non li hai modificati
   const vivi = new Set(fatte.map(v=>v.id));
   // a rate con rate già pagate: resta (si sistema dalla sezione Rate)
-  const via = S.tx.filter(t=>t.bf && !vivi.has(t.id) && mio(t) && !(t.rata && (S.rate.find(r=>r.id===t.rata)||{}).done));
+  // si toglie solo se Mezzi l'ha eliminata davvero (segno) o la tiene esclusa; se manca e basta (lista salvata da una copia
+  // vecchia) resta qui e si rimette in Mezzi (bordoRipristina)
+  const chiave = t => t.id.replace(/^bf_/, ''), tolta = t => bordo.eliminate && bordo.eliminate.has(chiave(t)), esclusa = t => bordo.presenti && bordo.presenti.has(chiave(t));
+  const via = S.tx.filter(t=>t.bf && !vivi.has(t.id) && (tolta(t) || esclusa(t)) && mio(t) && !(t.rata && (S.rate.find(r=>r.id===t.rata)||{}).done));
   via.forEach(t=>{ applyPag(t,-1); if(t.rata) S.rate = S.rate.filter(r=>r.id!==t.rata); });
   // tolte per Mezzi (non da te): se ricompaiono, si importano di nuovo
   if(via.length){ S.tx = S.tx.filter(t=>!via.includes(t)); o.fatti = o.fatti.filter(id=>!via.some(t=>t.id===id)); }
@@ -2757,11 +2760,16 @@ async function correggiCategorie(dati){
 }
 // spese nate qui e cambiate o eliminate in Mezzi: si allineano (importo, data, voce); non se l'estratto conto è già addebitato
 function bordoRientro(dati){
-  const inMezzi = new Map(); let k = 0;
+  const inMezzi = new Map(), rimettere = []; let k = 0;
   BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{ if(e && e.bil) inMezzi.set(e.bil, {e, m}); }));
   S.tx.filter(t=>t.mz).forEach(t=>{
     const x = inMezzi.get(t.id);
-    if(!x){ if(t.mzT && bordo.agg > t.mzT + 2000 && !estrattoChiuso(t)){ applyPag(t,-1); S.tx = S.tx.filter(y=>y!==t); if(t.mzReg) registroTogli(t.mzReg, 'bil_' + t.id).catch(()=>{}); k++; } return; } // eliminata in Mezzi (anche dal registro)
+    if(!x){
+      // eliminata davvero in Mezzi (segno): via anche qui; se manca e basta, si rimette in Mezzi (mai perdere una spesa)
+      if(bordo.eliminate && bordo.eliminate.has(t.mz + ':bil_' + t.id) && !estrattoChiuso(t)){ applyPag(t,-1); S.tx = S.tx.filter(y=>y!==t); if(t.mzReg) registroTogli(t.mzReg, 'bil_' + t.id).catch(()=>{}); k++; }
+      else rimettere.push(t);
+      return;
+    }
     const {e, m} = x, det = m.det[e.category] || t.det;
     if(e.excluded || estrattoChiuso(t)) return;
     if(round2(spesa(t))!==round2(e.amount) || t.d!==e.date || t.det!==det || t.sub!==m.voce || t.mz!==m.ek){
@@ -2769,6 +2777,24 @@ function bordoRientro(dati){
     }
   });
   if(k){ save(); render(); }
+  bordoRipristina(rimettere);
+}
+// spese che dovrebbero essere in Mezzi e non ci sono (lista riscritta da una copia vecchia): si rimettono.
+// Copie nate qui: di nuovo con mezziSync. Nate in Mezzi e importate qui: la spesa torna nella sua lista con lo stesso id
+async function bordoRipristina(copie){
+  if(!CLOUD || !cloud.key) return;
+  try {
+    for(const t of copie) await mezziSync(t);
+    const perLista = {};
+    S.tx.filter(t=>t.bf && /^bf_[^:]+:/.test(t.id)).forEach(t=>{
+      const [ek, id] = t.id.slice(3).split(/:(.*)/s); const m = BORDO_IMP.find(x=>x.ek===ek); if(!m) return;
+      if(bordo.presenti && !bordo.presenti.has(ek + ':' + id) && !(bordo.eliminate && bordo.eliminate.has(ek + ':' + id)))
+        (perLista[ek] = perLista[ek] || []).push({id, date:t.d, amount:round2(spesa(t)), category:catMezzi(m, t.det), note:t.note || '', excluded:false});
+    });
+    let n = copie.length;
+    for(const [ek, voci] of Object.entries(perLista)){ const l = await listaMezzi(ek); const mancano = voci.filter(v=>!l.some(e=>e.id===v.id)); if(mancano.length){ await Cassaforte.scrivi('giornale', ek, JSON.stringify(l.concat(mancano))); n += mancano.length; } }
+    if(n){ toast(`${n} ${n===1?'spesa rimessa':'spese rimesse'} in Mezzi`); try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){} }
+  } catch(e){ console.warn('ripristino Mezzi', e); }
 }
 async function bordoLeggi(){
   if(!CLOUD || !cloud.key) return;
@@ -2778,6 +2804,9 @@ async function bordoLeggi(){
     const testi = await Cassaforte.tutti('giornale'), dati = {};
     Object.entries(testi).forEach(([k,v])=>{ try{ dati[k] = JSON.parse(v); }catch(e){} });
     bordo.voci = bordoVoci(dati); bordo.imp = bordoImpVoci(dati); bordo.stato = 'ok'; bordo.agg = Date.now();
+    // eliminate davvero in Mezzi (segno lasciato da Mezzi) e tutte le spese presenti nelle liste (anche escluse)
+    bordo.eliminate = new Set((Array.isArray(dati.eliminateMezzi) ? dati.eliminateMezzi : []).map(x=>x.k + ':' + x.id));
+    bordo.presenti = new Set(BORDO_IMP.flatMap(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).filter(Boolean).map(e=>m.ek + ':' + e.id)));
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
     bordoImporta(); bordoRientro(dati);
     // uno dopo l'altro: scrivono le stesse liste di Mezzi
