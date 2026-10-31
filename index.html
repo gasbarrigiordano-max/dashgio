@@ -1305,14 +1305,21 @@ function tilePalestra(){
 }
 // riquadro Lavoro: il prossimo evento del calendario di lavoro scelto nelle impostazioni
 // la prossima giornata segnata nella sezione Lavoro (da oggi in poi): nave, agenzia e molo
+// dalle 12 in poi, se domani c'è da fare (giornata di Lavoro o evento di lavoro), il riquadro mostra domani invece di oggi
+function giornoLavoro(){
+  const ora = new Date(), oggi = isoLocale(ora), domani = piuGiorno(oggi, 1);
+  if(ora.getHours() < 12) return oggi;
+  const domaniPieno = ((LAV && LAV.giornate) || []).some(g => g.d === domani) || (gcalAttivi().length && GC.eventi.some(e => e.lavoro && e.d === domani));
+  return domaniPieno ? domani : oggi;
+}
 function prossimaGiornata(){
-  const oggi = isoLocale(new Date());
-  return ((LAV && LAV.giornate) || []).filter(g => g.d >= oggi).sort((a, b) => a.d.localeCompare(b.d))[0] || null;
+  const dal = giornoLavoro();
+  return ((LAV && LAV.giornate) || []).filter(g => g.d >= dal).sort((a, b) => a.d.localeCompare(b.d))[0] || null;
 }
 function tileLavoro(){
   const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
   // prima le giornate della sezione Lavoro (ci sono tutte le agenzie); Google solo se ha un impegno di lavoro prima
-  const g = prossimaGiornata(), evG = gcalAttivi().length ? GC.eventi.filter(e => e.lavoro && e.fineTs > Date.now()).sort((a, b) => a.ts - b.ts)[0] : null;
+  const dal = giornoLavoro(), g = prossimaGiornata(), evG = gcalAttivi().length ? GC.eventi.filter(e => e.lavoro && e.fineTs > Date.now() && e.d >= dal).sort((a, b) => a.ts - b.ts)[0] : null;
   if(g && !(evG && evG.d < g.d)){
     const m = g.nave && PORTO ? moloDi({titolo: g.nave, d: g.d}) : null;
     const molo = m ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(m.attesa ? '…' : m.banchina || '–')}</b>${m.banchina ? '' : `<small>${m.attesa ? 'non ancora pubblicato' : 'da definire'}</small>`}</div>` : '';
@@ -1323,7 +1330,7 @@ function tileLavoro(){
   if(!gcalAttivi().length && AUTO.inCorso) return {...t, v:'…', s:'collego Google'};
   if(!gcalAttivi().length && passoAuto()) return {...t, v:'Mostra eventi', s:'per non toccare più: Impostazioni → accesso automatico', on:'gcalCollegaPrimo()'};
   if(!gcalAttivi().length) return {...t, v:GC.conti.length ? 'Mostra eventi' : 'Collega Google', s:'tocca per vedere il prossimo impegno', on:'gcalCollegaPrimo()'};
-  const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora).sort((a, b) => a.ts - b.ts)[0];
+  const ora = Date.now(), ev = GC.eventi.filter(e => e.lavoro && e.fineTs > ora && e.d >= dal).sort((a, b) => a.ts - b.ts)[0];
   if(!ev) return {...t, app:GC.nomeLavoro || 'Google', v:'Nessun impegno', s:'nei prossimi 30 giorni', href:'https://calendar.google.com/', blank:true};
   const molo = ev.molo ? `<div class="molo-t"><small>Molo</small><b class="mono">${esc(ev.molo.attesa ? '…' : ev.molo.banchina || '–')}</b>${ev.molo.banchina ? '' : `<small>${ev.molo.attesa ? 'non ancora pubblicato' : 'da definire'}</small>`}</div>` : '';
   lavoroEv = ev;
