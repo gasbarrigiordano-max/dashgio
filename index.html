@@ -1407,7 +1407,7 @@ function dimensiona(){
     Object.assign(bil.style, {left: r.left + 'px', top: r.top + 'px', width: r.width / k + 'px', height: r.height / k + 'px', transform: k < 1 ? `scale(${k})` : '', transformOrigin: '0 0'});
   }
 }
-function liberaBil(){ bil.classList.remove('in-vista'); ['inset','left','top','width','height','transform','transformOrigin'].forEach(k => bil.style[k] = ''); }
+function liberaBil(){ bil.classList.remove('in-vista'); bil.title = 'Bilancio (in background)'; ['inset','left','top','width','height','transform','transformOrigin'].forEach(k => bil.style[k] = ''); }
 function mostraVista(v, extra = ''){
   vista = PERCORSI[v] ? v : 'panoramica';
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
@@ -1422,7 +1422,7 @@ function mostraVista(v, extra = ''){
   if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto){ leggi(); leggiLavoro(); } return; }
   scrollTo(0, 0); // dalla panoramica scorsa in giù: l'app parte sotto la barra, non nascosta dietro
   if(vista === 'bilancio'){
-    bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; dimensiona();
+    bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; bil.title = 'Bilancio'; dimensiona();
     // bilancio/#passphrase e #impostazioni: la finestra giusta di Bilancio
     if(/#(passphrase|impostazioni)/.test(extra)){ try { W().openSettings(); if(extra.includes('passphrase')) W().openPass(); } catch(e){} }
     entraApp(bil);

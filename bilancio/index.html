@@ -325,7 +325,6 @@ nav button.on{color:var(--acc)}
   .mast,main{max-width:1200px;margin:0 auto;width:100%;grid-column:2;box-sizing:border-box;transition:max-width .55s cubic-bezier(.3,.85,.3,1)}
   /* Mensile e altre schermate con molti dati: tutta la larghezza e più righe della tabella senza scorrere */
   html.largo .mast,html.largo main{max-width:100%}
-  html.largo .mx-wrap{max-height:calc(100vh - 210px)}
   .mast{grid-row:1} main{grid-row:2}
   .mast{padding:16px 28px 12px;border-bottom:none}
   .view{padding:12px 28px 28px}
@@ -411,7 +410,7 @@ nav button.on{color:var(--acc)}
 :root[data-theme="notte"]{--panel:rgba(26,15,8,.54);--panel2:rgba(255,255,255,.08);--line:rgba(255,255,255,.20);--ink2:rgba(255,255,255,.82);--ink3:rgba(255,255,255,.66);--glass:rgba(30,20,14,.35)}
 :root[data-theme="notte"] .card{background:linear-gradient(rgba(26,15,8,.56),rgba(26,15,8,.56)),rgba(255,255,255,.03);border-color:rgba(255,255,255,.22)}
 :root[data-theme="notte"] .card,:root[data-theme="notte"] .tx,:root[data-theme="notte"] .sec,:root[data-theme="notte"] .note{text-shadow:0 1px 3px rgba(40,20,5,.45)}
-:root[data-theme="notte"]{--neg:#ffb4a3;--solid:rgba(30,21,15,.9);--solid2:rgba(40,29,21,.9)}
+:root[data-theme="notte"]{--neg:#ffb4a3;--solid:rgb(30,21,15);--solid2:rgb(40,29,21)} /* pieni: sotto intestazione e prima colonna del Mensile non si vedono le righe che scorrono */
 :root[data-theme="notte"] .mx-wrap{background:rgba(30,20,14,.45)}
 /* dentro la Dashboard: niente sfondo proprio, si vede quello della Dashboard attraverso il vetro */
 :root[data-theme="notte"].incorporata,:root[data-theme="notte"].incorporata .gate{background:transparent}
@@ -1208,6 +1207,15 @@ function altroSeg(cur){
   return `<div class="seg" style="margin-bottom:14px">${[['mx','Mensile'],['abbo','Abbon.'],['inv','Invest.'],['trading','Trading']].map(([v,l])=>
     `<button class="${cur===v?'on':''}" onclick="${v==='mx' ? "showTab('mx')" : `ui.altro='${v}';ui.altroTel='${v}';showTab('altro')`}">${l}</button>`).join('')}</div>`;
 }
+// su schermo largo la tabella del Mensile è alta quanto lo spazio che resta sotto i comandi: finisce dentro la scheda,
+// si scorre solo lei (non anche la pagina) e si vedono più righe
+function altezzaMx(){
+  const w = document.querySelector('#v-mx .mx-wrap'); if(!w) return;
+  if(!WIDE.matches){ w.style.maxHeight = ''; return; }
+  const sopra = w.getBoundingClientRect().top + window.scrollY;
+  w.style.maxHeight = Math.max(260, Math.floor(innerHeight - sopra - 20)) + 'px';
+}
+addEventListener('resize', ()=>{ if(ui.tab==='mx') altezzaMx(); });
 function renderMx(){
   const tipo = ui.mxTipo;
   const tx = S.tx.filter(t=>t.t===tipo && txYear(t)===ui.year);
@@ -1260,6 +1268,7 @@ function renderMx(){
       ${rows || '<tr><td colspan="14" class="empty">Nessun dato per questo anno</td></tr>'}
     </table></div>
     <p class="note" style="margin-top:12px">Stessa logica del tuo foglio: macro-categoria, sottovoci e mesi in colonna. Tocca una cella per vedere, modificare o aggiungere i movimenti; + per una nuova ${tipo==='u'?'uscita':'entrata'}. <span class="narrow-only">Scorri a destra per vedere tutti i mesi.</span></p>`;
+  altezzaMx();
 }
 let mxRighe = [];
 // una volta: le spese di Mezzi registrate prima (Numbers, a mano) nella struttura per mezzo: Mezzi › Auto › Gasolio
