@@ -3484,7 +3484,7 @@ const VEHICLE_CAT_SCELTE = {
   auto: [['carburante', 'Gasolio'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['lavori'], ['altro']],
   scooter: [['carburante', 'Benzina'], ['manutenzione'], ['manutenzione_str'], ['tagliando'], ['revisione'], ['assicurazione'], ['bollo'], ['acquisto'], ['lavori'], ['altro']],
 };
-VEHICLE_CAT_SCELTE.moto = VEHICLE_CAT_SCELTE.scooter;
+VEHICLE_CAT_SCELTE.moto = VEHICLE_CAT_SCELTE.scooter.slice(); // copia: ogni mezzo può avere le sue categorie aggiunte
 let VEHICLE_CATEGORIES = [], VEHICLE_CAT_MAP = {};
 function vaSetCategorie(type) {
   const scelte = VEHICLE_CAT_SCELTE[type] || VEHICLE_CAT_SCELTE.auto;
@@ -4184,6 +4184,14 @@ const nomePeriodo = p => p.mese ? MESI_LUNGHI[+p.mese - 1] + ' ' + p.anno : p.an
 function righePeriodo(spese, p, fn, idAnni, idMesi) {
   const anni = [...new Set(spese.map(e => e.date.slice(0, 4)))].sort().reverse();
   if (p.anno && !anni.includes(p.anno)) { p.anno = ''; p.mese = ''; }
+  // un anno solo: niente riga degli anni, i mesi subito (prima restavano nascosti)
+  if (anni.length === 1) {
+    const a1 = anni[0]; if (p.anno !== a1) { p.anno = a1; }
+    document.getElementById(idAnni).innerHTML = '';
+    const mesi = [...new Set(spese.map(e => e.date.slice(5, 7)))].sort();
+    document.getElementById(idMesi).innerHTML = `<div class="chip ${p.mese ? '' : 'active'}" onclick="${fn}('${a1}','')">Tutti i mesi</div>` + mesi.map(m => `<div class="chip ${p.mese === m ? 'active' : ''}" onclick="${fn}('${a1}','${m}')">${MESI_BREVI[+m - 1]}</div>`).join('');
+    return;
+  }
   document.getElementById(idAnni).innerHTML = anni.length < 2 && !p.anno ? '' :
     `<div class="chip ${p.anno ? '' : 'active'}" onclick="${fn}('','')">Tutti gli anni</div>` + anni.map(a => `<div class="chip ${p.anno === a ? 'active' : ''}" onclick="${fn}('${a}','')">${a}</div>`).join('');
   const mesi = p.anno ? [...new Set(spese.filter(e => e.date.startsWith(p.anno)).map(e => e.date.slice(5, 7)))].sort() : [];
@@ -4194,7 +4202,7 @@ function righePeriodo(spese, p, fn, idAnni, idMesi) {
 async function ricaricaSpese() {
   try {
     // tutto, non solo le spese: eliminando da Bilancio può sparire anche un rifornimento, un bollo…
-    await loadAll();
+    await loadAll(); await caricaCategorieExtra();
     Object.keys(vStateCache || {}).forEach(k => { if (!currentVehicle || k !== currentVehicle.type) delete vStateCache[k]; });
     if (currentVehicle) await vaLoadAll();
     const vapp = document.getElementById('vehicle-app');
@@ -4203,6 +4211,20 @@ async function ricaricaSpese() {
   } catch (e) { console.warn('ricarica spese', e); }
 }
 addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.tipo === 'mezzi-ricarica') ricaricaSpese(); });
+/* Categorie aggiunte da Bilancio (una voce nuova di un mezzo, per esempio SH › Pneumatici): nella cassaforte
+   categorieExtra = {gommone:[{id,label}], auto:[…], scooter:[…], moto:[…]}; qui diventano categorie come le altre */
+async function caricaCategorieExtra() {
+  let ex = {}; try { const v = await Cassaforte.leggi('giornale', 'categorieExtra'); ex = v ? JSON.parse(v) : {}; } catch (e) { return; }
+  (ex.gommone || []).forEach(c => {
+    if (!CAT_MAP[c.id]) { const o = { id: c.id, label: c.label, icon: '🏷️' }; CAT_ALL.push(o); CAT_MAP[c.id] = o; }
+    if (!CATEGORIES.some(x => x.id === c.id)) CATEGORIES.push(CAT_MAP[c.id]);
+  });
+  ['auto', 'scooter', 'moto'].forEach(t => (ex[t] || []).forEach(c => {
+    if (!VEHICLE_CAT_ALL.some(x => x.id === c.id)) VEHICLE_CAT_ALL.push({ id: c.id, label: c.label, icon: '🏷️' });
+    if (!VEHICLE_CAT_SCELTE[t].some(x => x[0] === c.id)) VEHICLE_CAT_SCELTE[t].push([c.id]);
+  }));
+  if (currentVehicle) vaSetCategorie(currentVehicle.type);
+}
 function vaSetPeriodo(a, m) { vaPeriodo = { anno: a, mese: m }; vaRenderSpese(); }
 function setSpesePeriodo(a, m) { spesePeriodo = { anno: a, mese: m }; renderSpese(); }
 function vaRenderSpese() {
@@ -4228,7 +4250,7 @@ function vaRenderSpese() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const totalEl = document.getElementById('va-spese-filter-total');
-  if ((vaActiveFilter || 'tutte') === 'tutte' && !vaPeriodo.anno) {
+  if ((vaActiveFilter || 'tutte') === 'tutte' && !vaPeriodo.mese && (!vaPeriodo.anno || new Set(vState.expenses.map(e => e.date.slice(0, 4))).size === 1)) {
     totalEl.style.display = 'none';
   } else {
     const catTotal = filtered.filter(e => !e.excluded).reduce((s, e) => s + e.amount, 0);
@@ -8396,7 +8418,7 @@ function renderSpese() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const totalEl = document.getElementById('spese-filter-total');
-  if (state.activeFilter === 'tutte' && !spesePeriodo.anno) {
+  if (state.activeFilter === 'tutte' && !spesePeriodo.mese && (!spesePeriodo.anno || new Set(state.expenses.map(e => e.date.slice(0, 4))).size === 1)) {
     totalEl.style.display = 'none';
   } else {
     const catTotal = filtered.filter(e => !e.excluded).reduce((s, e) => s + e.amount, 0);
@@ -9546,7 +9568,7 @@ async function resetAllData() {
 
 /* ---------------- Init ---------------- */
 async function bootApp() {
-  await loadAll();
+  await loadAll(); await caricaCategorieExtra();
   renderMasthead();
   applyCarrelloVisibility();
   applyEngineTypeVisibility();
