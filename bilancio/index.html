@@ -433,6 +433,7 @@ html.incorporata .card,html.incorporata .seg,html.incorporata .mx-wrap,html.inco
 :root[data-theme="notte"] .btn.ghost{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff}
 :root[data-theme="notte"] .btn.danger{background:rgba(255,138,115,.12);border:1px solid var(--neg-line);color:var(--neg)}
 :root[data-theme="notte"] .chip{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.10);color:var(--ink2)}
+:root[data-theme="notte"] .chip.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)} /* il mese scelto si vede (la regola sopra lo spegneva) */
 :root[data-theme="notte"] .fab{border-radius:50%}
 :root[data-theme="notte"] a{color:#ffb07a}
 
@@ -532,7 +533,7 @@ html.incorporata .card,html.incorporata .seg,html.incorporata .mx-wrap,html.inco
   <section class="view" id="v-altro"></section>
 </main>
 
-<button class="fab" id="fab" onclick="ui.tab==='mx' ? openTx('', '', {t:ui.mxTipo}) : openTx()" aria-label="Nuovo movimento">+</button>
+<button class="fab" id="fab" onclick="nuovoDaFab()" aria-label="Nuovo movimento">+</button>
 
 <nav id="nav">
   <button data-t="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Panoramica</button>
@@ -1216,6 +1217,12 @@ function altezzaMx(){
   w.style.maxHeight = Math.max(260, Math.floor(innerHeight - sopra - 20)) + 'px';
 }
 addEventListener('resize', ()=>{ if(ui.tab==='mx') altezzaMx(); });
+// la data di un movimento nuovo nel mese scelto (filtro): oggi se è il mese in corso, se no il primo del mese
+const dataNelMese = m => ui.year===now.getFullYear() && m===now.getMonth() ? today() : `${ui.year}-${String(m+1).padStart(2,'0')}-01`;
+function nuovoDaFab(){
+  if(ui.tab==='mx') return openTx('', '', {t:ui.mxTipo, ...(ui.mxMese!=null ? {d:dataNelMese(ui.mxMese)} : {})});
+  openTx('', '', typeof ui.month==='number' ? {d:dataNelMese(ui.month)} : undefined);
+}
 function mxFiltraMese(m){ ui.mxMese = m; render(); Moto.largo(true, larghezzaMensile()); }
 function renderMx(){
   const tipo = ui.mxTipo;
