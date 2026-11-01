@@ -3240,12 +3240,7 @@
       <label id="hist-total-label">Prezzo totale (€)</label>
       <input type="number" id="hist-price" inputmode="decimal" placeholder="es. 12.50" oninput="onHistFieldInput('total')">
       <div class="field-hint" id="hist-total-hint">Compila due dei tre campi (quantità, prezzo unitario, totale): calcolo automaticamente il terzo. Per un pezzo singolo lascia quantità a 1.</div>
-    </div>
-    <div class="field">
-      <label style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0; cursor:pointer;">
-        <span>Spesa da non conteggiare / fatta da altri</span>
-        <input type="checkbox" id="hist-excluded" style="width:20px; height:20px; accent-color:var(--brass); flex-shrink:0; margin-left:10px;">
-      </label>
+      <div class="field-hint">Solo per riferimento: non diventa una spesa. Quello che compri (per esempio 6 candele, anche se ne cambi 4) lo registri in Spese.</div>
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeHistoryModal()">Annulla</button>
@@ -3284,17 +3279,13 @@
     <div class="field">
       <label>Prezzo di riferimento (€)</label>
       <input type="number" id="part-price" inputmode="decimal" placeholder="es. 12.50">
+      <div class="field-hint">Solo per riferimento: non diventa una spesa (l'acquisto lo registri in Spese).</div>
     </div>
     <div class="field">
       <label>Note (opzionale)</label>
       <input type="text" id="part-note" placeholder="es. cambiare ogni 100h">
     </div>
-    <div class="field">
-      <label style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0; cursor:pointer;">
-        <span>Spesa da non conteggiare / fatta da altri</span>
-        <input type="checkbox" id="part-excluded" style="width:20px; height:20px; accent-color:var(--brass); flex-shrink:0; margin-left:10px;">
-      </label>
-    </div>
+
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closePartModal()">Annulla</button>
       <button class="btn btn-primary" onclick="savePart()">Salva ricambio</button>
@@ -8155,7 +8146,7 @@ function openHistoryModal(key, historyId) {
     document.getElementById('hist-unit-price').value = h.unitPrice ?? '';
     document.getElementById('hist-price').value = h.price ?? '';
     document.getElementById('hist-hours-hint').textContent = '';
-    document.getElementById('hist-excluded').checked = !!h.excluded; pagSet('hist', h);
+
     document.getElementById('hist-delete-btn').style.display = 'block';
   } else {
     document.getElementById('part-history-modal-title').textContent = 'Registra cambio: ' + label.toLowerCase();
@@ -8168,7 +8159,7 @@ function openHistoryModal(key, historyId) {
     document.getElementById('hist-hours-hint').textContent = suggestedHours
       ? `Suggerite dalle uscite registrate in app (${suggestedHours} h totali) — correggi se il motore ha più ore di quelle tracciate qui.`
       : '';
-    document.getElementById('hist-excluded').checked = false; pagSet('hist', null);
+
     document.getElementById('hist-delete-btn').style.display = 'none';
   }
   document.getElementById('part-history-modal-overlay').classList.add('show');
@@ -8243,13 +8234,7 @@ async function saveHistoryEntry() {
     history.push(entry);
   }
 
-  const partLabel = state.engineParts.standard[key].label;
-  const noteText = (entry.quantity && entry.quantity !== 1)
-    ? `${partLabel} (${entry.quantity}${cfg.pricingMode === 'liter' ? ' L' : 'x'})`
-    : partLabel;
-  const excluded = document.getElementById('hist-excluded').checked;
-  const pag = pagGet('hist');
-  syncPartExpense(entry, { date: entry.date, amount: entry.price, note: noteText, excluded, ...pag });
+  // il prezzo del cambio resta sul pezzo: la spesa (quello che si compra davvero) si registra in Spese
 
   closeHistoryModal();
   showToast('Cambio registrato');
@@ -8262,11 +8247,10 @@ function deleteHistoryEntry() {
   const id = document.getElementById('hist-id').value;
   showConfirm(
     'Eliminare questo cambio dallo storico?',
-    'L\'azione non è reversibile. La spesa collegata (se presente) verrà rimossa anche dalle Spese.',
+    'L\'azione non è reversibile. Le spese registrate restano nelle Spese.',
     async () => {
       const history = state.engineParts.standard[key].history;
       const entry = history.find(x => x.id === id);
-      if (entry) removePartExpense(entry);
       state.engineParts.standard[key].history = history.filter(x => x.id !== id);
       closeHistoryModal();
       showToast('Cambio eliminato');
@@ -8328,7 +8312,7 @@ function openPartModal(id) {
     document.getElementById('part-torque').value = p.torqueNm ?? '';
     document.getElementById('part-price').value = p.price ?? '';
     document.getElementById('part-note').value = p.note || '';
-    document.getElementById('part-excluded').checked = !!p.excluded; pagSet('part', p);
+
     document.getElementById('part-delete-btn').style.display = 'block';
   } else {
     document.getElementById('part-modal-title').textContent = 'Nuovo ricambio';
@@ -8340,7 +8324,7 @@ function openPartModal(id) {
     document.getElementById('part-torque').value = '';
     document.getElementById('part-price').value = '';
     document.getElementById('part-note').value = '';
-    document.getElementById('part-excluded').checked = false; pagSet('part', null);
+
     document.getElementById('part-delete-btn').style.display = 'none';
   }
   document.getElementById('part-modal-overlay').classList.add('show');
@@ -8365,8 +8349,6 @@ async function savePart() {
     note: document.getElementById('part-note').value.trim(),
   };
 
-  const excluded = document.getElementById('part-excluded').checked;
-  const pag = pagGet('part');
 
   let entry;
   if (id) {
@@ -8376,7 +8358,7 @@ async function savePart() {
     entry = { id: uid(), ...data };
     state.engineParts.altro.push(entry);
   }
-  syncPartExpense(entry, { date: entry.lastChangeDate, amount: entry.price, note: entry.name, excluded, ...pag });
+  // il prezzo di riferimento non diventa una spesa (l'acquisto si registra in Spese)
   closePartModal();
   showToast('Ricambio salvato');
   renderAltroParts();
@@ -8389,9 +8371,8 @@ function deletePart() {
   if (!p) return;
   showConfirm(
     'Eliminare questo ricambio?',
-    `"${p.name}" verrà rimosso dalla lista. La spesa collegata (se presente) verrà rimossa anche dalle Spese.`,
+    `"${p.name}" verrà rimosso dalla lista. Le spese registrate restano nelle Spese.`,
     async () => {
-      removePartExpense(p);
       state.engineParts.altro = state.engineParts.altro.filter(x => x.id !== id);
       closePartModal();
       showToast('Ricambio eliminato');
