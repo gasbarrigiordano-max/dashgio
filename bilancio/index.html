@@ -2637,6 +2637,9 @@ async function mezziSync(t, eliminata){
 // movimenti eliminati qui (uno o tanti dal Mensile): via anche da Mezzi. Nati qui (t.mz): la loro copia;
 // nati in Mezzi (bf_<lista>:<id>): la spesa e la scheda collegata (rifornimento, bollo, assicurazione, revisione), come in Mezzi
 async function mezziTogli(list){
+  // annotate: una copia rimasta in Mezzi (scrittura non riuscita) non verrà mai recuperata come movimento perso
+  const el = list.filter(t=>t.mz).map(t=>t.id);
+  if(el.length){ S.opz.bilEliminati = [...new Set([...(S.opz.bilEliminati||[]), ...el])].slice(-2000); save(); }
   if(!CLOUD || !cloud.key || bordo.stato!=='ok') return;
   const via = {};   // lista → id da togliere
   const metti = (ek, id) => (via[ek] = via[ek] || new Set()).add(id);
@@ -2681,7 +2684,7 @@ async function pulisciMezzi(dati){
   const o = S.opz.bordoImp || {fatti:[]}, ids = new Set(S.tx.map(t=>t.id)), bil = [], mz = [];
   BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{
     if(!e) return;
-    if(e.bil){ if(!ids.has(e.bil)) bil.push({id:e.bil, mz:m.ek}); return; }
+    if(e.bil){ if(!ids.has(e.bil) && (S.opz.bilEliminati||[]).includes(e.bil)) bil.push({id:e.bil, mz:m.ek}); return; } // solo quelle eliminate qui: le altre si recuperano
     const bid = `bf_${m.ek}:${e.id}`;
     if((o.fatti||[]).includes(bid) && !ids.has(bid) && !e.excluded && !S.tx.some(t=>t.cat==='Mezzi' && t.d===e.date && Math.abs(spesa(t)-(e.amount||0)) < 0.01))
       mz.push({id:bid, bf:1, d:e.date, amt:e.amount, sub:m.voce, note:e.note||''});
@@ -2718,7 +2721,7 @@ function diciVoci(){
     <button class="btn" style="margin-top:12px" onclick="closeSheet()">Ok</button>`);
   S.opz.vociMezziViste = [...new Set([...(S.opz.vociMezziViste||[]), ...v.keys()])]; save();
 }
-addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile'){ if(mezziPendenti) setTimeout(chiediPulizia, 400); else if(vociDaDire) setTimeout(diciVoci, 400); } });
+addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile'){ if(daRecuperare) setTimeout(chiediRecupero, 400); else if(mezziPendenti) setTimeout(chiediPulizia, 400); else if(vociDaDire) setTimeout(diciVoci, 400); } });
 // una volta: le spese dei mezzi registrate qui prima del collegamento vanno anche in Mezzi
 // (non quelle che Mezzi ha già: stessa data e stesso importo, per esempio arrivate due volte dal foglio)
 async function copiaMezziVecchi(dati){
@@ -2740,6 +2743,37 @@ async function copiaMezziVecchi(dati){
     if(copiate){ toast(`${copiate} spese dei mezzi copiate in Mezzi` + (saltate ? ` (${saltate} c'erano già)` : '')); try { if(parent!==window) parent.postMessage({tipo:'mezzi-ricarica'}, location.origin); } catch(e){} }
   } catch(e){ console.warn('copia Mezzi', e); }
 }
+// movimenti nati qui e spariti per errore (la loro copia è ancora in Mezzi): si ricreano, dopo conferma, con lo stesso id
+let daRecuperare = null;
+function trovaPersi(dati){
+  const ids = new Set(S.tx.map(t=>t.id)), tolti = new Set(S.opz.bilEliminati||[]), out = [];
+  BORDO_IMP.forEach(m=>(Array.isArray(dati[m.ek]) ? dati[m.ek] : []).forEach(e=>{
+    if(!e || !e.bil || e.excluded || ids.has(e.bil) || tolti.has(e.bil) || (bordo.eliminate && bordo.eliminate.has(m.ek + ':' + e.id))) return;
+    out.push({m, e});
+  }));
+  if(out.length){ daRecuperare = out; if(parent===window) chiediRecupero(); }
+}
+function chiediRecupero(){
+  const l = daRecuperare; if(!l) return; daRecuperare = null;
+  const tot = round2(sum(l.map(x=>x.e.amount||0)));
+  sheet(`<h3>Spese da recuperare</h3>
+    <p class="note" style="margin:-6px 0 12px">${l.length===1?'Questa spesa dei mezzi registrata':'Queste spese dei mezzi registrate'} qui è sparita da Bilancio per un errore, ma è ancora in Mezzi. Ricreandole tornano nel Mensile e nei totali, collegate a Mezzi (nessun doppione).</p>
+    ${l.slice().sort((a,b)=>a.e.date.localeCompare(b.e.date)).map(({m,e})=>`<div class="acct" style="cursor:default"><span>${fmtD(e.date)} · ${esc(m.voce)} › ${esc(m.det[e.category]||'Spese varie')}${e.note?' · '+esc(e.note):''}</span><b class="mono">${eur(e.amount)}</b></div>`).join('')}
+    <div class="row" style="margin:12px 2px 4px"><span class="note">Totale</span><b class="mono">${eur(tot)}</b></div>
+    <p class="note">Il conto da cui erano uscite non si sa più: tornano senza "Pagato con", quindi i saldi non cambiano. Se vuoi, aprile e scegli il conto.</p>
+    <button class="btn" style="margin-top:12px" onclick="recuperaPersi()">Ricrea ${l.length===1?'la spesa':'le '+l.length+' spese'}</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="lasciaPersi()">Non ora</button>`);
+  chiediRecupero.lista = l;
+}
+function recuperaPersi(){
+  const l = chiediRecupero.lista || []; let n = 0;
+  l.forEach(({m,e})=>{ if(S.tx.some(t=>t.id===e.bil)) return;
+    S.tx.push({id:e.bil, d:e.date, t:'u', cat:'Mezzi', sub:m.voce, det:m.det[e.category]||'Spese varie', amt:round2(e.amount), note:e.note||'', mz:m.ek, mzT:Date.now()}); n++; });
+  save(); closeSheet(); render(); toast(n===1 ? '1 spesa ricreata' : `${n} spese ricreate`); prossimaDomanda();
+}
+function lasciaPersi(){ closeSheet(); toast('Te le richiedo alla prossima apertura di Bilancio'); prossimaDomanda(); }
+// le domande all'apertura di Bilancio, una alla volta
+function prossimaDomanda(){ setTimeout(()=>{ if(daRecuperare) chiediRecupero(); else if(mezziPendenti) chiediPulizia(); else if(vociDaDire) diciVoci(); }, 400); }
 // spese nate qui finite in Mezzi con una categoria vecchia dallo stesso nome in Bilancio (Spese varie → Documenti/Tasse): si correggono
 async function correggiCategorie(dati){
   if(!CLOUD || !cloud.key) return;
@@ -2810,6 +2844,7 @@ async function bordoLeggi(){
     bordo.vuoto = !Object.keys(dati).some(k=>k!=='bilancioPagamenti');
     bordoImporta(); bordoRientro(dati);
     // uno dopo l'altro: scrivono le stesse liste di Mezzi
+    trovaPersi(dati); // i movimenti spariti per errore (la pulizia non tocca le loro copie)
     correggiCategorie(dati).then(()=>copiaMezziVecchi(dati)).then(()=>pulisciMezzi(dati)).then(vociSenzaCategoria);
     // l'elenco dei conti e delle carte per il "Pagato con" di Mezzi, se è cambiato
     const pg = bordoPagamenti();
