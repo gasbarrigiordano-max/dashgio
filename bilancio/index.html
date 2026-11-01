@@ -766,6 +766,17 @@ function migrateRata(r){
 // paga le rate scadute (oggi compreso): uscita nei movimenti, importo tolto dal conto, rata segnata pagata.
 // L'id del movimento è fisso per rata, così due dispositivi non la registrano due volte.
 const quotaRata = (r, amt) => round2(amt * r.quota / r.tot);
+// rate contate come spesa: solo se spuntato e se l'acquisto non è già nei movimenti
+const contaRata = r => !!r.conta && !r.tx;
+// pagamenti già registrati di un piano: uscite (contate) o solo pagamenti, secondo la spunta
+function rateContate(r){
+  const conta = contaRata(r);
+  S.tx.forEach(t=>{ if(t.rid!==r.id || t.int) return;
+    t.t = conta ? 'u' : 'r';
+    if(conta && r.quota!=null) t.quota = quotaRata(r, t.amt); else delete t.quota; });
+  // contata per intero: niente interessi a parte (sarebbero contati due volte)
+  if(conta) S.tx = S.tx.filter(t=>!(t.rid===r.id && t.int));
+}
 function payDueRate(){
   const t = today(); let k = 0;
   S.rate.forEach(r=>{
@@ -777,9 +788,13 @@ function payDueRate(){
         // pagata con carta: va nell'estratto conto della carta e lascia il conto con l'estratto.
         // Ogni rata è solo un pagamento (t:'r'): si vede, muove i soldi, ma non si conta nelle uscite, perché la spesa
         // è l'acquisto (registrato a parte). Gli eventuali interessi (totale da rimborsare − importo) sono una spesa a parte.
-        S.tx.push({id, d, t:'r', cat:'Rate', sub:r.tipo||'Rate', amt, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, conto:r.carta?'':(r.conto||''), carta:r.carta||''});
+        // Con "Conta le rate come spesa" (r.conta: acquisto non registrato a parte, es. iPhone) la rata è un'uscita;
+        // acquisto di gruppo: nelle spese la mia parte della rata.
+        const conta = contaRata(r);
+        S.tx.push({id, d, t:conta?'u':'r', cat:'Rate', sub:r.tipo||'Rate', amt, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, conto:r.carta?'':(r.conto||''), carta:r.carta||'',
+          ...(conta && r.quota!=null ? {quota:quotaRata(r, amt)} : {})});
         const c = !r.carta && S.conti.find(c=>c.id===r.conto); if(c) c.v = round2(c.v - amt);
-        const int = r.imp!=null && r.imp < r.tot ? round2(amt - capRata(r,i)) : 0;
+        const int = !conta && r.imp!=null && r.imp < r.tot ? round2(amt - capRata(r,i)) : 0;
         if(int>0) S.tx.push({id:`rti_${r.id}_${i}`, d, t:'u', cat:'Rate', sub:'Interessi '+(r.tipo||''), amt:int, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, int:1});
       }
       r.done++; k++;
@@ -1700,7 +1715,7 @@ function renderRate(){
         ? `Prossima: <b style="color:var(--ink)">${fmtD(next(r))}</b> · ${eur(quota(r,pagate(r)))}`
         : `<span style="color:var(--warn)">Manca la data della prossima rata: tocca Modifica</span>`;
       return `<div class="card rate">
-        <div class="row"><div style="min-width:0"><b>${titolo(r)}</b><div class="note">${eur(r.rata)} × ${r.n}${daDove(r)?` · da ${esc(daDove(r))}`:''}${r.tx?` · acquisto del ${fmtD(r.acq)} nei movimenti`:''}${r.quota!=null?`<br>👥 tua quota ${eur(r.quota)} · ${daRicevere(r)>0?`da ricevere ${eur(daRicevere(r))}`:'rimborsato'}`:''}</div></div><b class="mono">${eur(daPagare(r))}</b></div>
+        <div class="row"><div style="min-width:0"><b>${titolo(r)}</b><div class="note">${eur(r.rata)} × ${r.n}${daDove(r)?` · da ${esc(daDove(r))}`:''}${r.tx?` · acquisto del ${fmtD(r.acq)} nei movimenti`:contaRata(r)?' · contata nelle spese':' · non contata'}${r.quota!=null?`<br>👥 tua quota ${eur(r.quota)} · ${daRicevere(r)>0?`da ricevere ${eur(daRicevere(r))}`:'rimborsato'}`:''}</div></div><b class="mono">${eur(daPagare(r))}</b></div>
         <div class="bar" style="margin:4px 0 8px"><div style="width:${pagate(r)/r.n*100}%;background:var(--acc)"></div></div>
         <div class="row"><div class="note">${pagate(r)}/${r.n} pagate · ${info}${pm?`<br><span class="pos">✓ ${nome} pagata il ${fmtD(pm.d)}</span>`:''}</div>
           <button class="btn sm ghost" onclick="openRata('${r.id}')">Modifica</button></div></div>`;
@@ -1711,7 +1726,7 @@ function renderRate(){
       return `<div class="gh"><b>${esc(g)}</b><span class="mono">${eur(sum(l.map(r=>r.rata)))}/mese · resta ${eur(sum(l.map(daPagare)))}</span></div><div class="rgrid">${l.map(card).join('')}</div>`; }).join('');
     return top + seg + `<div class="grid2"><div class="card kpi"><small>Rate al mese</small><b class="mono">${eur(sum(att.map(r=>r.rata)))}</b></div><div class="card kpi"><small>Ancora da pagare</small><b class="mono neg">${eur(sum(att.map(daPagare)))}</b></div></div>
       ${html || '<div class="empty">Nessuna rata da pagare 🎉</div>'}
-      <p class="note" style="margin-top:14px">Nel giorno della scadenza (o alla prima apertura dell'app dopo) la rata viene registrata tra le uscite, categoria Rate, e tolta dal conto scelto; se è pagata con una carta di credito finisce nel suo estratto conto.</p>`;
+      <p class="note" style="margin-top:14px">Nel giorno della scadenza (o alla prima apertura dell'app dopo) la rata viene registrata e tolta dal conto scelto; se è pagata con una carta di credito finisce nel suo estratto conto. Conta nelle spese solo se nella rata hai spuntato "Conta le rate come spesa", altrimenti si vede ma non si conta (la spesa è l'acquisto).</p>`;
   }
   const storico = S.tx.filter(t=>t.rid && !t.int).sort((a,b)=>b.d.localeCompare(a.d) || b.id.localeCompare(a.id));
   const ultima = r => (storico.find(t=>t.rid===r.id)||{}).d;
@@ -1750,7 +1765,9 @@ function openRata(id){
       <div class="f"><label>Pagata da</label><select id="r-c">${conti}</select></div>
     </div>
     <p class="note" id="r-prev" style="margin:0 0 12px"></p>
-    ${r && r.tx ? '' : `<label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="r-g" ${r&&r.quota!=null?'checked':''} onchange="$('r-g-f').style.display=this.checked?'block':'none';rataPrev()"> Acquisto di gruppo</label>
+    ${r && r.tx ? '' : `<label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="r-k" ${r&&r.conta?'checked':''} onchange="rataPrev()"> Conta le rate come spesa</label>
+    <p class="note" style="margin:-6px 0 12px">Spunta se l'acquisto non è registrato tra le uscite: ogni rata pagata conta nelle spese. Senza spunta le rate si vedono ma non si contano.</p>
+    <label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="r-g" ${r&&r.quota!=null?'checked':''} onchange="$('r-g-f').style.display=this.checked?'block':'none';rataPrev()"> Acquisto di gruppo</label>
     <div id="r-g-f" style="display:${r&&r.quota!=null?'block':'none'}">
       <div class="f"><label>La mia quota (€)</label><input id="r-q" inputmode="decimal" value="${r&&r.quota!=null?dec(r.quota)||'0':''}" placeholder="0,00 €" oninput="rataPrev()"></div>
       <p class="note" id="r-g-p" style="margin:-4px 0 12px"></p>
@@ -1774,7 +1791,7 @@ function rataForm(){
 function rataPrev(){
   const {tot,n,res,next} = rataForm(), el = $('r-prev'), g = $('r-g-p');
   if(g) g.innerHTML = tot && n && $('r-q').value.trim() ? (()=>{ const q = num($('r-q').value), pr = rataAperta && S.rate.find(x=>x.id===rataAperta), ric = pr ? sum(rimborsi(pr).map(x=>x.amt)) : 0;
-    return `Dal conto o dalla carta escono le rate intere; nelle spese ogni rata conta per la tua parte (<b class="mono" style="color:var(--ink)">${eur(round2(q/n))}</b>). Gli altri ti devono <b class="mono" style="color:var(--ink)">${eur(round2(tot-q))}</b>${ric?` · già ricevuti ${eur(ric)}`:''}.`; })() : '';
+    return `Dal conto o dalla carta escono le rate intere; ${$('r-k')&&$('r-k').checked ? `nelle spese ogni rata conta per la tua parte (<b class="mono" style="color:var(--ink)">${eur(round2(q/n))}</b>)` : 'nelle spese conta l\'acquisto che hai registrato'}. Gli altri ti devono <b class="mono" style="color:var(--ink)">${eur(round2(tot-q))}</b>${ric?` · già ricevuti ${eur(ric)}`:''}.`; })() : '';
   if(!tot || !n){ el.textContent = ''; return; }
   const rata = round2(tot/n);
   el.innerHTML = `Rata <b class="mono" style="color:var(--ink)">${eur(rata)}</b> × ${n}` +
@@ -1799,10 +1816,12 @@ function saveRata(id){
     o.quota = round2(num($('r-q').value));
     if(o.quota<0 || o.quota>=o.tot) return toast('La tua quota deve essere minore dell\'importo totale');
   } else if(old && rimborsi(old).length) return toast('Ci sono rimborsi ricevuti: eliminali prima di togliere "Acquisto di gruppo"');
-  if(old){ Object.assign(old,o); if(!gr) delete old.quota; } else S.rate.push({id:uid(),...o});
-  // rate già pagate: la loro parte nelle spese segue la quota
+  if($('r-k')) o.conta = $('r-k').checked;
+  if(old){ Object.assign(old,o); if(!gr) delete old.quota; if(!o.conta) delete old.conta; } else S.rate.push({id:uid(),...o});
+  // rate già pagate: contate o no secondo la spunta, e nelle spese la mia quota
   const pr = old || S.rate[S.rate.length-1];
-  if(!pr.tx) S.tx.filter(t=>t.rid===pr.id && t.t==='u' && !t.int).forEach(t=>{ if(pr.quota!=null) t.quota = quotaRata(pr, t.amt); else delete t.quota; });
+  if(!pr.conta) delete pr.conta;
+  if(!pr.tx) rateContate(pr);
   addServizio(o.tipo);
   save(); closeSheet(); payDueRate(); render(); toast('Salvato');
 }
