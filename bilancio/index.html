@@ -144,6 +144,7 @@ table.mx{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-
 .mx td.z{color:var(--ink3)}
 .mx tr.grp td, .mx tr.sub td, .mx tr.det td, .mx tr.fuel td{cursor:pointer}
 .mx tr.tot td{font-weight:800;border-top:2px solid var(--line)}
+.mx tr.rate-info td{cursor:default;color:var(--ink2);font-weight:500} .mx tr.rate-info.grp td{border-top:2px dashed var(--line)} /* rate: si vedono ma non si contano */
 /* le cifre dei totali (del mese e delle categorie) più grandi e in corsivo; i nomi restano dritti */
 .mx tr.tot td:not(:first-child){font-size:15px;font-style:italic}
 .mx tr.grp td:not(:first-child){font-size:14px;font-style:italic}
@@ -773,13 +774,12 @@ function payDueRate(){
       if(d>t) break;
       const id = `rt_${r.id}_${i}`, amt = quota(r,i);
       if(!S.tx.some(x=>x.id===id)){
-        // pagata con carta: diventa una spesa della carta e lascia il conto con l'estratto conto.
-        // Rata di un acquisto già registrato nei movimenti (r.tx): è solo un pagamento (t:'r'), la spesa c'è già;
-        // gli eventuali interessi (totale da rimborsare − importo) diventano una spesa a parte.
-        S.tx.push({id, d, t:r.tx?'r':'u', cat:'Rate', sub:r.tipo||'Rate', amt, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, conto:r.carta?'':(r.conto||''), carta:r.carta||'',
-          ...(!r.tx && r.quota!=null ? {quota:quotaRata(r, amt)} : {})}); // acquisto di gruppo: nelle spese la mia parte della rata
+        // pagata con carta: va nell'estratto conto della carta e lascia il conto con l'estratto.
+        // Ogni rata è solo un pagamento (t:'r'): si vede, muove i soldi, ma non si conta nelle uscite, perché la spesa
+        // è l'acquisto (registrato a parte). Gli eventuali interessi (totale da rimborsare − importo) sono una spesa a parte.
+        S.tx.push({id, d, t:'r', cat:'Rate', sub:r.tipo||'Rate', amt, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, conto:r.carta?'':(r.conto||''), carta:r.carta||''});
         const c = !r.carta && S.conti.find(c=>c.id===r.conto); if(c) c.v = round2(c.v - amt);
-        const int = r.tx ? round2(amt - capRata(r,i)) : 0;
+        const int = r.imp!=null && r.imp < r.tot ? round2(amt - capRata(r,i)) : 0;
         if(int>0) S.tx.push({id:`rti_${r.id}_${i}`, d, t:'u', cat:'Rate', sub:'Interessi '+(r.tipo||''), amt:int, note:`${r.prod||r.tipo} · rata ${i+1}/${r.n}`, rid:r.id, int:1});
       }
       r.done++; k++;
@@ -977,6 +977,11 @@ function payAbbo(){
 function afterLoad(){
   S.rate = S.rate.map(migrateRata);
   if(!S.opz) S.opz = {};
+  // una volta: le rate pagate registrate come spese (piani creati nella sezione Rate) diventano pagamenti, non contati due volte
+  if(!S.opz.ratePagamenti){
+    S.tx.forEach(t=>{ if(t.cat==='Rate' && t.t==='u' && t.rid && !t.int){ t.t = 'r'; delete t.quota; } });
+    S.opz.ratePagamenti = true; save();
+  }
   if(!S.opz.contiBase){ seedConti(); S.opz.contiBase = true; save(); }
   if(!S.carte){ S.carte = seedCarte(); seedConti(); }
   if(!S.opz.bbvaRateale){
@@ -1278,11 +1283,27 @@ function renderMx(){
       <tr><th>${tipo==='u'?'Uscite':'Entrate'} ${ui.year}</th>${mm.map(i=>`<th>${M3[i]}</th>`).join('')}<th>${fm==null?'Totale':'Anno'}</th></tr>
       <tr class="tot"><td>Totale mese</td>${mm.map(i=>cell(tot[i])).join('')}<td class="mono t">${fmt(sum(tot))}</td></tr>
       ${rows || `<tr><td colspan="${mm.length+2}" class="empty">${fm==null ? 'Nessun dato per questo anno' : 'Nessun movimento in ' + MESI[fm].toLowerCase()}</td></tr>`}
+      ${tipo==='u' ? righeRate(mm, fm, cell, fmt) : ''}
     </table></div>
     <p class="note" style="margin-top:12px">Stessa logica del tuo foglio: macro-categoria, sottovoci e mesi in colonna. Tocca una cella per vedere, modificare o aggiungere i movimenti; + per una nuova ${tipo==='u'?'uscita':'entrata'}. <span class="narrow-only">Scorri a destra per vedere tutti i mesi.</span></p>`;
   altezzaMx();
 }
 let mxRighe = [];
+// rate pagate (t:'r'): si vedono sotto le uscite, per finanziaria, ma non entrano in nessun totale
+// (la spesa è l'acquisto, registrato a parte)
+function righeRate(mm, fm, cell, fmt){
+  const g = new Map(), tot = Array(12).fill(0);
+  S.tx.filter(t=>t.t==='r' && t.rid && txYear(t)===ui.year).forEach(t=>{
+    const k = t.sub||'Rate', mi = txMonth(t);
+    if(!g.has(k)) g.set(k, Array(12).fill(0));
+    g.get(k)[mi] += t.amt; tot[mi] += t.amt;
+  });
+  if(!g.size || (fm!=null && !tot[fm])) return '';
+  const riga = (cls, nome, m) => fm!=null && !m[fm] ? '' :
+    `<tr class="${cls} rate-info"><td>${esc(nome)}</td>${mm.map(i=>cell(m[i])).join('')}<td class="mono t">${fmt(sum(m))}</td></tr>`;
+  return riga('grp', 'Rate (non conteggiate)', tot)
+    + [...g.entries()].sort((a,b)=>sum(b[1])-sum(a[1])).map(([k,m])=>riga('sub', k, m)).join('');
+}
 // una volta: le spese di Mezzi registrate prima (Numbers, a mano) nella struttura per mezzo: Mezzi › Auto › Gasolio
 function migraMezzi(){
   const mappa = [[/^(benzina|gasolio) (golf|auto|macchina)$/i,'Auto','Gasolio'], [/^benzina (sh|scooter)$/i,'SH','Benzina'], [/^benzina gommone$/i,'Gommone','Benzina'],
