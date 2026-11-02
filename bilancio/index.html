@@ -814,7 +814,22 @@ function payDueRate(){
    es = estratti conto già addebitati {m, d, spese, pf, tot}. */
 const addYM = (ym,k) => addMonths(ym+'-01',k).slice(0,7);
 const lastDay = ym => ymd(new Date(+ym.slice(0,4), +ym.slice(5,7), 0));
-const stmtDate = (c,ym) => c.tipo==='fine' ? lastDay(ym) : addMonths(ym+'-'+String(Math.min(c.giorno||10,28)).padStart(2,'0'), 1);
+// giorni non lavorativi: sabato, domenica e festività nazionali (con Pasquetta)
+function pasquetta(y){ const a=y%19, b=Math.floor(y/100), c=y%100, d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451), mese=Math.floor((h+l-7*m+114)/31), g1=((h+l-7*m+114)%31)+1;
+  return ymd(new Date(y, mese-1, g1+1)); }
+const FESTE = ['01-01','01-06','04-25','05-01','06-02','08-15','11-01','12-08','12-25','12-26'];
+const festivo = d => { const w = new Date(d+'T12:00:00').getDay(); return w===0 || w===6 || FESTE.includes(d.slice(5)) || d===pasquetta(+d.slice(0,4)); };
+const piuGiorni = (d,n) => ymd(new Date(new Date(d+'T12:00:00').getTime() + n*864e5));
+// data contabile di una spesa con carta: la banca la registra qualche giorno lavorativo dopo (c.contab, di solito 2).
+// L'estratto conto è il mese della data contabile: una spesa del 29 o del 31 può finire nell'estratto del mese dopo.
+function contabile(c, d){ let x = d, n = c && c.contab!=null ? c.contab : 2; while(n>0){ x = piuGiorni(x,1); if(!festivo(x)) n--; } return x; }
+// giorno di addebito dell'estratto del mese ym; c.festivo='prima': se è festivo si anticipa al giorno lavorativo prima (BBVA)
+function stmtDate(c, ym){
+  let d = c.tipo==='fine' ? lastDay(ym) : addMonths(ym+'-'+String(Math.min(c.giorno||10,28)).padStart(2,'0'), 1);
+  if(c.festivo==='prima') while(festivo(d)) d = piuGiorni(d,-1);
+  return d;
+}
 const pfCap = (f,i) => i===f.n-1 ? round2(f.imp - round2(f.imp/f.n)*(f.n-1)) : round2(f.imp/f.n);
 // rateizzazione per carta: ING "PagoFlex" con commissione % al mese sull'importo,
 // BBVA "Rimborso rateale" con commissione fissa in € per tutto il piano, divisa sulle rate
@@ -827,10 +842,11 @@ const pfCosto = f => f.commTipo==='eur' ? round2(f.comm||0) : round2(f.imp*(f.co
 const pfRata = (f,i) => round2(pfCap(f,i) + pfFee(f,i));
 const pfResiduo = f => round2(sum(Array.from({length:f.n-f.done}, (_,j)=>pfCap(f, f.done+j))));
 const settled = (c,ym) => ym < c.dal || (c.es||[]).some(e=>e.m===ym);
-// l'estratto conto (ciclo) di una spesa con carta: il mese della spesa. Le carte addebitate a fine mese (BBVA) chiudono
-// l'estratto il giorno prima: la spesa dell'ultimo giorno va nell'estratto del mese dopo (30 settembre → ottobre).
-// t.ciclo: estratto fissato (spese dell'ultimo giorno già addebitate col loro mese prima di questa regola)
-const cicloDi = (c,t) => t.ciclo || (c && c.tipo==='fine' && t.d===lastDay(t.d.slice(0,7)) ? addYM(t.d.slice(0,7),1) : t.d.slice(0,7));
+// l'estratto conto (ciclo) di una spesa con carta: il mese della sua data contabile (vedi contabile).
+// t.ciclo: estratto scelto a mano nella spesa, o fissato per gli estratti già addebitati prima di questa regola
+const cicloDi = (c,t) => t.ciclo || (c ? contabile(c, t.d).slice(0,7) : t.d.slice(0,7));
+// la regola di prima (mese della spesa; a fine mese l'ultimo giorno andava al mese dopo): serve solo per non toccare gli estratti già addebitati
+const cicloVecchio = (c,t) => t.ciclo || (c && c.tipo==='fine' && t.d===lastDay(t.d.slice(0,7)) ? addYM(t.d.slice(0,7),1) : t.d.slice(0,7));
 const cicloTx = t => cicloDi(carte().find(x=>x.id===t.carta), t);
 // una volta sola: le spese dell'ultimo giorno già comprese in un estratto addebitato (il totale torna) restano in quell'estratto
 function fissaCicliVecchi(){
@@ -854,9 +870,12 @@ function cicliAperti(c){
   return [...m].filter(ym=>!settled(c,ym)).sort();
 }
 const cicloTot = (c,ym) => round2(sum(cartaSpese(c,ym).map(t=>t.amt)) + sum(pfDelCiclo(c,ym).map(x=>pfRata(x.f,x.i))));
-// plafond impegnato: spese non ancora addebitate + capitale PagoFlex ancora da restituire
+// plafond impegnato: spese non ancora addebitate + capitale PagoFlex ancora da restituire.
+// c.ripristino='mese' (ING): il plafond è mensile e il 1° del mese torna libero, anche se l'estratto si addebita dopo (il 10):
+// contano solo le spese del mese in corso (e quelle già contabilizzate nei mesi dopo)
 function plafondUsato(c){
-  const spese = sum(cicliAperti(c).map(ym=>sum(cartaSpese(c,ym).map(t=>t.amt))));
+  const mese = c.ripristino==='mese', ora = thisMonth();
+  const spese = sum(cicliAperti(c).filter(ym=>!mese || ym>=ora).map(ym=>sum(cartaSpese(c,ym).map(t=>t.amt))));
   return round2(spese + sum((c.flex||[]).map(pfResiduo)));
 }
 // addebito automatico degli estratti conto scaduti (giorno di addebito compreso)
@@ -882,11 +901,37 @@ function settleCards(){
   if(k){ save(); toast(k===1 ? 'Addebitato 1 estratto conto della carta' : `Addebitati ${k} estratti conto delle carte`); }
   return k;
 }
+/* una volta: carte allineate al funzionamento delle banche
+   - estratto conto per data contabile (spesa + 2 giorni lavorativi) al posto del mese della spesa;
+     le spese degli estratti già addebitati restano dove sono (t.ciclo)
+   - ING: plafond mensile, torna libero il 1° del mese (l'estratto si addebita il 10)
+   - BBVA: estratto addebitato il 5 del mese dopo (se festivo il giorno lavorativo prima), non a fine mese;
+     gli estratti che l'app aveva già scalato a fine mese ma che la banca addebita più avanti tornano da addebitare */
+function carteContabili(){
+  carte().forEach(c=>{
+    const vecchio = new Map(S.tx.filter(t=>t.carta===c.id).map(t=>[t.id, cicloVecchio(c,t)])); // prima di cambiare la carta
+    if(c.contab==null) c.contab = 2;
+    if(/\bing\b/i.test(c.n) && !c.ripristino) c.ripristino = 'mese';
+    if(/bbva/i.test(c.n) && c.tipo==='fine'){
+      Object.assign(c, {tipo:'giorno', giorno:5, festivo:'prima', ripristino:'addebito'});
+      const oggi = today();
+      (c.es||[]).filter(e=>stmtDate(c,e.m) > oggi).forEach(e=>{
+        const conto = S.conti.find(x=>x.id===(e.conto||c.conto)); if(conto) conto.v = round2(conto.v + e.tot);
+        (c.flex||[]).forEach(f=>{ const i = mdiff(f.m0, e.m); if(i>=0 && i===f.done-1){ f.done--; S.tx = S.tx.filter(x=>x.id!==`pfc_${f.id}_${i}`); } });
+        S.tx.forEach(t=>{ if(t.carta===c.id && t.ciclo===e.m) delete t.ciclo; });
+        c.es = c.es.filter(x=>x!==e);
+      });
+    }
+    // estratti già addebitati: le loro spese non cambiano mese
+    S.tx.forEach(t=>{ if(t.carta!==c.id || t.pf || t.ciclo) return;
+      const v = vecchio.get(t.id); if(v && settled(c,v) && cicloDi(c,t)!==v) t.ciclo = v; });
+  });
+}
 function seedCarte(){
   const find = re => (S.conti.find(c=>re.test(c.n))||{}).id || '';
   return [
-    {id:'ing-oro', n:'ING Oro', plafond:1500, tipo:'giorno', giorno:10, conto:find(/\bing\b/i), pf:true, pfMin:200, pfComm:0.5, dal:thisMonth(), flex:[], es:[]},
-    {id:'bbva', n:'BBVA', plafond:1000, tipo:'fine', giorno:10, conto:find(/bbva/i), pf:true, pfNome:'Rimborso rateale', pfCommTipo:'eur', pfMin:50, pfComm:0, dal:thisMonth(), flex:[], es:[]}
+    {id:'ing-oro', n:'ING Oro', plafond:1500, tipo:'giorno', giorno:10, ripristino:'mese', contab:2, conto:find(/\bing\b/i), pf:true, pfMin:200, pfComm:0.5, dal:thisMonth(), flex:[], es:[]},
+    {id:'bbva', n:'BBVA', plafond:1000, tipo:'giorno', giorno:5, festivo:'prima', ripristino:'addebito', contab:2, conto:find(/bbva/i), pf:true, pfNome:'Rimborso rateale', pfCommTipo:'eur', pfMin:50, pfComm:0, dal:thisMonth(), flex:[], es:[]}
   ];
 }
 // conti con carta di debito/prepagata: se mancano li creo una volta sola (saldo 0, da compilare in Patrimonio)
@@ -1000,6 +1045,7 @@ function afterLoad(){
   }
   if(!S.opz.contiBase){ seedConti(); S.opz.contiBase = true; save(); }
   if(!S.carte){ S.carte = seedCarte(); seedConti(); }
+  if(!S.opz.carteContabili){ carteContabili(); S.opz.carteContabili = true; save(); }
   if(!S.opz.bbvaRateale){
     const b = S.carte.find(c=>/bbva/i.test(c.n));
     if(b) Object.assign(b, {pf:true, pfNome:'Rimborso rateale', pfCommTipo:'eur', pfMin:50, pfComm:b.pfCommTipo==='eur' ? b.pfComm : 0});
@@ -2091,16 +2137,17 @@ function renderCarte(){
   const usato = plafondUsato(c), disp = round2(c.plafond - usato), aperti = cicliAperti(c);
   const resPF = round2(sum((c.flex||[]).map(pfResiduo)));
   const prossimo = aperti[0];
-  const quando = c.tipo==='fine' ? 'a fine mese' : `il ${c.giorno} del mese dopo`;
+  const quando = (c.tipo==='fine' ? 'a fine mese' : `il ${c.giorno} del mese dopo`) + (c.festivo==='prima' ? ' (se festivo, il giorno lavorativo prima)' : '');
   let html = seg + `<div class="card hero kpi"><div class="row"><small>Disponibile su ${eur(c.plafond,0)} di plafond</small><button class="btn sm ghost" onclick="openCarta('${c.id}')">Modifica</button></div>
       <b class="mono ${disp<0?'neg':''}">${eur(disp)}</b>
+      <div class="note" style="margin-top:2px">${c.ripristino==='mese' ? 'Il plafond torna libero il 1° di ogni mese' : 'Il plafond torna libero con l\'addebito dell\'estratto conto'}</div>
       <div class="bar" style="margin:10px 0 12px"><div style="width:${Math.min(100,usato/(c.plafond||1)*100)}%;background:${disp<0?'var(--neg)':usato/(c.plafond||1)>.8?'var(--warn)':'var(--acc)'}"></div></div>
       <div class="row"><div><small>Spese da addebitare</small><b class="mono" style="font-size:16px">${eur(round2(usato-resPF))}</b></div>
         ${c.pf?`<div style="text-align:right"><small>${pfNome(c)} residuo</small><b class="mono" style="font-size:16px">${eur(resPF)}</b></div>`:''}</div></div>
     <div class="note" style="margin:10px 2px 0">Addebito ${quando} ${c.conto?`su <b>${esc(contoName(c.conto))}</b>`:'<span style="color:var(--warn)">· scegli il conto di addebito in Modifica</span>'}${prossimo?` · prossimo: <b>${fmtD(stmtDate(c,prossimo))}</b>, ${eur(cicloTot(c,prossimo))}`:''}</div>
     <button class="btn" style="margin-top:12px" onclick="openTx(null,'${c.id}')">+ Spesa con ${esc(c.n)}</button>`;
   // spese per ciclo non ancora addebitato (di solito il mese in corso, per ING anche il precedente fino al 10)
-  const cicli = [...new Set([...aperti, thisMonth()])].filter(ym=>!settled(c,ym) && ym<=thisMonth()).sort().reverse(); // i mesi futuri (solo rate PagoFlex) sono nel riquadro PagoFlex
+  const cicli = [...new Set([...aperti, thisMonth()])].filter(ym=>!settled(c,ym) && (ym<=thisMonth() || cartaSpese(c,ym).length)).sort().reverse(); // i mesi futuri con sole rate PagoFlex sono nel riquadro PagoFlex; le spese di fine mese contabilizzate il mese dopo si vedono subito
   cicli.forEach(ym=>{
     const sp = cartaSpese(c,ym).sort((a,b)=>b.d.localeCompare(a.d)), pfs = pfDelCiclo(c,ym).filter(x=>x.i>=x.f.done);
     html += `<div class="gh"><b>${MESI[+ym.slice(5)-1]} ${ym.slice(0,4)}</b><span class="mono">${eur(cicloTot(c,ym))} · addebito ${fmtD(stmtDate(c,ym))}</span></div>
@@ -2121,17 +2168,20 @@ function renderCarte(){
   }
   const es = (c.es||[]).slice().sort((a,b)=>b.d.localeCompare(a.d));
   html += `<h2 class="sec">Addebiti</h2>${es.map(e=>`<div class="tx" style="cursor:default"><div class="mid"><b>${fmtD(e.d)} · spese di ${MESI[+e.m.slice(5)-1].toLowerCase()}</b><small>${e.pf?`spese ${eur(e.spese)} + ${pfNome(c)} ${eur(e.pf)} · `:''}da ${esc(contoName(e.conto)||'—')}</small></div><b class="mono">-${eur(e.tot)}</b></div>`).join('') || '<div class="empty">Ancora nessun addebito</div>'}
-    <p class="note" style="margin-top:12px">Il giorno dell'addebito (o alla prima apertura dell'app dopo) il totale del mese viene tolto dal conto della carta. Disponibile = plafond − spese non ancora addebitate − ${pfNome(c)} ancora da restituire.</p>`;
+    <p class="note" style="margin-top:12px">Il giorno dell'addebito (o alla prima apertura dell'app dopo) il totale del mese viene tolto dal conto della carta. Disponibile = plafond − ${c.ripristino==='mese' ? 'spese del mese in corso' : 'spese non ancora addebitate'} − ${pfNome(c)} ancora da restituire. Ogni spesa va nell'estratto del mese in cui la banca la contabilizza (${c.contab??2} giorni lavorativi dopo): le spese degli ultimi giorni del mese possono finire nel mese dopo. Se la banca la mette in un altro mese, cambialo nella spesa (Estratto conto).</p>`;
   return html;
 }
 function openCarta(id){
-  const c = id ? carte().find(x=>x.id===id) : {n:'', plafond:1000, tipo:'giorno', giorno:10, conto:'', pf:false, pfMin:200, pfComm:0.5};
+  const c = id ? carte().find(x=>x.id===id) : {n:'', plafond:1000, tipo:'giorno', giorno:10, contab:2, ripristino:'addebito', conto:'', pf:false, pfMin:200, pfComm:0.5};
   sheet(`<h3>${id?'Modifica carta':'Nuova carta'}</h3>
     <div class="grid2">
       <div class="f"><label>Nome</label><input id="k-n" value="${esc(c.n)}" placeholder="es. ING Oro"></div>
       <div class="f"><label>Plafond mensile (€)</label><input id="k-p" inputmode="decimal" value="${String(c.plafond).replace('.',',')}"></div>
       <div class="f"><label>Addebito</label><select id="k-t" onchange="$('k-g-w').style.visibility=this.value==='giorno'?'visible':'hidden'"><option value="giorno" ${c.tipo==='giorno'?'selected':''}>Giorno del mese dopo</option><option value="fine" ${c.tipo==='fine'?'selected':''}>Fine mese</option></select></div>
       <div class="f" id="k-g-w" style="visibility:${c.tipo==='giorno'?'visible':'hidden'}"><label>Giorno</label><input id="k-g" inputmode="numeric" value="${c.giorno||10}"></div>
+      <div class="f"><label>Se l'addebito è festivo</label><select id="k-fe"><option value="">Stesso giorno</option><option value="prima" ${c.festivo==='prima'?'selected':''}>Giorno lavorativo prima</option></select></div>
+      <div class="f"><label>Il plafond torna libero</label><select id="k-ri"><option value="addebito">Con l'addebito</option><option value="mese" ${c.ripristino==='mese'?'selected':''}>Il 1° del mese</option></select></div>
+      <div class="f"><label>Giorni lavorativi per contabilizzare</label><input id="k-cb" inputmode="numeric" value="${c.contab??2}"></div>
     </div>
     <div class="f"><label>Colore della carta</label><select id="k-col">${COLORI_CARTA.map(([v,l])=>`<option value="${v}" ${v===cartaColore(c)?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="f"><label>Conto di addebito</label><select id="k-c"><option value="">—</option>${S.conti.map(x=>`<option value="${x.id}" ${x.id===c.conto?'selected':''}>${esc(x.n)} · ${x.g}</option>`).join('')}</select></div>
@@ -2148,6 +2198,7 @@ function openCarta(id){
 }
 function saveCarta(id){
   const o = {n:$('k-n').value.trim(), colore:$('k-col').value, plafond:num($('k-p').value), tipo:$('k-t').value, giorno:Math.min(28,Math.max(1,parseInt($('k-g').value)||10)),
+    festivo:$('k-fe').value, ripristino:$('k-ri').value, contab:Math.min(5,Math.max(0,parseInt($('k-cb').value)||0)),
     conto:$('k-c').value, pf:$('k-pf').checked, pfNome:$('k-pn').value.trim()||'Rateizzazione', pfCommTipo:$('k-pu').value, pfMin:num($('k-pm').value), pfComm:num($('k-pc').value)};
   if(!o.n) return toast('Inserisci il nome');
   if(!o.plafond) return toast('Inserisci il plafond');
@@ -2282,6 +2333,7 @@ function openTx(id, carta, pre){
     <div class="f"><label>Nota</label><input id="t-n" value="${esc(t.note.startsWith('Totale mensile')?t.note:t.note)}" placeholder="facoltativa"></div>
     <div class="f" id="t-k-w" style="display:${t.t==='u'?'block':'none'}"><label id="t-k-l">${rp?'Rate pagate con':'Pagato con'}</label><select id="t-k" ${t.rid||t.pf?'disabled':''}>${pagOptions(rp ? (rp.carta ? 'k:'+rp.carta : rp.conto ? 'c:'+rp.conto : '') : id ? pagValue(t) : carta ? 'k:'+carta : ui.lastPag||'')}</select>
       ${t.pf?'<p class="note" style="margin:4px 0 0">Spesa rateizzata con la carta: per cambiarla annulla prima la rateizzazione nella sezione Carte.</p>':''}</div>
+    <div class="f" id="t-es-w" style="display:none" data-ciclo="${t.ciclo||''}" data-chiuso="${estrattoChiuso(t)?1:''}"><label>Estratto conto</label><select id="t-es" ${estrattoChiuso(t)||t.pf?'disabled':''}></select></div>
     <div id="t-r-w" style="display:${t.t==='u'&&rateOk?'block':'none'}">
       <label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="t-r" ${rp?'checked':''} ${lock?'disabled':''} onchange="txRate()"> Pagato a rate</label>
       <div id="t-r-f" style="display:${rp?'block':'none'}">
@@ -2311,6 +2363,7 @@ function openTx(id, carta, pre){
   $('t-a').addEventListener('input', txGruppoPrev); txGruppoPrev();
   $('t-a').addEventListener('input', txRatePrev);
   txRatePrev();
+  $('t-k').addEventListener('change', txEstratto); $('t-d').addEventListener('input', txEstratto); txEstratto();
   if(!id) setTimeout(()=>$('t-a').focus(),120);
 }
 function txGruppoPrev(){
@@ -2322,7 +2375,7 @@ function txRate(){
   const on = $('t-r').checked;
   $('t-r-f').style.display = on ? 'block' : 'none';
   $('t-k-l').textContent = on ? 'Rate pagate con' : 'Pagato con';
-  txRatePrev();
+  txRatePrev(); txEstratto();
 }
 function txRatePrev(){
   const el = $('t-r-p'); if(!el) return;
@@ -2343,7 +2396,7 @@ function openPagRata(t){
 function setTxT(v){
   $('t-t').value=v; draftT=v; $('t-k-w').style.display = v==='u'?'block':'none'; $('t-r-w').style.display = v==='u'?'block':'none'; $('t-g-w').style.display = v==='u'?'block':'none';
   document.querySelectorAll('#tx-seg button').forEach(b=>b.classList.toggle('on',b.classList.contains(v)));
-  fillCats('');
+  fillCats(''); txEstratto();
 }
 function fillCats(sel){
   const tipo=$('t-t').value; const m=catMap(tipo);
@@ -2365,6 +2418,18 @@ function catChange(){
   $('t-mezzi').style.display = $('t-t').value==='u' && /^mezzi$/i.test(v) && bordo.stato==='ok' ? 'block' : 'none';
   detChange();
 }
+// carta di credito: in quale estratto conto va la spesa (di solito lo decide la data contabile; si può scegliere a mano)
+function txEstratto(){
+  const w = $('t-es-w'); if(!w) return;
+  const v = $('t-k').value, d = $('t-d').value, c = v.startsWith('k:') && carte().find(x=>x.id===v.slice(2));
+  if(!c || !d || $('t-t').value!=='u' || ($('t-r') && $('t-r').checked)){ w.style.display='none'; return; }
+  const sel = $('t-es'), prima = sel.options.length ? sel.value : (w.dataset.ciclo || 'auto');
+  const auto = contabile(c, d).slice(0,7), m0 = d.slice(0,7), mesi = [...new Set([m0, addYM(m0,1), auto, w.dataset.ciclo].filter(Boolean))].sort();
+  const nome = ym => MESI[+ym.slice(5)-1] + ' ' + ym.slice(0,4);
+  sel.innerHTML = `<option value="auto">Automatico · ${nome(auto)}</option>` + mesi.map(m=>`<option value="${m}">${nome(m)}</option>`).join('');
+  sel.value = [...sel.options].some(o=>o.value===prima) ? prima : 'auto';
+  w.style.display = 'block';
+}
 function saveTx(id){
   const rit = ritornoCella;
   const o = { t:$('t-t').value, amt:num($('t-a').value), d:$('t-d').value,
@@ -2381,6 +2446,8 @@ function saveTx(id){
   } else if(id && rimborsi({id}).length) return toast('Ci sono rimborsi ricevuti: eliminali prima di togliere "Acquisto di gruppo"');
   const old = id && S.tx.find(x=>x.id===id);
   if(!(old && (old.rid || old.pf))) Object.assign(o, o.t==='u' ? pagParse($('t-k').value) : {carta:'', pag:'', conto:''});
+  const esScelto = o.carta && $('t-es-w') && $('t-es-w').style.display!=='none' && !$('t-es').disabled ? $('t-es').value : null;
+  if(esScelto && esScelto!=='auto') o.ciclo = esScelto;
   // pagato a rate: l'acquisto non muove soldi, li muovono le rate dal conto/carta di "Rate pagate con"
   const rateOn = o.t==='u' && $('t-r') && $('t-r').checked && !(old && (old.rid || old.pf || old.abid));
   const pianoOld = old && old.rata && S.rate.find(r=>r.id===old.rata);
@@ -2401,7 +2468,7 @@ function saveTx(id){
   const chiuso = t => t && t.carta && (()=>{ const c=carte().find(x=>x.id===t.carta); return c && (c.es||[]).some(e=>e.m===cicloDi(c,t)); })();
   if(chiuso(old) && (o.carta!==old.carta || o.amt!==old.amt || cicloTx(o.d===old.d && o.carta===old.carta ? {...o, ciclo:old.ciclo} : o)!==cicloTx(old))) return toast('Estratto conto già addebitato: importo, mese e carta non si possono più cambiare');
   if(chiuso({...o, carta:o.carta}) && !(old && old.carta===o.carta && cicloTx(o)===cicloTx(old))) return toast('L\'estratto conto di quel mese è già stato addebitato');
-  if(old && old.ciclo && (o.d!==old.d || o.carta!==old.carta)) delete old.ciclo; // data o carta cambiate: l'estratto lo decide di nuovo la regola
+  if(old && old.ciclo && !o.ciclo && (esScelto==='auto' || o.d!==old.d || o.carta!==old.carta)) delete old.ciclo; // automatico, o data o carta cambiate: l'estratto lo decide di nuovo la regola
   if(old && old.pf){ const f=carte().flatMap(c=>c.flex||[]).find(f=>f.id===old.pf); if(f && o.amt!==old.amt){ if(f.done) return toast('Rateizzazione già in corso: l\'importo non si può cambiare'); f.imp=o.amt; } }
   // carta di debito / conto / contanti: l'importo esce subito dal conto (prima tolgo l'effetto della versione vecchia)
   if(old) applyPag(old, -1);
