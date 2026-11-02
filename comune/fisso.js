@@ -50,3 +50,30 @@
   }, { passive: true });
   document.addEventListener('touchcancel', () => { y0 = null; tira = 0; nascondi(); }, { passive: true });
 })();
+
+/* Dentro la Dashboard, sul telefono, quando si apre la tastiera la Dashboard rimpicciolisce l'app alla parte che si vede:
+   il campo in cui si scrive torna in vista scorrendo solo la finestra che lo contiene (non la pagina della Dashboard). */
+(function () {
+  if (parent === window) return;
+  let t = 0;
+  const campo = a => !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  function contenitore(el) {
+    for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight) return n;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+  function inVista() {
+    const a = document.activeElement; if (!campo(a)) return;
+    const c = contenitore(a), r = a.getBoundingClientRect();
+    const radice = c === (document.scrollingElement || document.documentElement);
+    const cr = radice ? { top: 0, bottom: innerHeight } : c.getBoundingClientRect();
+    const alto = Math.max(cr.top, 0), basso = Math.min(cr.bottom, innerHeight);
+    if (r.top >= alto + 8 && r.bottom + 8 <= basso) return;
+    c.scrollTop += r.top - (alto + Math.max(8, (basso - alto) / 4));
+  }
+  const presto = ms => { clearTimeout(t); t = setTimeout(inVista, ms); };
+  addEventListener('resize', () => presto(60));
+  document.addEventListener('focusin', () => presto(350));
+})();

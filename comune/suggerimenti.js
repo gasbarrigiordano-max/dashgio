@@ -49,15 +49,7 @@
     chiudi();
   }
   const campo = t => t && t.matches && t.matches('input[data-lista]');
-  // se, aperta la tastiera, il campo è finito fuori dalla parte visibile, lo riporta in vista
-  function inVista(inp) {
-    setTimeout(() => {
-      if (document.activeElement !== inp) return;
-      const r = inp.getBoundingClientRect(), vv = window.visualViewport, alto = vv ? vv.height : innerHeight;
-      if (r.top < 0 || r.bottom > alto) inp.scrollIntoView({ block: 'center' });
-    }, 400);
-  }
-  document.addEventListener('focusin', e => { if (campo(e.target)) { chiudi(); mostra(e.target); inVista(e.target); } });
+  document.addEventListener('focusin', e => { if (campo(e.target)) { chiudi(); mostra(e.target); } });
   document.addEventListener('input', e => { if (campo(e.target)) mostra(e.target); });
   document.addEventListener('focusout', e => {
     if (campo(e.target)) setTimeout(() => { if (document.activeElement !== e.target) e.target.parentElement.querySelector(':scope > .sugg')?.remove(); }, 150);

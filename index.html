@@ -215,6 +215,7 @@ body.in-app{overflow:hidden}
 .app-vista iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:transparent}
 .app-vista iframe.on{display:block}
 #bil.in-vista{opacity:1;pointer-events:auto;z-index:6;border-radius:28px;transform:none}
+body.tastiera .app-vista, body.tastiera #bil.in-vista{z-index:13} /* tastiera aperta: l'app copre la barra in alto (più spazio per scrivere) */
 
 /* attesa e sblocco di Bilancio */
 .stato{position:fixed;left:50%;bottom:calc(20px + var(--sab));transform:translateX(-50%);z-index:20;border-radius:99px;padding:10px 16px;font-size:12.5px;font-weight:600;display:none}
@@ -1469,6 +1470,24 @@ function applicaLargo(si, px){
 addEventListener('resize', () => { if(largoOra.si) applicaLargo(largoOra.si, largoOra.px); });
 // mentre la scheda si allarga o si stringe, Bilancio (posizionato a mano) la segue
 if(window.ResizeObserver) new ResizeObserver(() => dimensiona()).observe($('app-vista'));
+/* tastiera aperta sul telefono dentro un'app: l'iPhone sposta la pagina in su (anche troppo: la scheda e il campo
+   finivano fuori dallo schermo). L'app allora segue la parte che si vede, sopra la tastiera, e copre la barra in alto;
+   dentro l'app il campo torna in vista da solo (comune/fisso.js). Chiusa la tastiera torna tutto com'era. */
+(function(){
+  const vv = window.visualViewport; if(!vv) return;
+  let raf = 0, su = false;
+  function segui(){
+    raf = 0; const box = $('app-vista');
+    const aperta = tel() && document.body.classList.contains('in-app') && innerHeight - vv.height > 120;
+    if(!aperta){ if(su){ su = false; document.body.classList.remove('tastiera'); box.style.top = box.style.bottom = ''; dimensiona(); } return; }
+    su = true; document.body.classList.add('tastiera');
+    box.style.top = `calc(var(--sat) + 6px + ${Math.round(vv.offsetTop)}px)`;
+    box.style.bottom = Math.max(0, Math.round(innerHeight - vv.offsetTop - vv.height) + 4) + 'px';
+    dimensiona();
+  }
+  const pianifica = () => { if(!raf) raf = requestAnimationFrame(segui); };
+  vv.addEventListener('resize', pianifica); vv.addEventListener('scroll', pianifica);
+})();
 // l'app aperta fa entrare la sua schermata come quando si cambia scheda al suo interno
 function entraApp(f){ try { const w = f.contentWindow; if(w.Moto && w.motoVista) w.Moto.entra(w.motoVista()); } catch(e){} }
 // l'evidenziazione della voce attiva scivola da una voce all'altra (dock e barra in alto)
