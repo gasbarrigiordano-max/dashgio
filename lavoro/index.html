@@ -94,6 +94,8 @@ header.top h1{margin:0;font-size:22px;font-weight:800;flex:1 1 auto}
 .g .imp b{display:block;font-size:14px}
 .g .imp small{font-size:11px;color:var(--ink3)}
 .manca{color:#ffd98a;text-shadow:0 1px 4px rgba(50,25,0,.75)}
+.proposta{font-style:italic}
+.btn.piccolo{min-height:0;padding:6px 12px;font-size:12px}
 .stato{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;margin-top:3px}
 .stato.da{background:rgba(245,196,107,.18);color:var(--warn)}
 .stato.fatturato{background:rgba(138,180,248,.2);color:var(--blu)}
@@ -284,9 +286,41 @@ async function leggiPorto(){
   if (!window.Porto) return;
   try { PORTO = await Porto.leggi(); disegna(); } catch(e) { console.warn('porto', e); }
 }
-function moloDi(g){
-  if (!PORTO || !g.nave) return null;
-  return Porto.trova(PORTO, g.nave, g.d);
+function moloDi(g, nave){
+  nave = nave || g.nave;
+  if (!PORTO || !nave) return null;
+  return Porto.trova(PORTO, nave, g.d);
+}
+/* nave proposta per una giornata senza nave: tra le navi in porto quel giorno, quelle della compagnia che l'agenzia
+   segue di solito (imparata dalle giornate con la nave: COSTAMED → Costa…). Una sola: è la proposta. */
+function marcheAgenzia(ag){
+  const m = new Set();
+  L.giornate.forEach(x => { if (x.agenzia === ag && x.nave) { const b = Porto.norm(x.nave).split(' ')[0]; if (b) m.add(b); } });
+  return m;
+}
+function naviProbabili(g){
+  if (g.nave || !PORTO || !g.agenzia) return [];
+  const marche = marcheAgenzia(g.agenzia); if (!marche.size) return [];
+  return naviDelGiorno(g.d).filter(n => marche.has(n.split(' ')[0])).map(titolo);
+}
+const proposta = g => { const l = naviProbabili(g); return l.length === 1 ? l[0] : ''; };
+// testo della nave: quella inserita, o la proposta da confermare, o "da inserire" con le navi della compagnia in porto
+function nomeNave(g, grande){
+  if (g.nave) return esc(g.nave);
+  const l = naviProbabili(g);
+  if (l.length === 1) return `<span class="proposta">${esc(l[0])}</span> <small class="manca">da confermare</small>`;
+  return `<span class="manca">${grande ? 'Nave da inserire' : 'nave da inserire'}</span>${l.length ? ` <small class="manca">· in porto ${esc(l.join(', '))}</small>` : ''}`;
+}
+// conferma in una volta le navi proposte (una sola possibile per giornata); anche il calendario si aggiorna
+function confermaNavi(){
+  const l = ordinate().filter(g => g.d >= oggiISO() && !g.nave && proposta(g));
+  if (!l.length) return;
+  if (!confirm(`Inserire la nave proposta in ${l.length} ${l.length === 1 ? 'giornata' : 'giornate'}?\n\n` + l.map(g => fmtD(g.d) + ' · ' + proposta(g)).join('\n'))) return;
+  const prima = l.map(g => ({...g}));
+  l.forEach(g => { g.nave = proposta(g); });
+  salva(); disegna();
+  l.forEach((g, i) => avvisaCalendario('salva', prima[i], {...g}));
+  toast(l.length === 1 ? 'Nave inserita' : `${l.length} navi inserite`);
 }
 const badgeMolo = (m, grande) => m ? `<span class="molo${m.fonte === 'mese' ? ' prev' : ''}${grande ? ' grande' : ''}${(m.banchina || '').length > 4 ? ' lungo' : ''}" title="${esc(m.nave + ' · molo ' + (m.banchina || 'da definire') + (m.orari ? ' · ' + m.orari : '') + (m.fonte === 'mese' ? ' · previsione del mese' : ''))}"><small>molo</small><b class="mono">${esc(m.banchina || '–')}</b></span>` : '';
 // navi in porto quel giorno (per scegliere la nave di una giornata)
@@ -313,10 +347,10 @@ function larghezzaLavoro(){
   return col * 420 + (col - 1) * 16 + 32 + 4;
 }
 function rigaG(g){
-  const m = g.d >= oggiISO() ? moloDi(g) : null;
+  const m = g.d >= oggiISO() ? moloDi(g, g.nave || proposta(g)) : null;
   return `<button class="g" type="button" onclick="modifica('${g.id}')">
     <span class="data"><b>${+g.d.slice(8)}</b><small>${giornoSett(g.d)} ${MESI[+g.d.slice(5, 7) - 1]}</small></span>
-    <span class="mid"><b>${g.nave ? esc(g.nave) : '<span class="manca">nave da inserire</span>'}</b><small>${esc(g.agenzia || '–')}${g.tipo ? ' · ' + esc(g.tipo) : ''}</small>${etichStato(g)}</span>
+    <span class="mid"><b>${nomeNave(g)}</b><small>${esc(g.agenzia || '–')}${g.tipo ? ' · ' + esc(g.tipo) : ''}</small>${etichStato(g)}</span>
     ${m ? badgeMolo(m) : ''}
     <span class="imp"><b class="mono">${eur(totale(g))}</b><small>lordo ${eur0(num(g.lordo) || 0)}</small></span></button>`;
 }
@@ -325,16 +359,17 @@ function vistaProssime(){
     <div class="azioni"><button class="btn" type="button" onclick="$('imp-file').click()">Importa giornate</button></div></section>`;
   const oggi = oggiISO(), fut = ordinate().filter(g => g.d >= oggi), p = fut[0];
   const daFatt = L.giornate.filter(g => statoDi(g) === 'da'), senzaNave = fut.filter(g => !g.nave);
-  const mp = p && moloDi(p);
+  const mp = p && moloDi(p, p.nave || proposta(p)), proposte = fut.filter(g => !g.nave && proposta(g));
   const quando = p ? (giorni(p.d) === 0 ? 'oggi' : giorni(p.d) === 1 ? 'domani' : new Date(p.d + 'T12:00').toLocaleDateString('it-IT', {weekday: 'long', day: 'numeric', month: 'long'})) : '';
   return `${p ? `<section class="card glass prossima" onclick="modifica('${p.id}')" style="cursor:pointer">
       <div class="quando">${quando} · ${esc(p.agenzia || '')}</div>
-      <div class="nave">${p.nave ? esc(p.nave) : '<span class="manca">Nave da inserire</span>'}</div>
+      <div class="nave">${nomeNave(p, true)}</div>
       <div class="riga">${badgeMolo(mp, true)}${p.tipo ? `<span class="chip">${esc(p.tipo)}</span>` : ''}<span class="chip mono">${eur(totale(p))}</span></div>
-      ${!p.nave && naviDelGiorno(p.d).length ? `<p class="nota">In porto quel giorno: ${esc(naviDelGiorno(p.d).map(titolo).join(', '))}</p>` : ''}
+      ${!p.nave && !naviProbabili(p).length && naviDelGiorno(p.d).length ? `<p class="nota">In porto quel giorno: ${esc(naviDelGiorno(p.d).map(titolo).join(', '))}</p>` : ''}
     </section>` : '<section class="card glass"><h2>Nessuna giornata in programma</h2><p class="nota">Aggiungile con il "+".</p></section>'}
     ${daFatt.length ? `<section class="card glass" onclick="tab='fatture';disegna()" style="cursor:pointer"><h2>${daFatt.length} ${daFatt.length === 1 ? 'giornata' : 'giornate'} da fatturare</h2><p class="nota">${eur(somma(daFatt, totale))} · tocca per fatturare</p></section>` : ''}
     <div class="sez"><h2>In programma</h2><small>${fut.length} ${fut.length === 1 ? 'giornata' : 'giornate'}${senzaNave.length ? ` · <span class="manca">${senzaNave.length} senza nave</span>` : ''}</small></div>
+    ${proposte.length ? `<p class="nota" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">Navi proposte dal programma del porto (la compagnia che l'agenzia segue di solito): ${proposte.length} da confermare <button class="btn piccolo" type="button" onclick="confermaNavi()">Conferma tutte</button></p>` : ''}
     ${fut.slice(1).map(rigaG).join('') || '<p class="vuoto">Nient\'altro in programma.</p>'}`;
 }
 // Giornate: filtro per mese e per agenzia, a elenco o a calendario (la scelta resta su questo dispositivo)
@@ -434,7 +469,8 @@ function modifica(id, giorno){
   apri(id ? 'Giornata' : 'Nuova giornata', `<div class="campi">
     <label>Data<input id="m-d" type="date" value="${esc(g.d)}" onchange="aggiornaNavi(this.value)"></label>
     <label>Agenzia<input id="m-a" data-sugg="agenzie" autocomplete="off" value="${esc(g.agenzia)}" autocapitalize="characters" placeholder="Es. CFFT"></label>
-    <label class="tutta">Nave<input id="m-n" data-sugg="navi" autocomplete="off" value="${esc(g.nave)}" placeholder="Es. Costa Toscana"></label>
+    <label class="tutta">Nave<input id="m-n" data-sugg="navi" autocomplete="off" value="${esc(g.nave || (id ? proposta(g) : ''))}" placeholder="Es. Costa Toscana"></label>
+    ${id && !g.nave && proposta(g) ? `<p class="nota tutta" style="margin:-4px 0 0">Nave proposta dal programma del porto: controlla e salva per confermarla.</p>` : ''}
     <label class="tutta">Servizio<input id="m-t" data-sugg="tipi" autocomplete="off" value="${esc(g.tipo)}" placeholder="Es. AM/PM GO, PS, Spiaggia"></label>
     <label>Lordo €<input id="m-l" inputmode="decimal" value="${esc(g.lordo)}" oninput="ricalcola()"></label>
     <label>Extra €<input id="m-e" inputmode="decimal" value="${esc(g.extra)}" oninput="ricalcola()"></label>
