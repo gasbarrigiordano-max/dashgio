@@ -1471,18 +1471,31 @@ addEventListener('resize', () => { if(largoOra.si) applicaLargo(largoOra.si, lar
 // mentre la scheda si allarga o si stringe, Bilancio (posizionato a mano) la segue
 if(window.ResizeObserver) new ResizeObserver(() => dimensiona()).observe($('app-vista'));
 /* tastiera aperta sul telefono dentro un'app: l'iPhone sposta la pagina in su (anche troppo: la scheda e il campo
-   finivano fuori dallo schermo). L'app allora segue la parte che si vede, sopra la tastiera, e copre la barra in alto;
-   dentro l'app il campo torna in vista da solo (comune/fisso.js). Chiusa la tastiera torna tutto com'era. */
+   finivano fuori dallo schermo). L'app allora si ferma tra la cima dello schermo e la tastiera (copre la barra in alto)
+   e lo spostamento dell'iPhone si annulla: con il campo già sopra la tastiera non serve. La posizione dipende solo
+   dall'altezza della tastiera, non da quanto l'iPhone ha spostato la pagina (seguirlo faceva rimbalzare la scheda).
+   Dentro l'app il campo torna in vista da solo (comune/fisso.js). Chiusa la tastiera torna tutto com'era. */
 (function(){
   const vv = window.visualViewport; if(!vv) return;
-  let raf = 0, su = false;
+  let raf = 0, su = false, hFatta = 0, tRiporta = 0, riporta = false; // riporta: l'iPhone si lascia riportare in cima
   function segui(){
     raf = 0; const box = $('app-vista');
     const aperta = tel() && document.body.classList.contains('in-app') && innerHeight - vv.height > 120;
-    if(!aperta){ if(su){ su = false; document.body.classList.remove('tastiera'); box.style.top = box.style.bottom = ''; dimensiona(); } return; }
-    su = true; document.body.classList.add('tastiera');
-    box.style.top = `calc(var(--sat) + 6px + ${Math.round(vv.offsetTop)}px)`;
-    box.style.bottom = Math.max(0, Math.round(innerHeight - vv.offsetTop - vv.height) + 4) + 'px';
+    if(!aperta){ if(su){ su = false; hFatta = 0; riporta = false; delete box.dataset.spost; document.body.classList.remove('tastiera'); box.style.top = box.style.bottom = ''; dimensiona(); } return; }
+    const h = Math.round(vv.height);
+    if(!su || Math.abs(h - hFatta) > 30){ // solo quando la tastiera si apre o cambia altezza
+      su = true; delete box.dataset.spost; hFatta = h; document.body.classList.add('tastiera');
+      box.style.top = 'calc(var(--sat) + 6px)'; box.style.bottom = Math.max(0, innerHeight - h + 4) + 'px';
+      dimensiona();
+    }
+    if(vv.offsetTop > 0 || scrollY > 0){ clearTimeout(tRiporta); tRiporta = setTimeout(() => { const o = vv.offsetTop; scrollTo(0, 0); if(vv.offsetTop < o) riporta = true; else setTimeout(ripiego, 400); }, 50); }
+  }
+  // se l'iPhone non si lascia riportare la pagina in cima, l'app si sposta una volta sola dove si vede (niente inseguimenti)
+  function ripiego(){
+    const box = $('app-vista'), off = Math.round(vv.offsetTop);
+    if(!su || riporta || off < 20 || box.dataset.spost) return;
+    box.dataset.spost = '1';
+    box.style.top = `calc(var(--sat) + 6px + ${off}px)`; box.style.bottom = Math.max(0, innerHeight - off - hFatta + 4) + 'px';
     dimensiona();
   }
   const pianifica = () => { if(!raf) raf = requestAnimationFrame(segui); };
