@@ -1281,8 +1281,10 @@ function allenamento(d){
   const mu = PAL.muscoli && PAL.muscoli.length ? PAL.muscoli : Programma.MUSCOLI_BASE, nome = id => (mu.find(m => m.id === id) || {nome:id}).nome;
   return {d, titolo:g.ordine.map(nome).join(' → '), app:'Palestra · allenamento', tag:'GYM', amt:null, senzaImporto:true, href:'palestra/'};
 }
+// allenamento di oggi già fatto (una sessione salvata oggi nella Palestra): si passa al prossimo
+const allenatoOggi = () => !!(PAL && PAL.sessioni && PAL.sessioni.some(x => x.d === isoLocale(new Date())));
 function prossimoAllenamento(){
-  const oggi = new Date(); for(let i = 0; i < 7; i++){ const a = allenamento(isoLocale(new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + i))); if(a) return a; }
+  const oggi = new Date(); for(let i = allenatoOggi() ? 1 : 0; i < 8; i++){ const a = allenamento(isoLocale(new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + i))); if(a) return a; }
   return null;
 }
 function tuttaAgenda(){ const al = prossimoAllenamento(); return [...D.agenda, ...altriEventi(), ...(al ? [al] : []), ...GC.eventi.filter(e => giorniA(e.d) >= 0 && giorniA(e.d) <= 30)].sort((x, y) => x.d.localeCompare(y.d)); }
@@ -1296,22 +1298,35 @@ function tilePalestra(){
   if(PAL.errore) return {...t, v:'Non leggibile', s:PAL.errore};
   if(!PAL.programma || !(PAL.programma.blocchi || []).length) return {...t, app:'', v:'Nessun programma', s:'imposta i blocchi nella Palestra'};
   const mu = PAL.muscoli && PAL.muscoli.length ? PAL.muscoli : Programma.MUSCOLI_BASE, nome = id => (mu.find(m => m.id === id) || {nome:id}).nome;
-  const oggi = new Date(), g = Programma.giorno(PAL.programma, isoLocale(oggi));
-  if(g) return {...t, v:g.ordine.map(nome).join(' → '), s: g.ordine.length > 1 ? `${g.secondoGiorno ? 'secondo' : 'primo'} giorno della coppia · priorità ${nome(g.ordine[0]).toLowerCase()}` : 'un muscolo solo'};
+  const oggi = new Date(), g = Programma.giorno(PAL.programma, isoLocale(oggi)), fatto = allenatoOggi();
+  const coppia = g => g.ordine.length > 1 ? `${g.secondoGiorno ? 'secondo' : 'primo'} giorno della coppia · priorità ${nome(g.ordine[0]).toLowerCase()}` : 'un muscolo solo';
+  if(g && !fatto) return {...t, v:g.ordine.map(nome).join(' → '), s:coppia(g)};
+  // oggi riposo, o allenamento di oggi già finito: il prossimo
   for(let i = 1; i < 8; i++){
     const d = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + i), n = Programma.giorno(PAL.programma, isoLocale(d));
-    if(n) return {...t, v:'Riposo', s:`${i === 1 ? 'domani' : d.toLocaleDateString('it-IT', {weekday:'long'})}: ${n.ordine.map(nome).join(' → ')}`};
+    if(!n) continue;
+    const quando = i === 1 ? 'domani' : d.toLocaleDateString('it-IT', {weekday:'long'});
+    if(fatto) return {...t, app:quando, v:n.ordine.map(nome).join(' → '), s:`oggi fatto ✓ · ${coppia(n)}`};
+    return {...t, v:'Riposo', s:`${quando}: ${n.ordine.map(nome).join(' → ')}`};
   }
-  return {...t, v:'Riposo', s:'nessun allenamento in programma'};
+  return {...t, v:fatto ? 'Fatto ✓' : 'Riposo', s:'nessun allenamento in programma'};
 }
 // riquadro Lavoro: il prossimo evento del calendario di lavoro scelto nelle impostazioni
 // la prossima giornata segnata nella sezione Lavoro (da oggi in poi): nave, agenzia e molo
-// dalle 12 in poi, se domani c'è da fare (giornata di Lavoro o evento di lavoro), il riquadro mostra domani invece di oggi
+// dalle 12 in poi la giornata di oggi è finita: il riquadro guarda da domani. Se domani non si lavora al porto
+// mostra gli appuntamenti di domani (se ce ne sono), se no la prossima giornata di lavoro
 function giornoLavoro(){
-  const ora = new Date(), oggi = isoLocale(ora), domani = piuGiorno(oggi, 1);
-  if(ora.getHours() < 12) return oggi;
-  const domaniPieno = ((LAV && LAV.giornate) || []).some(g => g.d === domani) || (gcalAttivi().length && GC.eventi.some(e => e.lavoro && e.d === domani));
-  return domaniPieno ? domani : oggi;
+  const ora = new Date(), oggi = isoLocale(ora);
+  return ora.getHours() < 12 ? oggi : piuGiorno(oggi, 1);
+}
+function lavoroDomani(){
+  const domani = piuGiorno(isoLocale(new Date()), 1);
+  return ((LAV && LAV.giornate) || []).some(g => g.d === domani) || !!(gcalAttivi().length && GC.eventi.some(e => e.lavoro && e.d === domani));
+}
+function appuntamentiDomani(){
+  if(!gcalAttivi().length) return [];
+  const domani = piuGiorno(isoLocale(new Date()), 1);
+  return GC.eventi.filter(e => e.d === domani).sort((a, b) => a.ts - b.ts);
 }
 function prossimaGiornata(){
   const dal = giornoLavoro();
@@ -1320,6 +1335,11 @@ function prossimaGiornata(){
 function tileLavoro(){
   const t = {href:'#', lab:'Lavoro', app:'Google', cl:'testo', ico:ICO_LAVORO};
   // prima le giornate della sezione Lavoro (ci sono tutte le agenzie); Google solo se ha un impegno di lavoro prima
+  if(new Date().getHours() >= 12 && !lavoroDomani()){
+    const ap = appuntamentiDomani();
+    if(ap.length){ lavoroEv = ap[0];
+      return {...t, lab:'Domani', app:'niente porto', v:ap[0].titolo + (ap.length > 1 ? ` · +${ap.length - 1}` : ''), s:quando(ap[0]), href:'#', on:'apriNelCalendario(lavoroEv)'}; }
+  }
   const dal = giornoLavoro(), g = prossimaGiornata(), evG = gcalAttivi().length ? GC.eventi.filter(e => e.lavoro && e.fineTs > Date.now() && e.d >= dal).sort((a, b) => a.ts - b.ts)[0] : null;
   if(g && !(evG && evG.d < g.d)){
     const m = g.nave && PORTO ? moloDi({titolo: g.nave, d: g.d}) : null;
@@ -1420,7 +1440,7 @@ function mostraVista(v, extra = ''){
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
   liberaBil();
   Moto.aggiorna(); // la barra in alto e il dock cambiano forma: le pillole si rimettono al loro posto
-  if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto){ leggi(); leggiLavoro(); } return; }
+  if(vista === 'panoramica'){ Moto.entra(document.querySelector('main')); Moto.entra(document.querySelector('aside')); if(pronto){ leggi(); leggiLavoro(); leggiPalestra(); } return; }
   scrollTo(0, 0); // dalla panoramica scorsa in giù: l'app parte sotto la barra, non nascosta dietro
   if(vista === 'bilancio'){
     bil.classList.add('in-vista'); bil.removeAttribute('aria-hidden'); bil.tabIndex = 0; bil.title = 'Bilancio'; dimensiona();
