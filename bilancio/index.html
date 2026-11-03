@@ -1382,7 +1382,7 @@ function mxMov(r, m, tutti){
     && (tutti || (txYear(t)===ui.year && (m<0 || txMonth(t)===m))));
 }
 // collegati a rate o rateizzazioni della carta: si eliminano dalla loro sezione, non in blocco
-const mxBloccato = t => t.rid || t.pf || t.rata || t.int;
+const mxBloccato = t => t.rid || t.pf || t.rata || t.int || t.lav;
 function mxElimina(r, m, tutti){
   const {cat, sub, det, fuel} = mxRighe[r], list = mxMov(r, m, tutti).filter(t=>!mxBloccato(t)), salt = mxMov(r, m, tutti).length - list.length;
   if(!list.length) return;
@@ -2307,6 +2307,7 @@ function openTx(id, carta, pre){
   const t = id ? S.tx.find(x=>x.id===id) : {t:carta?'u':draftT, d:today(), cat:'', sub:'', amt:'', note:'', carta:carta||'', ...pre};
   if(pre && pre.t) draftT = pre.t;
   if(t.t==='r') return openPagRata(t);
+  if(t.lav) return openDaLavoro(t);
   if(t.t==='rb') return openRimb(t.gid, t.id);
   const rp = t.rata ? S.rate.find(r=>r.id===t.rata) : null, lock = rp && rp.done>0;
   const rateOk = !t.rid && !t.pf && !t.abid; // movimenti nati da rate, PagoFlex o abbonamenti non si rateizzano
@@ -2391,6 +2392,14 @@ function openPagRata(t){
     <p class="note" style="margin:-6px 0 12px"><b style="color:var(--ink)">${esc(t.note)}</b> · ${fmtD(t.d)} · ${eur(t.amt)}${pagLabel(t)?' · '+esc(pagLabel(t)):''}</p>
     <p class="note" style="margin:0 0 14px">È il pagamento di una rata: la spesa è già registrata con l'acquisto, quindi qui non conta come uscita. Per cambiare importi o scadenze apri la rata.</p>
     ${r?`<button class="btn" onclick="closeSheet();showTab('rate');openRata('${r.id}')">Apri la rata</button>`:''}
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Chiudi</button>`);
+}
+// entrata di una giornata di Lavoro: si cambia da Lavoro
+function openDaLavoro(t){
+  sheet(`<h3>Giornata di lavoro</h3>
+    <p class="note" style="margin:-6px 0 12px"><b style="color:var(--ink)">${esc([t.det, t.note].filter(Boolean).join(' · '))}</b> · ${fmtD(t.d)} · ${eur(t.amt)}</p>
+    <p class="note" style="margin:0 0 14px">Entrata registrata dalla sezione Lavoro (${/^lavx_/.test(t.id)?'extra':'netto'} della giornata). Data, importo e agenzia seguono Lavoro: per cambiarla o eliminarla, apri la giornata là.</p>
+    ${parent!==window ? `<button class="btn" onclick="closeSheet();try{parent.dashVai('lavoro/')}catch(e){}">Apri Lavoro</button>` : `<a class="btn" href="../lavoro/">Apri Lavoro</a>`}
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Chiudi</button>`);
 }
 function setTxT(v){
@@ -2838,6 +2847,7 @@ async function chiediPulizia(){
   if(confirm(`Hai eliminato qui ${mz.length} ${mz.length===1?'spesa che è':'spese che sono'} ancora in Mezzi:\n\n${righe}${mz.length>12 ? '\n…' : ''}\n\nLe tolgo anche da Mezzi?`)){ await mezziTogli(mz); toast('Tolte anche da Mezzi'); }
   S.opz.mezziPulizia = today(); save();
 }
+addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile') lavoroLeggi(); }); // Lavoro può essere cambiato
 addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.tipo==='bilancio-visibile'){ if(daRecuperare) setTimeout(chiediRecupero, 400); else if(mezziPendenti) setTimeout(chiediPulizia, 400); } });
 // una volta: le spese dei mezzi registrate qui prima del collegamento vanno anche in Mezzi
 // (non quelle che Mezzi ha già: stessa data e stesso importo, per esempio arrivate due volte dal foglio)
@@ -2972,6 +2982,41 @@ async function bordoLeggi(){
       Cassaforte.scrivi('giornale', 'bilancioPagamenti', JSON.stringify(pg)).then(()=>{ bordo.pagErr=''; }).catch(e=>{ console.warn(e); bordo.pagErr = e.code||e.message; bordoAggiorna(); });
   }catch(e){ console.error(e); bordo.stato = 'err'; bordo.err = e.code==='permission-denied' ? 'accesso negato dalle regole Firestore (aggiungi il blocco "giornale")' : (e.code||e.message); }
   bordoAggiorna();
+}
+/* ---- Giornate di Lavoro al porto → entrate ----
+   Ogni giornata della sezione Lavoro fino a oggi è un'entrata: Lavoro › Porto › agenzia, il netto alla data della giornata
+   (lordo − ritenuta + rivalsa, con le percentuali di Lavoro), più l'extra se c'è. Le entrate seguono Lavoro: giornata cambiata,
+   spostata o eliminata là → qui si aggiorna; si modificano solo da Lavoro. Non toccano i conti (i soldi arrivano col pagamento).
+   Le giornate future entrano il giorno stesso. */
+const LAV_CAT = 'Lavoro', LAV_SUB = 'Porto';
+const numL = v => typeof v==='number' ? v : (parseFloat(String(v??'').replace(/\./g,'').replace(',','.')) || 0);
+function nettoLavoro(g, a){ const l = numL(g.lordo); return round2(l - l*a.imponibile*a.ritenuta + l*a.rivalsa); }
+function lavoroEntrate(L){
+  const a = {imponibile:0.85, ritenuta:0.21, rivalsa:0.04, ...(L.aliquote||{})}, oggi = today(), out = [];
+  (L.giornate||[]).filter(g=>g && g.id && g.d && g.d<=oggi).forEach(g=>{
+    const base = {d:g.d, t:'e', cat:LAV_CAT, sub:LAV_SUB, det:(g.agenzia||'').trim() || 'Senza agenzia', lav:g.id};
+    const note = [g.nave, g.tipo].filter(Boolean).join(' · '), n = nettoLavoro(g, a), x = round2(numL(g.extra));
+    if(n>0) out.push({id:'lav_'+g.id, ...base, amt:n, note});
+    if(x>0) out.push({id:'lavx_'+g.id, ...base, amt:x, note:['extra', note].filter(Boolean).join(' · ')});
+  });
+  return out;
+}
+let lavoroAgg = 0;
+async function lavoroLeggi(){
+  if(!CLOUD || !cloud.key) return;
+  let L;
+  try { Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); const v = await Cassaforte.leggi('dashboard', 'lavoro'); L = v ? JSON.parse(v) : null; }
+  catch(e){ console.warn('Lavoro', e); return; }
+  lavoroAgg = Date.now();
+  if(!L || !Array.isArray(L.giornate)) return;
+  const voluti = lavoroEntrate(L), ids = new Set(voluti.map(x=>x.id)); let k = 0;
+  voluti.forEach(v=>{
+    const t = S.tx.find(x=>x.id===v.id);
+    if(!t){ S.tx.push(v); k++; return; }
+    if(['d','amt','det','note','cat','sub','t'].some(f=>t[f]!==v[f])){ Object.assign(t, v); k++; }
+  });
+  const prima = S.tx.length; S.tx = S.tx.filter(t=>!t.lav || ids.has(t.id)); k += prima - S.tx.length;
+  if(k){ save(); render(); }
 }
 function bordoBox(){
   const prossime = bordo.voci.filter(v=>!v.paid).slice(0,4);
@@ -3249,6 +3294,7 @@ async function openVault(key){
   afterLoad();
   $('gate').classList.remove('on'); setSync(cloud.timer?'saving':'ok'); render();
   bordoLeggi(); // Mezzi, dalla stessa cassaforte
+  lavoroLeggi(); // giornate di Lavoro → entrate
   // dalla Dashboard: bilancio/#passphrase o #impostazioni
   if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
 }
@@ -3316,6 +3362,8 @@ window.addEventListener('beforeunload', e=>{ if(CLOUD && (cloud.timer || cloud.b
 function checkRate(){ if((!CLOUD || cloud.key) && S.carte && (payDueRate() + payAbbo() + bordoImporta() + settleCards() + autoStorico())) render(); }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && !CLOUD) checkRate(); });
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && bordo.stato==='ok' && Date.now()-bordo.agg > 10*60*1000) bordoLeggi(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && Date.now()-lavoroAgg > 60*1000) lavoroLeggi(); });
+setInterval(()=>{ if(document.visibilityState==='visible') lavoroLeggi(); }, 5*60*1000);
 setInterval(checkRate, 60*60*1000);
 
 if(!CLOUD) afterLoad();
