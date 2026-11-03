@@ -617,16 +617,33 @@ const ts = () => firebase.firestore.FieldValue.serverTimestamp();
 const cloud = {
   db:null, user:null, meta:null, key:null, v:null, last:{}, timer:null, rt:null, busy:false, again:false, retry:0, wipeLocal:false,
   ref(){ return this.db.collection('bilancio').doc(this.user.uid); },
-  async get(){
+  // una sezione che si decifra ma non è JSON valido (vuota o tagliata) non blocca più tutto: si apre il resto,
+  // della sezione si recupera quello che si legge e il testo originale resta in cloud.rotte (copiato in sez/{k}rotta)
+  async get(key){
+    key = key || this.key;
     const col = this.ref().collection('sez');
     const snap = await col.get({source:'server'}).catch(()=>col.get());
-    const out = buildSeed();
-    for(const d of snap.docs) if(SEZ.includes(d.id)) out[d.id] = JSON.parse(await decrypt(this.key, d.data(), d.id));
+    const out = buildSeed(); this.rotte = {};
+    for(const d of snap.docs) if(SEZ.includes(d.id)){
+      const txt = await decrypt(key, d.data(), d.id); // chiave sbagliata: errore come prima
+      try { out[d.id] = JSON.parse(txt); }
+      catch(e){ const r = recuperaJSON(txt); this.rotte[d.id] = {testo:txt, err:e.message, recuperati: Array.isArray(r) ? r.length : r ? 1 : 0}; if(r!==undefined) out[d.id] = r; }
+    }
     SEZ.forEach(k=>this.last[k]=JSON.stringify(out[k]));
     return out;
   },
   set(v){ this.v=v; clearTimeout(this.timer); this.timer=setTimeout(()=>{ this.timer=null; this.flush(); },400); setSync('saving'); },
-  dirty(){ return this.key && this.v ? SEZ.map(k=>[k,JSON.stringify(this.v[k])]).filter(([k,j])=>j!==this.last[k]) : []; },
+  // mai una sezione "undefined" (diventerebbe un testo vuoto, illeggibile alla prossima apertura) e mai una sezione
+  // piena svuotata di colpo (es. uno stato vuoto salvato per errore): restano com'erano nel cloud
+  dirty(){
+    if(!(this.key && this.v)) return [];
+    return SEZ.map(k=>[k,JSON.stringify(this.v[k])]).filter(([k,j])=>{
+      if(j===this.last[k] || j===undefined) return false;
+      const prima = this.last[k] || '';
+      if(!this.svuota && prima.length>2000 && j.length<prima.length*0.05){ console.warn('sezione '+k+' quasi svuotata: non salvata'); return false; }
+      return true;
+    });
+  },
   async flush(){
     if(this.busy){ this.again=true; return; }
     if(!this.key) return;
@@ -640,6 +657,7 @@ const cloud = {
         for(const [k,j] of dirty) b.set(this.ref().collection('sez').doc(k), {kid, ...await encrypt(this.key,j,k), updated:ts()});
         await b.commit();
         dirty.forEach(([k,j])=>this.last[k]=j);
+        this.svuota = false;
       }
       this.retry=0;
       if(this.wipeLocal){ localStore.clear(); this.wipeLocal=false; }
@@ -664,7 +682,9 @@ const cloud = {
       const meta={v:1, salt:b64(salt), iter:KDF_ITER, check:await encrypt(key,CHECK,'check')};
       const b=this.db.batch(), last={};
       b.set(this.ref(), {...meta, updated:ts()}, {merge:true});
-      for(const k of SEZ){ last[k]=JSON.stringify(S[k]??[]); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await encrypt(key,last[k],k), updated:ts()}); }
+      // last segue lo stato com'è (una sezione assente resta assente): con last '[]' e la sezione undefined il salvataggio dopo
+      // avrebbe scritto un testo vuoto
+      for(const k of SEZ){ last[k]=JSON.stringify(S[k]); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await encrypt(key,JSON.stringify(S[k]??[]),k), updated:ts()}); }
       // Mezzi, Palestra e Dashboard stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
       Cassaforte.adotta({db:this.db, user:this.user, meta:this.meta, key:this.key});
       for(const app of ['giornale','palestra','dashboard']){
@@ -3087,7 +3107,7 @@ function openSettings(){
     <p class="note" style="margin-top:-4px">Il backup .json non è cifrato: tienilo in un posto sicuro e mai nel repo.</p>
     <button class="btn ghost" onclick="exportJSON()">Esporta backup (.json)</button>
     <label class="btn ghost" style="display:block;text-align:center;margin-top:8px;cursor:pointer">Importa backup (.json)<input type="file" accept=".json" hidden onchange="importJSON(this.files[0])"></label>
-    <button class="btn danger" style="margin-top:8px" onclick="if(confirm(CLOUD?'Cancellare TUTTI i dati, anche dal cloud?':'Cancellare TUTTI i dati di questa app?')){S=buildSeed();afterLoad();save();closeSheet();render();toast('Dati cancellati')}">Cancella tutti i dati</button>
+    <button class="btn danger" style="margin-top:8px" onclick="if(confirm(CLOUD?'Cancellare TUTTI i dati, anche dal cloud?':'Cancellare TUTTI i dati di questa app?')){cloud.svuota=true;S=buildSeed();afterLoad();save();closeSheet();render();toast('Dati cancellati')}">Cancella tutti i dati</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Chiudi</button>`);
 }
 /* ---- CSV ---- */
@@ -3300,11 +3320,13 @@ async function unlockVault(){
   openVault(key);
 }
 async function openVault(key){
-  cloud.key=key;
+  // la chiave diventa attiva solo dopo la lettura: nessun salvataggio può partire con uno stato ancora vuoto
+  cloud.key=null; clearTimeout(cloud.timer); cloud.timer=null;
   gate('loading','Decifro i dati…');
-  try{ S = await cloud.get(); }
+  try{ S = await cloud.get(key); }
   catch(e){ cloud.key=null; return gate('error','Impossibile leggere o decifrare i dati: '+(e.code||e.message||'chiave non valida')); }
-  cloud.v = S;
+  cloud.key=key; cloud.v = S;
+  if(Object.keys(cloud.rotte||{}).length) await salvaRotte();
   // primo accesso da un browser che aveva già dati in locale: li porto nel cloud e poi li tolgo da localStorage
   // (prima di afterLoad, che crea le carte predefinite e renderebbe il cloud "non vuoto")
   const loc = localStore.get();
@@ -3317,6 +3339,28 @@ async function openVault(key){
   lavoroLeggi(); // giornate di Lavoro → entrate
   // dalla Dashboard: bilancio/#passphrase o #impostazioni
   if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
+}
+// testo JSON tagliato: si tiene la parte iniziale valida (elenchi: gli elementi completi; oggetti: le voci complete)
+function recuperaJSON(txt){
+  const t = String(txt||'').trim(); if(!t) return undefined;
+  const chiudi = t[0]==='[' ? ']' : t[0]==='{' ? '}' : null; if(!chiudi) return undefined;
+  const sep = t[0]==='[' ? '}' : ',';
+  let i = t.length, prove = 0;
+  while(prove++ < 5000 && (i = t.lastIndexOf(sep, i-1)) > 0){
+    try { return JSON.parse(t.slice(0, sep==='}' ? i+1 : i) + chiudi); } catch(e){}
+  }
+  try { return JSON.parse(t[0] + chiudi); } catch(e){ return undefined; }
+}
+// sezioni rotte: una copia cifrata del testo originale (sez/{nome}rotta) prima di qualsiasi salvataggio, e l'avviso
+async function salvaRotte(){
+  const r = cloud.rotte, nomi = {tx:'Movimenti', conti:'Conti', rate:'Rate', inv:'Investimenti', trading:'Trading', carte:'Carte', servizi:'Servizi', opz:'Impostazioni', storico:'Storico', abbo:'Abbonamenti'};
+  try {
+    const b = cloud.db.batch();
+    for(const [k,x] of Object.entries(r)) if(x.testo) b.set(cloud.ref().collection('sez').doc(k+'rotta'), {kid:cloud.meta.salt, ...await encrypt(cloud.key, x.testo, k+'rotta'), updated:ts()});
+    await b.commit();
+  } catch(e){ console.warn('copia sezioni rotte', e); }
+  const righe = Object.entries(r).map(([k,x])=>`${nomi[k]||k}: ${x.testo ? `${x.testo.length} caratteri, recuperati ${x.recuperati} ${x.recuperati===1?'elemento':'elementi'}` : 'vuota'}`);
+  setTimeout(()=>alert('Attenzione: alcune parti del Bilancio erano danneggiate nel cloud.\n\n' + righe.join('\n') + '\n\nIl resto si è aperto normalmente. Fai uno screenshot di questo messaggio e mandalo a Claude.'), 300);
 }
 function resetVault(){
   clearTimeout(cloud.timer); clearTimeout(cloud.rt);
