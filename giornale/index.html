@@ -4226,15 +4226,18 @@ async function caricaCategorieExtra() {
 }
 function vaSetPeriodo(a, m) { vaPeriodo = { anno: a, mese: m }; vaRenderSpese(); }
 function setSpesePeriodo(a, m) { spesePeriodo = { anno: a, mese: m }; renderSpese(); }
-function vaRenderSpese() {
+// categorie della finestra "Nuova spesa": anche se la si apre dal Riepilogo senza essere passati da Spese
+function vaGrigliaCategorie() {
   const grid = document.getElementById('va-cat-grid');
-  if (!grid.dataset.built) {
-    grid.innerHTML = VEHICLE_CATEGORIES.map(c =>
-      `<div class="cat-opt" data-cat="${c.id}" onclick="selectCategory('${c.id}')">
-        <div class="ic">${c.icon}</div><div class="lb">${c.label}</div>
-      </div>`).join('');
-    grid.dataset.built = '1';
-  }
+  if (grid.dataset.built) return;
+  grid.innerHTML = VEHICLE_CATEGORIES.map(c =>
+    `<div class="cat-opt" data-cat="${c.id}" onclick="selectCategory('${c.id}')">
+      <div class="ic">${c.icon}</div><div class="lb">${c.label}</div>
+    </div>`).join('');
+  grid.dataset.built = '1';
+}
+function vaRenderSpese() {
+  vaGrigliaCategorie();
   const chips = document.getElementById('va-spese-filter');
   if (!chips.dataset.built) {
     chips.innerHTML = `<div class="chip active" data-cat="tutte" onclick="vaSetFilter('tutte')">Tutte</div>` +
@@ -4286,6 +4289,7 @@ function vaRenderSpese() {
 let vaActiveFilter = 'tutte';
 function vaSetFilter(cat) { vaActiveFilter = cat; vaRenderSpese(); }
 function vaOpenExpenseModal(id) {
+  vaGrigliaCategorie();
   if (id) {
     const e = vState.expenses.find(x => x.id === id);
     document.getElementById('va-expense-modal-title').textContent = 'Modifica spesa';
