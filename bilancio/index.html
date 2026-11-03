@@ -619,19 +619,22 @@ const cloud = {
   ref(){ return this.db.collection('bilancio').doc(this.user.uid); },
   // una sezione che si decifra ma non è JSON valido (vuota o tagliata) non blocca più tutto: si apre il resto,
   // della sezione si recupera quello che si legge e il testo originale resta in cloud.rotte (copiato in sez/{k}rotta)
+  // sempre dal server: senza rete la lettura "di riserva" dalla cache tornava vuota, e uno stato vuoto preso per buono
+  // finiva poi salvato sopra i dati veri. get() non tocca last: lo fa adotta(), solo quando i dati letti diventano lo stato
   async get(key){
     key = key || this.key;
     const col = this.ref().collection('sez');
-    const snap = await col.get({source:'server'}).catch(()=>col.get());
+    const snap = await col.get({source:'server'});
+    this.letti = snap.docs.filter(d=>SEZ.includes(d.id)).length;
     const out = buildSeed(); this.rotte = {};
     for(const d of snap.docs) if(SEZ.includes(d.id)){
       const txt = await decrypt(key, d.data(), d.id); // chiave sbagliata: errore come prima
       try { out[d.id] = JSON.parse(txt); }
       catch(e){ const r = recuperaJSON(txt); this.rotte[d.id] = {testo:txt, err:e.message, recuperati: Array.isArray(r) ? r.length : r ? 1 : 0}; if(r!==undefined) out[d.id] = r; }
     }
-    SEZ.forEach(k=>this.last[k]=JSON.stringify(out[k]));
     return out;
   },
+  adotta(out){ SEZ.forEach(k=>this.last[k]=JSON.stringify(out[k])); },
   set(v){ this.v=v; clearTimeout(this.timer); this.timer=setTimeout(()=>{ this.timer=null; this.flush(); },400); setSync('saving'); },
   // mai una sezione "undefined" (diventerebbe un testo vuoto, illeggibile alla prossima apertura) e mai una sezione
   // piena svuotata di colpo (es. uno stato vuoto salvato per errore): restano com'erano nel cloud
@@ -2772,7 +2775,8 @@ async function salvaCategorieExtra(){
 }
 // le voci da proporre in Bilancio per un mezzo: tutte le categorie che si scelgono anche in Mezzi
 const vociMezzo = m => [...new Set([...Object.entries(m.det).filter(([k])=>!CAT_VECCHIE.includes(k)).map(([,v])=>v), ...extraDi(m).map(c=>c.label)])];
-async function listaMezzi(ek){ try { const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; } catch(e){ if(e && e.code==='permission-denied') throw e; return []; } }
+// voce che non c'è → []; errore di lettura (rete, permessi) → errore: un elenco vuoto per sbaglio verrebbe poi riscritto sopra quello vero
+async function listaMezzi(ek){ const v = await Cassaforte.leggi('giornale', ek); return v ? JSON.parse(v) : []; }
 /* Registri di manutenzione di Mezzi: una spesa di manutenzione registrata qui va anche lì (come se fatta in Mezzi):
    gommone, Manutenzione straordinaria → ricambi "Altro" del motore (engineParts.altro); auto/SH/moto, Manutenzione
    ordinaria o straordinaria → voci di manutenzione del mezzo (<mezzo>_manutenzione). La voce è collegata alla spesa
@@ -3323,8 +3327,8 @@ async function openVault(key){
   // la chiave diventa attiva solo dopo la lettura: nessun salvataggio può partire con uno stato ancora vuoto
   cloud.key=null; clearTimeout(cloud.timer); cloud.timer=null;
   gate('loading','Decifro i dati…');
-  try{ S = await cloud.get(key); }
-  catch(e){ cloud.key=null; return gate('error','Impossibile leggere o decifrare i dati: '+(e.code||e.message||'chiave non valida')); }
+  try{ S = await cloud.get(key); cloud.adotta(S); }
+  catch(e){ cloud.key=null; S=buildSeed(); return gate('error', e && (e.code==='unavailable' || /offline|network|unavailable/i.test(e.message||'')) ? 'Nessuna connessione con il cloud: controlla la rete e riprova.' : 'Impossibile leggere o decifrare i dati: '+(e.code||e.message||'chiave non valida')); }
   cloud.key=key; cloud.v = S;
   if(Object.keys(cloud.rotte||{}).length) await salvaRotte();
   // primo accesso da un browser che aveva già dati in locale: li porto nel cloud e poi li tolgo da localStorage
@@ -3415,8 +3419,10 @@ document.addEventListener('visibilitychange', async ()=>{
   if(cloud.busy || cloud.timer || cloud.dirty().length || $('ov').classList.contains('on')) return checkRate();
   try{
     const fresh = await cloud.get();
-    if(cloud.busy || cloud.timer) return;
-    if(SEZ.some(k=>JSON.stringify(fresh[k])!==JSON.stringify(S[k]))){ S=fresh; cloud.v=S; S.rate=S.rate.map(migrateRata); render(); }
+    if(cloud.busy || cloud.timer || cloud.dirty().length) return;
+    // una lettura senza sezioni mentre qui ci sono dati: non è credibile (rete a metà), si tiene quello che c'è
+    if(!cloud.letti && SEZ.some(k=>Array.isArray(S[k]) ? S[k].length : S[k])) return;
+    if(SEZ.some(k=>JSON.stringify(fresh[k])!==JSON.stringify(S[k]))){ S=fresh; cloud.adotta(S); cloud.v=S; S.rate=S.rate.map(migrateRata); render(); }
   }catch(e){}
   checkRate();
 });

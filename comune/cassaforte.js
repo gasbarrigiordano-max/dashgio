@@ -131,7 +131,7 @@
       return this._ricomponi(col, id, await decrypt(this.key, d.data(), col + '/' + id), async pid => (await c.doc(pid).get()).data());
     },
     async tutti(col) {
-      const snap = await this.ref().collection(col).get(), doc = {}, out = {};
+      const snap = await this.ref().collection(col).get({ source: 'server' }), doc = {}, out = {}; // senza rete la cache darebbe un elenco vuoto: meglio un errore
       snap.docs.forEach(d => { doc[d.id] = d.data(); });
       for (const id of Object.keys(doc)) if (!eParte(id))
         out[id] = await this._ricomponi(col, id, await decrypt(this.key, doc[id], col + '/' + id), async pid => doc[pid]);
