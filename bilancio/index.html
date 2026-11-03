@@ -190,6 +190,8 @@ table.mx{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-
 .pcard.nero{background:linear-gradient(135deg,#121212,#3b3b3b 60%,#1a1a1a);color:#fff}
 .pcard.argento{background:linear-gradient(135deg,#aeb4bb,#f1f3f5 45%,#c2c7cd);color:#1d2022}
 .pcard.verde{background:linear-gradient(135deg,#0a4d37,#1f9d6b 60%,#0d6a4a);color:#fff}
+.pcard.telepass{background:linear-gradient(135deg,#f2c500,#ffe14d 50%,#e0b400);color:#0a2a5c}
+.pcard.telepass i{display:none}
 .pcard.foto{background-size:cover;background-position:center}
 .pcard.foto span,.pcard.foto i{display:none}
 .pcard.foto::after{background:linear-gradient(115deg,rgba(255,255,255,.18),rgba(255,255,255,0) 40%)}
@@ -927,6 +929,10 @@ function carteContabili(){
       const v = vecchio.get(t.id); if(v && settled(c,v) && cicloDi(c,t)!==v) t.ciclo = v; });
   });
 }
+function nuovoTelepass(){
+  const ing = (S.conti.find(c=>/\bing\b/i.test(c.n) && c.g==='Banche')||{}).id || '';
+  return {id:'telepass', n:'Telepass', colore:'telepass', solo:'carburante', plafond:0, tipo:'giorno', giorno:15, contab:0, ripristino:'addebito', conto:ing, pf:false, dal:thisMonth(), flex:[], es:[]};
+}
 function seedCarte(){
   const find = re => (S.conti.find(c=>re.test(c.n))||{}).id || '';
   return [
@@ -947,17 +953,21 @@ function seedConti(){
 const hasCredito = contoId => carte().some(k=>k.conto===contoId);
 const debitoName = c => (hasCredito(c.id) ? 'Carta di debito ' : 'Carta ') + c.n;
 function pagLabel(t){
-  if(t.carta) return 'Carta di credito '+cartaName(t.carta);
+  if(t.carta) return cartaEtichetta(carte().find(k=>k.id===t.carta) || {n:cartaName(t.carta)});
   const c = S.conti.find(x=>x.id===t.conto);
   if(!c || !t.pag) return '';
   return t.pag==='carta' ? debitoName(c) : t.pag==='conto' ? 'Conto '+c.n : 'Contanti';
 }
 const pagValue = t => t.carta ? 'k:'+t.carta : t.pag && t.conto ? `${t.pag==='conto'?'c':t.pag==='contanti'?'x':'d'}:${t.conto}` : '';
+// Telepass (c.solo='carburante'): non è una carta di credito, si usa solo per i rifornimenti
+const cartaEtichetta = k => k.solo ? k.n : 'Carta di credito '+k.n;
+const soloCarburante = id => { const k = carte().find(x=>x.id===id); return !!(k && k.solo==='carburante'); };
 function pagOptions(sel){
   const opt = (v,l) => `<option value="${v}" ${v===sel?'selected':''}>${esc(l)}</option>`;
   const banche = S.conti.filter(c=>c.g==='Banche'), cash = S.conti.filter(c=>c.g==='Cash');
   return opt('','Non specificato') +
-    (carte().length ? `<optgroup label="Carte di credito">${carte().map(k=>opt('k:'+k.id,'Carta di credito '+k.n)).join('')}</optgroup>` : '') +
+    (carte().some(k=>!k.solo) ? `<optgroup label="Carte di credito">${carte().filter(k=>!k.solo).map(k=>opt('k:'+k.id,'Carta di credito '+k.n)).join('')}</optgroup>` : '') +
+    (carte().some(k=>k.solo) ? `<optgroup label="Solo carburante">${carte().filter(k=>k.solo).map(k=>opt('k:'+k.id, k.n+' (solo carburante)')).join('')}</optgroup>` : '') +
     (banche.length ? `<optgroup label="Carte di debito e prepagate">${banche.map(c=>opt('d:'+c.id, debitoName(c))).join('')}</optgroup>
       <optgroup label="Dal conto (bonifico, bollettino…)">${banche.map(c=>opt('c:'+c.id, 'Conto '+c.n)).join('')}</optgroup>` : '') +
     (cash.length ? `<optgroup label="Contanti">${cash.map(c=>opt('x:'+c.id, 'Contanti · '+c.n)).join('')}</optgroup>` : '');
@@ -1046,6 +1056,10 @@ function afterLoad(){
   if(!S.opz.contiBase){ seedConti(); S.opz.contiBase = true; save(); }
   if(!S.carte){ S.carte = seedCarte(); seedConti(); }
   if(!S.opz.carteContabili){ carteContabili(); S.opz.carteContabili = true; save(); }
+  if(!S.opz.telepass){ // Telepass: rifornimenti pagati col Telepass, addebitati dal conto ING il mese dopo
+    if(!carte().some(c=>/telepass/i.test(c.n))) S.carte.push(nuovoTelepass());
+    S.opz.telepass = true; save();
+  }
   if(!S.opz.bbvaRateale){
     const b = S.carte.find(c=>/bbva/i.test(c.n));
     if(b) Object.assign(b, {pf:true, pfNome:'Rimborso rateale', pfCommTipo:'eur', pfMin:50, pfComm:b.pfCommTipo==='eur' ? b.pfComm : 0});
@@ -2124,9 +2138,9 @@ function delAbbo(id){
 
 /* ---- Carte di credito: pagina ---- */
 // aspetto della carta nel selettore: foto della carta vera (file accanto a index.html) o un colore
-const COLORI_CARTA = [['ing-oro','Foto ING Gold'],['bbva','Foto BBVA Credit'],['oro','Oro'],['blu','Blu scuro'],['nero','Nero'],['argento','Argento'],['verde','Verde']];
+const COLORI_CARTA = [['ing-oro','Foto ING Gold'],['bbva','Foto BBVA Credit'],['oro','Oro'],['blu','Blu scuro'],['nero','Nero'],['argento','Argento'],['verde','Verde'],['telepass','Giallo Telepass']];
 const FOTO_CARTA = {'ing-oro':'carta-ing-oro.webp', 'bbva':'carta-bbva.webp'};
-const cartaColore = c => c.colore || (/\bing\b/i.test(c.n) && /oro|gold/i.test(c.n) ? 'ing-oro' : /bbva/i.test(c.n) ? 'bbva' : 'nero');
+const cartaColore = c => c.colore || (/\bing\b/i.test(c.n) && /oro|gold/i.test(c.n) ? 'ing-oro' : /bbva/i.test(c.n) ? 'bbva' : /telepass/i.test(c.n) ? 'telepass' : 'nero');
 function renderCarte(){
   const cs = carte();
   if(!cs.find(c=>c.id===ui.carta)) ui.carta = (cs[0]||{}).id || '';
@@ -2138,14 +2152,17 @@ function renderCarte(){
   const resPF = round2(sum((c.flex||[]).map(pfResiduo)));
   const prossimo = aperti[0];
   const quando = (c.tipo==='fine' ? 'a fine mese' : `il ${c.giorno} del mese dopo`) + (c.festivo==='prima' ? ' (se festivo, il giorno lavorativo prima)' : '');
-  let html = seg + `<div class="card hero kpi"><div class="row"><small>Disponibile su ${eur(c.plafond,0)} di plafond</small><button class="btn sm ghost" onclick="openCarta('${c.id}')">Modifica</button></div>
+  let html = seg + (!c.plafond ? `<div class="card hero kpi"><div class="row"><small>${c.solo ? 'Rifornimenti da addebitare' : 'Da addebitare'}</small><button class="btn sm ghost" onclick="openCarta('${c.id}')">Modifica</button></div>
+      <b class="mono">${eur(round2(usato-resPF))}</b>
+      <div class="note" style="margin-top:2px">${c.solo ? 'Solo per i rifornimenti di carburante: ' : ''}ogni mese le spese vengono addebitate tutte insieme sul conto il mese dopo</div></div>` :
+    `<div class="card hero kpi"><div class="row"><small>Disponibile su ${eur(c.plafond,0)} di plafond</small><button class="btn sm ghost" onclick="openCarta('${c.id}')">Modifica</button></div>
       <b class="mono ${disp<0?'neg':''}">${eur(disp)}</b>
       <div class="note" style="margin-top:2px">${c.ripristino==='mese' ? 'Il plafond torna libero il 1° di ogni mese' : 'Il plafond torna libero con l\'addebito dell\'estratto conto'}</div>
       <div class="bar" style="margin:10px 0 12px"><div style="width:${Math.min(100,usato/(c.plafond||1)*100)}%;background:${disp<0?'var(--neg)':usato/(c.plafond||1)>.8?'var(--warn)':'var(--acc)'}"></div></div>
       <div class="row"><div><small>Spese da addebitare</small><b class="mono" style="font-size:16px">${eur(round2(usato-resPF))}</b></div>
-        ${c.pf?`<div style="text-align:right"><small>${pfNome(c)} residuo</small><b class="mono" style="font-size:16px">${eur(resPF)}</b></div>`:''}</div></div>
+        ${c.pf?`<div style="text-align:right"><small>${pfNome(c)} residuo</small><b class="mono" style="font-size:16px">${eur(resPF)}</b></div>`:''}</div></div>`) + `
     <div class="note" style="margin:10px 2px 0">Addebito ${quando} ${c.conto?`su <b>${esc(contoName(c.conto))}</b>`:'<span style="color:var(--warn)">· scegli il conto di addebito in Modifica</span>'}${prossimo?` · prossimo: <b>${fmtD(stmtDate(c,prossimo))}</b>, ${eur(cicloTot(c,prossimo))}`:''}</div>
-    <button class="btn" style="margin-top:12px" onclick="openTx(null,'${c.id}')">+ Spesa con ${esc(c.n)}</button>`;
+    <button class="btn" style="margin-top:12px" onclick="${c.solo ? `openTx(null,'${c.id}',{cat:'Mezzi',sub:'Auto',det:'Gasolio'})` : `openTx(null,'${c.id}')`}">+ ${c.solo ? 'Rifornimento' : 'Spesa'} con ${esc(c.n)}</button>`;
   // spese per ciclo non ancora addebitato (di solito il mese in corso, per ING anche il precedente fino al 10)
   const cicli = [...new Set([...aperti, thisMonth()])].filter(ym=>!settled(c,ym) && (ym<=thisMonth() || cartaSpese(c,ym).length)).sort().reverse(); // i mesi futuri con sole rate PagoFlex sono nel riquadro PagoFlex; le spese di fine mese contabilizzate il mese dopo si vedono subito
   cicli.forEach(ym=>{
@@ -2176,7 +2193,7 @@ function openCarta(id){
   sheet(`<h3>${id?'Modifica carta':'Nuova carta'}</h3>
     <div class="grid2">
       <div class="f"><label>Nome</label><input id="k-n" value="${esc(c.n)}" placeholder="es. ING Oro"></div>
-      <div class="f"><label>Plafond mensile (€)</label><input id="k-p" inputmode="decimal" value="${String(c.plafond).replace('.',',')}"></div>
+      <div class="f"><label>Plafond mensile (€)</label><input id="k-p" inputmode="decimal" value="${c.plafond ? String(c.plafond).replace('.',',') : ''}" placeholder="senza plafond"></div>
       <div class="f"><label>Addebito</label><select id="k-t" onchange="$('k-g-w').style.visibility=this.value==='giorno'?'visible':'hidden'"><option value="giorno" ${c.tipo==='giorno'?'selected':''}>Giorno del mese dopo</option><option value="fine" ${c.tipo==='fine'?'selected':''}>Fine mese</option></select></div>
       <div class="f" id="k-g-w" style="visibility:${c.tipo==='giorno'?'visible':'hidden'}"><label>Giorno</label><input id="k-g" inputmode="numeric" value="${c.giorno||10}"></div>
       <div class="f"><label>Se l'addebito è festivo</label><select id="k-fe"><option value="">Stesso giorno</option><option value="prima" ${c.festivo==='prima'?'selected':''}>Giorno lavorativo prima</option></select></div>
@@ -2185,6 +2202,7 @@ function openCarta(id){
     </div>
     <div class="f"><label>Colore della carta</label><select id="k-col">${COLORI_CARTA.map(([v,l])=>`<option value="${v}" ${v===cartaColore(c)?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="f"><label>Conto di addebito</label><select id="k-c"><option value="">—</option>${S.conti.map(x=>`<option value="${x.id}" ${x.id===c.conto?'selected':''}>${esc(x.n)} · ${x.g}</option>`).join('')}</select></div>
+    <label class="chk" style="justify-content:flex-start;margin:0 0 10px"><input type="checkbox" id="k-solo" ${c.solo?'checked':''}> Solo per i rifornimenti di carburante (es. Telepass)</label>
     <label class="chk" style="justify-content:flex-start;margin:0 0 10px"><input type="checkbox" id="k-pf" ${c.pf?'checked':''} onchange="$('k-pf-w').style.display=this.checked?'grid':'none'"> Rateizzazione delle spese</label>
     <div class="grid2" id="k-pf-w" style="display:${c.pf?'grid':'none'}">
       <div class="f"><label>Nome del servizio</label><input id="k-pn" value="${esc(c.n?pfNome(c):'')}" placeholder="es. PagoFlex"></div>
@@ -2201,7 +2219,8 @@ function saveCarta(id){
     festivo:$('k-fe').value, ripristino:$('k-ri').value, contab:Math.min(5,Math.max(0,parseInt($('k-cb').value)||0)),
     conto:$('k-c').value, pf:$('k-pf').checked, pfNome:$('k-pn').value.trim()||'Rateizzazione', pfCommTipo:$('k-pu').value, pfMin:num($('k-pm').value), pfComm:num($('k-pc').value)};
   if(!o.n) return toast('Inserisci il nome');
-  if(!o.plafond) return toast('Inserisci il plafond');
+  o.solo = $('k-solo').checked ? 'carburante' : '';
+  if(!o.plafond && !o.solo) return toast('Inserisci il plafond');
   if(id) Object.assign(carte().find(x=>x.id===id), o);
   else { const nid=uid(); S.carte.push({id:nid, ...o, dal:thisMonth(), flex:[], es:[]}); ui.carta=nid; }
   save(); closeSheet(); settleCards(); render(); toast('Carta salvata');
@@ -2455,6 +2474,7 @@ function saveTx(id){
   } else if(id && rimborsi({id}).length) return toast('Ci sono rimborsi ricevuti: eliminali prima di togliere "Acquisto di gruppo"');
   const old = id && S.tx.find(x=>x.id===id);
   if(!(old && (old.rid || old.pf))) Object.assign(o, o.t==='u' ? pagParse($('t-k').value) : {carta:'', pag:'', conto:''});
+  if(o.carta && soloCarburante(o.carta) && !(old && old.carta===o.carta) && !carburante(o)) return toast(`${cartaName(o.carta)} si usa solo per i rifornimenti (Mezzi › mezzo › Benzina o Gasolio)`);
   const esScelto = o.carta && $('t-es-w') && $('t-es-w').style.display!=='none' && !$('t-es').disabled ? $('t-es').value : null;
   if(esScelto && esScelto!=='auto') o.ciclo = esScelto;
   // pagato a rate: l'acquisto non muove soldi, li muovono le rate dal conto/carta di "Rate pagate con"
@@ -2669,7 +2689,7 @@ const bordoDoppi = () => { const o = S.opz.bordoImp; return o ? S.tx.filter(t=>t
 function bordoPagamenti(){
   const banche = S.conti.filter(c=>c.g==='Banche'), cash = S.conti.filter(c=>c.g==='Cash');
   return {pagamenti:[
-    ...carte().map(k=>({id:'k:'+k.id, label:'Carta di credito '+k.n, g:'Carte di credito'})),
+    ...carte().map(k=>k.solo ? {id:'k:'+k.id, label:k.n, g:'Solo carburante', solo:k.solo} : {id:'k:'+k.id, label:'Carta di credito '+k.n, g:'Carte di credito'}),
     ...banche.map(c=>({id:'d:'+c.id, label:debitoName(c), g:'Carte di debito e prepagate'})),
     ...banche.map(c=>({id:'c:'+c.id, label:'Conto '+c.n, g:'Dal conto (bonifico, bollettino…)'})),
     ...cash.map(c=>({id:'x:'+c.id, label:'Contanti · '+c.n, g:'Contanti'}))], servizi:servizi()};

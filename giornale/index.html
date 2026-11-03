@@ -3386,11 +3386,14 @@ const PAG_SERVIZI_BASE = ['PayPal', 'Klarna', 'Scalapay', 'Aliexpress', 'Findome
 let PAG_BILANCIO = null; // {pagamenti, servizi} letto da Bilancio
 // moduli con la spesa: id della casella "da non conteggiare" senza "-excluded" → id del menu "Pagato con"
 const pagSelId = base => base === 'va-exp' ? 'va-exp-payment-method' : base === 'exp' ? 'exp-payment-method' : base + '-pag';
-function pagOptionsHtml() {
+// Telepass e simili (solo:'carburante'): solo nei rifornimenti e nelle spese di carburante
+const pagSolo = id => { const x = PAG_BILANCIO && (PAG_BILANCIO.pagamenti || []).find(p => p.id === id); return x ? x.solo || '' : ''; };
+const pagCarb = sel => sel.dataset.carb === '1' || sel.id === 'ref-pag' || sel.id === 'va-ref-pag';
+function pagOptionsHtml(carb) {
   const opt = (v, l) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`;
   if (!PAG_BILANCIO || !(PAG_BILANCIO.pagamenti || []).length) return opt('', 'Non specificato') + PAG_GENERICI.map(x => opt(x, x)).join('');
   const gruppi = {};
-  PAG_BILANCIO.pagamenti.forEach(x => { (gruppi[x.g || 'Altro'] = gruppi[x.g || 'Altro'] || []).push(x); });
+  PAG_BILANCIO.pagamenti.filter(x => !x.solo || (x.solo === 'carburante' && carb)).forEach(x => { (gruppi[x.g || 'Altro'] = gruppi[x.g || 'Altro'] || []).push(x); });
   return opt('', 'Non specificato') + Object.entries(gruppi).map(([g, l]) => `<optgroup label="${escapeHtml(g)}">${l.map(x => opt(x.id, x.label)).join('')}</optgroup>`).join('');
 }
 function pagServiziHtml() {
@@ -3424,17 +3427,20 @@ function pagInitFields() {
   pagRefreshSelects();
 }
 function pagRefreshSelects() {
-  const html = pagOptionsHtml();
-  document.querySelectorAll('select.pag-sel').forEach(sel => { const v = sel.value; sel.innerHTML = html; pagSelectValue(sel, v); });
+  const html = pagOptionsHtml(false), htmlCarb = pagOptionsHtml(true);
+  document.querySelectorAll('select.pag-sel').forEach(sel => { const v = sel.value; sel.innerHTML = pagCarb(sel) ? htmlCarb : html; pagSelectValue(sel, v); });
   document.querySelectorAll('select.pag-servizio').forEach(sel => { const v = sel.value; sel.innerHTML = pagServiziHtml(); if (v) sel.value = v; });
 }
 function pagSelectValue(sel, v) {
+  if (v && pagSolo(v) && !pagCarb(sel)) v = ''; // Telepass fuori dai rifornimenti: niente
   if (v && ![...sel.options].some(o => o.value === v)) sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(v)}">${escapeHtml(pagLabel(v))}</option>`);
   sel.value = v || '';
 }
 // all'apertura di un modulo: il metodo della scheda/spesa, o per una nuova l'ultimo usato
 function pagSet(base, rec) {
   const sel = document.getElementById(pagSelId(base)); if (!sel) return;
+  // spese: tutte le voci finché non si sa la categoria (selectCategory poi toglie Telepass se non è carburante)
+  if ((base === 'exp' || base === 'va-exp') && sel.dataset.carb !== '1') { sel.dataset.carb = '1'; sel.innerHTML = pagOptionsHtml(true); }
   let ultimo = ''; try { ultimo = localStorage.getItem('bordo:ultimoPag') || ''; } catch (e) {}
   pagSelectValue(sel, rec ? (rec.pagId || rec.paymentMethod || '') : ultimo);
 }
@@ -8503,6 +8509,10 @@ function selectCategory(id) {
   document.querySelectorAll('.cat-opt').forEach(el => {
     el.classList.toggle('selected', el.dataset.cat === id);
   });
+  // carburante: nel "Pagato con" compare anche Telepass
+  ['exp-payment-method', 'va-exp-payment-method'].forEach(sid => { const sel = document.getElementById(sid); if (!sel) return;
+    const carb = id === 'carburante' ? '1' : ''; if ((sel.dataset.carb || '') === carb) return;
+    sel.dataset.carb = carb; const v = sel.value; sel.innerHTML = pagOptionsHtml(!!carb); pagSelectValue(sel, v); });
   document.getElementById('exp-fuel-fields').style.display = id === 'carburante' ? 'block' : 'none';
 }
 let expExpenseFieldOrder = [];
