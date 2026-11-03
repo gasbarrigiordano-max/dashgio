@@ -3405,6 +3405,7 @@ async function openVault(key){
   $('gate').classList.remove('on'); setSync(cloud.timer?'saving':'ok'); render();
   bordoLeggi(); // Mezzi, dalla stessa cassaforte
   lavoroLeggi(); // giornate di Lavoro → entrate
+  setTimeout(()=>{ try { Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); Cassaforte.backupGiornaliero().catch(e=>console.warn('backup', e)); } catch(e){} }, 25000); // backup giornaliero anche aprendo Bilancio da solo
   // dalla Dashboard: bilancio/#passphrase o #impostazioni
   if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
 }

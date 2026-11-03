@@ -189,6 +189,10 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .imp-az{display:flex;flex-wrap:wrap;gap:8px}
 .imp-az a,.imp-az button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 14px;min-height:40px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
 .imp-az .rosso{color:#ffb3a1}
+.bk-lista{display:flex;flex-direction:column;gap:6px;margin:0 0 10px;max-height:260px;overflow:auto}
+.bk-riga{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;font-size:13px;font-weight:700}
+.bk-riga small{display:block;font-size:11px;font-weight:600;color:var(--ink2)}
+.bk-riga button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 12px;min-height:34px;font-size:12px;font-weight:700;cursor:pointer;flex:none}
 .ev-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .ev-form .tutta{grid-column:1/-1}
 .ev-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
@@ -1246,8 +1250,34 @@ function disegnaImpostazioni(){
       <div id="gcal-imp"></div></section>
     <section class="imp-sez"><h3>Impostazioni delle app</h3><p>Conti, carte, categorie e importazioni stanno in Bilancio; veicoli e preferenze in Mezzi; muscoli, giorni e blocchi nel Programma della Palestra.</p>
       <div class="imp-az"><a href="bilancio/#impostazioni">Bilancio</a><a href="giornale/">Mezzi</a><a href="palestra/?t=schede">Palestra</a></div></section>
+    <section class="imp-sez"><h3>Backup automatici</h3><p>Ogni giorno una copia cifrata di tutto (Bilancio, Mezzi, Palestra, Lavoro): nel cloud gli ultimi 10 giorni e una al mese per un anno, e su questo dispositivo le ultime 5. Prima di un ripristino viene salvato anche lo stato attuale.</p>
+      <div id="bk-imp"><p class="nota">Leggo i backup…</p></div>
+      <div class="imp-az"><button type="button" onclick="backupOra()">Fai un backup adesso</button></div></section>
     <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
-  disegnaGoogle();
+  disegnaGoogle(); disegnaBackup();
+}
+// messaggio breve in basso (stesso riquadro dello stato di Bilancio)
+function toast(m){ const s = $('stato'); s.textContent = m; s.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => s.classList.remove('on'), 2600); }
+const dataBackup = id => { const g = id.slice(3); return `${+g.slice(6,8)} ${['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][+g.slice(4,6)-1]} ${g.slice(0,4)}` + (g.length > 8 ? ` · prima del ripristino delle ${g.slice(9,11)}:${g.slice(11,13)}` : ''); };
+async function disegnaBackup(){
+  const el = $('bk-imp'); if(!el) return;
+  try {
+    const l = await Cassaforte.elencoBackup();
+    el.innerHTML = l.length ? `<div class="bk-lista">${l.map(x => `<div class="bk-riga"><span>${esc(dataBackup(x.id))}<small>${[x.cloud ? 'cloud' : '', x.dispositivo ? 'questo dispositivo' : ''].filter(Boolean).join(' · ')}</small></span><button type="button" onclick="ripristinaBackup('${x.id}')">Ripristina</button></div>`).join('')}</div>` : '<p class="nota">Ancora nessun backup: il primo si fa da solo entro pochi minuti.</p>';
+  } catch(e){ el.innerHTML = `<p class="nota">Non riesco a leggere i backup (${esc(e.code || e.message)}).</p>`; }
+}
+async function backupOra(){
+  const el = $('bk-imp'); if(el) el.innerHTML = '<p class="nota">Salvo il backup…</p>';
+  try { const id = await Cassaforte.backupGiornaliero(true); toast(id ? 'Backup salvato' : 'Niente da salvare'); } catch(e){ toast('Backup non riuscito: ' + (e.code || e.message)); }
+  disegnaBackup();
+}
+async function ripristinaBackup(id){
+  let f; try { f = await Cassaforte.apriBackup(id); } catch(e){ return toast('Non riesco ad aprire il backup: ' + (e.message || e.code)); }
+  const c = Cassaforte.conteggi(f);
+  if(!confirm(`Ripristinare il backup del ${dataBackup(id)}?\n\nContiene: ${c.movimenti} movimenti, ${c.conti} conti, ${c.rate} rate, ${c.speseMezzi} spese dei mezzi, ${c.giornate} giornate di lavoro, ${c.allenamenti} allenamenti.\n\nPrima salvo una copia dello stato attuale, così puoi tornare indietro.`)) return;
+  toast('Ripristino…');
+  try { await Cassaforte.ripristina(f); toast('Ripristinato: ricarico'); setTimeout(() => location.reload(), 800); }
+  catch(e){ toast('Ripristino non riuscito: ' + (e.code || e.message)); }
 }
 async function esciTutto(){ if(!confirm('Uscire dall\'account su questo dispositivo?')) return; await Cassaforte.esci(); location.reload(); }
 
@@ -1385,7 +1415,10 @@ function controlla(){
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on');
       // le altre app si preparano in sottofondo, una alla volta e a Dashboard già disegnata: aprendole dopo, il cambio di vista è immediato
-      setTimeout(() => precarica(['palestra', 'lavoro', 'mezzi']), 2000); }
+      setTimeout(() => precarica(['palestra', 'lavoro', 'mezzi']), 2000);
+      // backup giornaliero (una volta al giorno, in sottofondo), e di nuovo ogni 6 ore se la Dashboard resta aperta
+      const bk = () => Cassaforte.backupGiornaliero().catch(e => console.warn('backup', e));
+      setTimeout(bk, 20000); setInterval(bk, 6 * 3600e3); }
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }

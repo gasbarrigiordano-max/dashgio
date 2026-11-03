@@ -51,6 +51,30 @@
   async function keyOk(key, meta) { try { return await decrypt(key, meta.check, 'check') === CHECK; } catch (e) { return false; } }
 
   // --- chiave ricordata: lo stesso database di Bilancio
+  // compressione (gzip) dei backup e delle sezioni grandi
+  async function gzip(bytes, comprimi) {
+    const s = new Blob([bytes]).stream().pipeThrough(comprimi ? new CompressionStream('gzip') : new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+  // sezioni del Bilancio: {iv, ct, z?} con aad = nome della sezione (come in bilancio/index.html, cifraSez/leggiSez)
+  async function apriSez(key, d, k) {
+    const dati = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(d.iv), additionalData: ENC.encode(k) }, key, unb64(d.ct)));
+    return DEC.decode(d.z ? await gzip(dati, false) : dati);
+  }
+  async function chiudiSez(key, testo, k) {
+    const iv = crypto.getRandomValues(new Uint8Array(12)); let dati = ENC.encode(testo), z = 0;
+    if (dati.length > 50000 && window.CompressionStream) { dati = await gzip(dati, true); z = 1; }
+    const ct = b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: ENC.encode(k) }, key, dati));
+    return z ? { iv: b64(iv), ct, z } : { iv: b64(iv), ct };
+  }
+  // backup sul dispositivo (solo testo cifrato)
+  const bkdb = {
+    open() { return new Promise((ok, ko) => { const r = indexedDB.open('dashgio-backup', 1); r.onupgradeneeded = () => r.result.createObjectStore('b'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); },
+    async get(id) { const db = await this.open(); return new Promise(ok => { const q = db.transaction('b').objectStore('b').get(id); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); },
+    async put(id, v) { const db = await this.open(); return new Promise(ok => { const t = db.transaction('b', 'readwrite'), s = t.objectStore('b'); v == null ? s.delete(id) : s.put(v, id); t.oncomplete = t.onerror = () => ok(); }); },
+    async chiavi() { const db = await this.open(); return new Promise(ok => { const q = db.transaction('b').objectStore('b').getAllKeys(); q.onsuccess = () => ok(q.result || []); q.onerror = () => ok([]); }); }
+  };
+
   const kdb = {
     open() { return new Promise((ok, ko) => { const r = indexedDB.open('bilancio-keys', 1); r.onupgradeneeded = () => r.result.createObjectStore('k'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); },
     async get(id) { try { const db = await this.open(); return await new Promise(ok => { const q = db.transaction('k').objectStore('k').get(id); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch (e) { return null; } },
@@ -243,6 +267,102 @@
       }
     },
     // l'app ha adottato il testo unito tornato da scrivi: da qui partono le sue prossime modifiche
+    /* ---- Backup automatici ----
+       Una volta al giorno una foto cifrata di tutto (sezioni del Bilancio, Mezzi, Palestra, Lavoro e Dashboard), compressa:
+       - nel cloud: dashboard/bk_AAAAMMGG (in parti se grande); si tengono gli ultimi 10 giorni e il primo di ogni mese per un anno;
+       - su questo dispositivo (IndexedDB, cifrata con la stessa chiave): le ultime 5.
+       Prima di un ripristino si fa una foto dello stato attuale (bk_AAAAMMGG_hhmmss), così anche il ripristino si annulla. */
+    async _testiCol(col, salta) {
+      const snap = await this.ref().collection(col).get({ source: 'server' }), doc = {}, out = {};
+      snap.docs.forEach(d => { doc[d.id] = d.data(); });
+      for (const id of Object.keys(doc)) if (!eParte(id) && !(salta && salta(id))) {
+        try { out[id] = await this._ricomponi(col, id, await decrypt(this.key, doc[id], col + '/' + id), async pid => doc[pid]); } catch (e) { console.warn('backup: voce illeggibile', col, id); }
+      }
+      return out;
+    },
+    async foto() {
+      const sez = {}, snap = await this.ref().collection('sez').get({ source: 'server' });
+      for (const d of snap.docs) if (/^[a-z]{2,16}$/.test(d.id) && !/rotta$/.test(d.id)) {
+        try { sez[d.id] = await apriSez(this.key, d.data(), d.id); } catch (e) { console.warn('backup: sezione illeggibile', d.id); }
+      }
+      const bk = id => /^bk_/.test(id);
+      return { v: 1, il: new Date().toISOString(), sez, giornale: await this._testiCol('giornale'), palestra: await this._testiCol('palestra'), dashboard: await this._testiCol('dashboard', bk) };
+    },
+    _vuota(f) { return !Object.keys(f.sez).length && !Object.keys(f.giornale).length && !Object.keys(f.palestra).length && !Object.keys(f.dashboard).length; },
+    async _idBackup() {
+      const snap = await this.ref().collection('dashboard').get({ source: 'server' });
+      return snap.docs.map(d => d.id).filter(id => /^bk_\d{8}(_\d{6})?$/.test(id)).sort().reverse();
+    },
+    async _salvaFoto(id, f) {
+      const zip = await gzip(ENC.encode(JSON.stringify(f)), true), b = this.db.batch();
+      await this.nelBatch(b, 'dashboard', id, b64(zip));
+      await b.commit();
+      // anche sul dispositivo
+      try {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: ENC.encode('backup/' + id) }, this.key, zip);
+        await bkdb.put(id, { iv: b64(iv), ct: b64(ct), salt: this.meta.salt, il: f.il });
+        const l = (await bkdb.chiavi()).sort().reverse(); for (const k of l.slice(5)) await bkdb.put(k, null);
+      } catch (e) { console.warn('backup sul dispositivo', e); }
+    },
+    async backupGiornaliero(forza) {
+      if (!this.key || !this.user) return null;
+      const oggi = new Date(), g = oggi.getFullYear() + String(oggi.getMonth() + 1).padStart(2, '0') + String(oggi.getDate()).padStart(2, '0');
+      try { const t = +localStorage.getItem('dg:backup') || 0; if (!forza && Date.now() - t < 120000) return null; localStorage.setItem('dg:backup', String(Date.now())); } catch (e) {}
+      const ids = await this._idBackup();
+      if (!forza && ids.includes('bk_' + g)) return null;
+      const f = await this.foto();
+      if (this._vuota(f)) return null;
+      const id = forza === 'prima' ? 'bk_' + g + '_' + oggi.toTimeString().slice(0, 8).replace(/:/g, '') : 'bk_' + g;
+      await this._salvaFoto(id, f);
+      await this._ruota([id, ...ids.filter(x => x !== id)]);
+      return id;
+    },
+    // ultimi 10 backup giornalieri + il primo di ogni mese per 12 mesi (+ le foto prima di un ripristino degli ultimi 30 giorni)
+    async _ruota(ids) {
+      const giorn = ids.filter(x => x.length === 11).sort().reverse(), tieni = new Set(giorn.slice(0, 10));
+      const mesi = {}; giorn.slice().sort().forEach(x => { const m = x.slice(3, 9); if (!mesi[m]) mesi[m] = x; });
+      Object.keys(mesi).sort().reverse().slice(0, 12).forEach(m => tieni.add(mesi[m]));
+      const limite = new Date(Date.now() - 30 * 864e5), lim = limite.getFullYear() + String(limite.getMonth() + 1).padStart(2, '0') + String(limite.getDate()).padStart(2, '0');
+      ids.filter(x => x.length > 11 && x.slice(3, 11) >= lim).forEach(x => tieni.add(x));
+      const via = ids.filter(x => !tieni.has(x)); if (!via.length) return;
+      const snap = await this.ref().collection('dashboard').get({ source: 'server' }), b = this.db.batch(); let n = 0;
+      snap.docs.forEach(d => { if (via.some(v => d.id === v || d.id.startsWith(v + '__p'))) { b.delete(this.ref().collection('dashboard').doc(d.id)); n++; } });
+      if (n) await b.commit();
+    },
+    async elencoBackup() {
+      const cloud = await this._idBackup().catch(() => []), locali = await bkdb.chiavi().catch(() => []);
+      const tutti = [...new Set([...cloud, ...locali])].sort().reverse();
+      return tutti.map(id => ({ id, cloud: cloud.includes(id), dispositivo: locali.includes(id) }));
+    },
+    async apriBackup(id) {
+      let zip = null;
+      try { const t = await this.leggi('dashboard', id, true); if (t) zip = unb64(t); } catch (e) {}
+      if (!zip) {
+        const x = await bkdb.get(id); if (!x) throw new Error('backup non trovato');
+        if (x.salt !== this.meta.salt) throw new Error('questo backup è cifrato con una passphrase precedente');
+        zip = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(x.iv), additionalData: ENC.encode('backup/' + id) }, this.key, unb64(x.ct)));
+      }
+      return JSON.parse(DEC.decode(await gzip(zip, false)));
+    },
+    // rimette tutto com'era nella foto: prima una foto dello stato attuale; rev nuovo, così gli altri dispositivi se ne accorgono
+    async ripristina(f) {
+      if (!f || f.v !== 1) throw new Error('backup non valido');
+      await this.backupGiornaliero('prima');
+      const rev = Date.now(), up = firebase.firestore.FieldValue.serverTimestamp(), ops = [];
+      for (const [k, txt] of Object.entries(f.sez || {})) ops.push(async b => b.set(this.ref().collection('sez').doc(k), { kid: this.meta.salt, ...await chiudiSez(this.key, txt, k), rev, updated: up }));
+      for (const col of ['giornale', 'palestra', 'dashboard'])
+        for (const [id, txt] of Object.entries(f[col] || {})) if (!/^bk_/.test(id)) ops.push(b => this.nelBatch(b, col, id, txt, this.key, this.meta.salt, rev));
+      for (let i = 0; i < ops.length; i += 100) { const b = this.db.batch(); for (const op of ops.slice(i, i + 100)) await op(b); await b.commit(); }
+      this.basi = {};
+    },
+    conteggi(f) {
+      const n = t => { try { const v = JSON.parse(t); return Array.isArray(v) ? v.length : 0; } catch (e) { return 0; } };
+      let spese = 0; Object.entries(f.giornale || {}).forEach(([k, t]) => { if (/expenses$/i.test(k)) spese += n(t); });
+      let giornate = 0; try { giornate = (JSON.parse(f.dashboard.lavoro).giornate || []).length; } catch (e) {}
+      return { movimenti: n((f.sez || {}).tx), conti: n((f.sez || {}).conti), rate: n((f.sez || {}).rate), speseMezzi: spese, giornate, allenamenti: n((f.palestra || {}).sessioni) };
+    },
+
     scritti: {},
     adottato(col, id) { const x = this.scritti[col + '/' + id]; if (x) this.basi[col + '/' + id] = { ...x }; },
 
