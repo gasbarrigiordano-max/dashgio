@@ -614,6 +614,26 @@ const localStore = {
   clear(){ try{ localStorage.removeItem(KEY); }catch(e){} }
 };
 const ts = () => firebase.firestore.FieldValue.serverTimestamp();
+/* Una sezione nel cloud: {kid, iv, ct, rev, z?}. Oltre 50 KB il testo si comprime (gzip) prima di cifrarlo (z:1), così anche
+   anni di movimenti stanno sotto il limite di 1 MB per documento di Firestore. rev conta i salvataggi: se al momento di
+   salvare il cloud ha un rev diverso da quello letto, un altro dispositivo ha salvato nel frattempo e si unisce. */
+const COMPRIMI = 50000, MAX_DOC = 1000000;
+async function gz(bytes, comprimi){
+  const s = new Blob([bytes]).stream().pipeThrough(comprimi ? new CompressionStream('gzip') : new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function cifraSez(key, testo, k){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  let dati = ENC.encode(testo), z = 0;
+  if(dati.length > COMPRIMI && window.CompressionStream){ dati = await gz(dati, true); z = 1; }
+  const ct = b64(await crypto.subtle.encrypt({name:'AES-GCM', iv, additionalData:ENC.encode(k)}, key, dati));
+  if(ct.length > MAX_DOC){ const e = new Error('Il Bilancio è diventato troppo grande per il cloud ('+Math.round(ct.length/1024)+' KB nella sezione '+k+')'); e.code='troppo-grande'; throw e; }
+  return z ? {iv:b64(iv), ct, z} : {iv:b64(iv), ct};
+}
+async function leggiSez(key, d, k){
+  const dati = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(d.iv), additionalData:ENC.encode(k)}, key, unb64(d.ct)));
+  return DEC.decode(d.z ? await gz(dati, false) : dati);
+}
 const cloud = {
   db:null, user:null, meta:null, key:null, v:null, last:{}, timer:null, rt:null, busy:false, again:false, retry:0, wipeLocal:false,
   ref(){ return this.db.collection('bilancio').doc(this.user.uid); },
@@ -626,26 +646,42 @@ const cloud = {
     const col = this.ref().collection('sez');
     const snap = await col.get({source:'server'});
     this.letti = snap.docs.filter(d=>SEZ.includes(d.id)).length;
-    const out = buildSeed(); this.rotte = {};
+    const out = buildSeed(); this.rotte = {}; this.lettiRev = {};
     for(const d of snap.docs) if(SEZ.includes(d.id)){
-      const txt = await decrypt(key, d.data(), d.id); // chiave sbagliata: errore come prima
+      this.lettiRev[d.id] = d.data().rev || 0;
+      const txt = await leggiSez(key, d.data(), d.id); // chiave sbagliata: errore come prima
       try { out[d.id] = JSON.parse(txt); }
       catch(e){ const r = recuperaJSON(txt); this.rotte[d.id] = {testo:txt, err:e.message, recuperati: Array.isArray(r) ? r.length : r ? 1 : 0}; if(r!==undefined) out[d.id] = r; }
     }
     return out;
   },
-  adotta(out){ SEZ.forEach(k=>this.last[k]=JSON.stringify(out[k])); },
+  adotta(out){ SEZ.forEach(k=>this.last[k]=JSON.stringify(out[k])); this.revs = {...(this.lettiRev||{})}; },
   set(v){ this.v=v; clearTimeout(this.timer); this.timer=setTimeout(()=>{ this.timer=null; this.flush(); },400); setSync('saving'); },
   // mai una sezione "undefined" (diventerebbe un testo vuoto, illeggibile alla prossima apertura) e mai una sezione
   // piena svuotata di colpo (es. uno stato vuoto salvato per errore): restano com'erano nel cloud
+  // una sezione che perderebbe più di metà del contenuto in un colpo non si salva da sola: si chiede (sospese), salvo le
+  // azioni volute (eliminazione in blocco, cancella tutto, ripristino: svuota = true)
   dirty(){
     if(!(this.key && this.v)) return [];
+    this.sospese = [];
     return SEZ.map(k=>[k,JSON.stringify(this.v[k])]).filter(([k,j])=>{
       if(j===this.last[k] || j===undefined) return false;
       const prima = this.last[k] || '';
-      if(!this.svuota && prima.length>2000 && j.length<prima.length*0.05){ console.warn('sezione '+k+' quasi svuotata: non salvata'); return false; }
+      if(!this.svuota && prima.length>300 && j.length<prima.length*0.5){ this.sospese.push(k); return false; }
       return true;
     });
+  },
+  // dopo un salvataggio con sezioni sospese: conferma (solo con l'app davanti); se no, si torna ai dati del cloud
+  async chiediSospese(){
+    if(!this.sospese || !this.sospese.length || this.chiedendo || document.visibilityState!=='visible') return;
+    const nomi = {tx:'movimenti', conti:'conti', rate:'rate', inv:'investimenti', trading:'operazioni', carte:'carte', servizi:'servizi', opz:'impostazioni', storico:'foto mensili', abbo:'abbonamenti'};
+    const conta = j => { try { const v = JSON.parse(j); return Array.isArray(v) ? v.length : Object.keys(v||{}).length; } catch(e){ return 0; } };
+    const righe = this.sospese.map(k=>`${nomi[k]||k}: da ${conta(this.last[k])} a ${conta(JSON.stringify(this.v[k]))}`);
+    this.chiedendo = true;
+    const si = confirm('Il salvataggio toglierebbe molti dati in una volta:\n\n'+righe.join('\n')+'\n\nÈ quello che volevi? (Annulla = ricarico i dati dal cloud)');
+    this.chiedendo = false;
+    if(si){ this.svuota = true; return this.flush(); }
+    try { const f = await this.get(); S = f; this.adotta(S); this.v = S; render(); toast('Dati ricaricati dal cloud'); } catch(e){ toast('Non riesco a rileggere il cloud: riprova'); }
   },
   async flush(){
     if(this.busy){ this.again=true; return; }
@@ -656,23 +692,50 @@ const cloud = {
       const dirty=this.dirty();
       if(dirty.length){
         setSync('saving');
-        const b=this.db.batch(), kid=this.meta.salt;
-        for(const [k,j] of dirty) b.set(this.ref().collection('sez').doc(k), {kid, ...await encrypt(this.key,j,k), updated:ts()});
-        await b.commit();
-        dirty.forEach(([k,j])=>this.last[k]=j);
+        const kid=this.meta.salt, key=this.key, revs=this.revs||(this.revs={}), ref=k=>this.ref().collection('sez').doc(k);
+        let scritte = [];
+        // in transazione: se nel frattempo un altro dispositivo (o scheda) ha salvato la stessa sezione, si unisce con la
+        // sua versione invece di sovrascriverla (Cassaforte.unisci: niente si perde da nessuna delle due parti)
+        await this.db.runTransaction(async t=>{
+          scritte = [];
+          const docs = [];
+          for(const [k] of dirty) docs.push(await t.get(ref(k)));
+          for(let i=0;i<dirty.length;i++){
+            const [k,j] = dirty[i], d = docs[i], rev = d.exists ? (d.data().rev||0) : 0;
+            let testo = j, unita = null;
+            if(d.exists && rev !== (revs[k]||0)){
+              let loro; try { loro = JSON.parse(await leggiSez(key, d.data(), k)); } catch(e){ loro = undefined; }
+              if(loro !== undefined){
+                const base = this.last[k]!==undefined ? JSON.parse(this.last[k]) : undefined;
+                unita = Cassaforte.unisci(base, JSON.parse(j), loro); testo = JSON.stringify(unita);
+              }
+            }
+            scritte.push({k, j, testo, unita, rev:rev+1, dati:{kid, ...await cifraSez(key, testo, k), rev:rev+1, updated:ts()}});
+          }
+          for(const x of scritte) t.set(ref(x.k), x.dati);
+        });
+        let unite = 0;
+        for(const x of scritte){
+          this.last[x.k] = x.testo; revs[x.k] = x.rev;
+          // unita con quella di un altro dispositivo: lo stato qui la adotta, tenendo le modifiche fatte intanto
+          if(x.unita && this.v){ this.v[x.k] = Cassaforte.unisci(JSON.parse(x.j), this.v[x.k], x.unita); unite++; }
+        }
         this.svuota = false;
+        if(unite){ try { render(); } catch(e){} toast('Unite le modifiche fatte su un altro dispositivo'); if(this.dirty().length) this.again = true; }
       }
       this.retry=0;
       if(this.wipeLocal){ localStore.clear(); this.wipeLocal=false; }
     }catch(e){ ok=false; this.fail(e); }
     this.busy=false;
     if(this.again) return this.flush();
-    if(ok && !this.timer && this.key) setSync('ok');
+    if(ok && !this.timer && this.key) setSync(this.sospese && this.sospese.length ? 'saving' : 'ok');
+    if(ok && this.sospese && this.sospese.length) setTimeout(()=>this.chiediSospese(), 50);
   },
   fail(e){
     console.error(e);
     if(e.code==='permission-denied') return keyMismatch();
     setSync('err');
+    if(e.code==='troppo-grande' && !this.avvisoGrande){ this.avvisoGrande = true; alert(e.message+'. I dati restano su questo dispositivo finché la pagina è aperta: scrivi a Claude.'); }
     this.retry++; clearTimeout(this.rt);
     this.rt=setTimeout(()=>this.flush(), Math.min(60000, 2000*2**(this.retry-1)));
   },
@@ -687,7 +750,8 @@ const cloud = {
       b.set(this.ref(), {...meta, updated:ts()}, {merge:true});
       // last segue lo stato com'è (una sezione assente resta assente): con last '[]' e la sezione undefined il salvataggio dopo
       // avrebbe scritto un testo vuoto
-      for(const k of SEZ){ last[k]=JSON.stringify(S[k]); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await encrypt(key,JSON.stringify(S[k]??[]),k), updated:ts()}); }
+      const revs = this.revs || {};
+      for(const k of SEZ){ last[k]=JSON.stringify(S[k]); revs[k]=(revs[k]||0)+1; b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await cifraSez(key,JSON.stringify(S[k]??[]),k), rev:revs[k], updated:ts()}); }
       // Mezzi, Palestra e Dashboard stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
       Cassaforte.adotta({db:this.db, user:this.user, meta:this.meta, key:this.key});
       for(const app of ['giornale','palestra','dashboard']){
@@ -699,7 +763,7 @@ const cloud = {
       await b.commit();
       Cassaforte.adotta({db:this.db, user:this.user, meta, key});
       const kept = await kdb.get(this.user.uid);
-      Object.assign(this, {key, meta, last, v:S});
+      Object.assign(this, {key, meta, last, v:S, revs});
       if(kept) await kdb.set(this.user.uid, {key, salt:meta.salt});
     }finally{ this.busy=false; if(this.again) this.flush(); }
   }
@@ -1427,7 +1491,7 @@ function mxElimina(r, m, tutti){
   if(!confirm(`Eliminare ${list.length} ${list.length===1?'movimento':'movimenti'} di "${nome}" ${dove}, per un totale di ${eur(sum(list.map(t=>t.amt)))}?\n\nNon si può annullare: se vuoi tenerne una copia, esporta prima un backup da Impostazioni.`)) return;
   const ids = new Set(list.map(t=>t.id));
   list.forEach(t=>applyPag(t, -1)); // come l'eliminazione singola: l'importo torna sul conto
-  S.tx = S.tx.filter(t=>!ids.has(t.id));
+  S.tx = S.tx.filter(t=>!ids.has(t.id)); cloud.svuota = true; // eliminazione voluta: si salva anche se sono tanti
   save(); closeSheet(); render(); mezziTogli(list);
   toast(`${list.length} movimenti eliminati` + (salt ? ` · ${salt} collegati a rate lasciati` : ''));
 }

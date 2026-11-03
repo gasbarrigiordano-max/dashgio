@@ -5726,7 +5726,12 @@ async function storageSet(key, value) {
   if (listaSpese(key)) { try { value = await unisciPrimaDiSalvare(key, value); } catch (e) { console.warn('unisci', e); } const s = idsDi(value); if (s) VISTI[key] = s; }
   const delays = [400, 1200, 2500];
   for (let i = 0; i <= delays.length; i++) {
-    try { await Cassaforte.scrivi('giornale', key, value); return { key, value, shared: false }; }
+    try {
+      const scritto = await Cassaforte.scrivi('giornale', key, value);
+      // salvata anche altrove nel frattempo: nel cloud c'è l'unione, si rilegge per averla anche qui
+      if (scritto !== value) { clearTimeout(storageSet.rilettura); storageSet.rilettura = setTimeout(() => { try { ricaricaSpese(); } catch (e) {} }, 300); }
+      return { key, value: scritto, shared: false };
+    }
     catch (e) {
       if (i === delays.length) { showToast('Salvataggio non riuscito: controlla la connessione'); throw e; }
       await sleep(delays[i]);

@@ -66,9 +66,54 @@
     'auth/network-request-failed': 'Nessuna connessione'
   })[e && e.code] || ('Accesso non riuscito: ' + ((e && (e.code || e.message)) || ''));
 
+  /* Unione a tre vie: base = la versione da cui sono partite le mie modifiche, mine = la mia, theirs = quella trovata nel cloud
+     (cambiata nel frattempo da un altro dispositivo o da un'altra scheda). Nessuna delle due si perde:
+     - elenchi di oggetti con id: unione per id (aggiunti da una parte o dall'altra restano; eliminato da una parte e non
+       toccato dall'altra → eliminato; eliminato da una parte ma cambiato dall'altra → resta la versione cambiata);
+     - elenchi di valori semplici: unione, meno quelli tolti da una delle due parti;
+     - oggetti: voce per voce; valori semplici cambiati da entrambe le parti: vince il mio (l'ultima modifica). */
+  const uguali = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const conId = a => Array.isArray(a) && a.every(x => x && typeof x === 'object' && !Array.isArray(x) && x.id != null);
+  const oggetto = x => x && typeof x === 'object' && !Array.isArray(x);
+  function unisci(base, mine, theirs) {
+    if (uguali(mine, theirs)) return mine;
+    if (uguali(base, mine)) return theirs;
+    if (uguali(base, theirs)) return mine;
+    if (mine === undefined) return uguali(base, theirs) ? undefined : theirs;
+    if (theirs === undefined) return uguali(base, mine) ? undefined : mine;
+    if (Array.isArray(mine) && Array.isArray(theirs)) {
+      const b = Array.isArray(base) ? base : [];
+      if (conId(mine) && conId(theirs) && conId(b)) {
+        const mb = new Map(b.map(x => [String(x.id), x])), mm = new Map(mine.map(x => [String(x.id), x])), mt = new Map(theirs.map(x => [String(x.id), x]));
+        // ordine: il mio, con in coda quelli nuovi dell'altra parte
+        const ids = [...mm.keys(), ...[...mt.keys()].filter(k => !mm.has(k))];
+        const out = [];
+        for (const id of ids) {
+          const x = unisci(mb.get(id), mm.get(id), mt.get(id));
+          if (x !== undefined) out.push(x);
+        }
+        return out;
+      }
+      if ([...mine, ...theirs, ...b].every(x => x === null || typeof x !== 'object')) {
+        const tolti = new Set(b.filter(x => !mine.includes(x) || !theirs.includes(x)));
+        return [...new Set([...mine, ...theirs])].filter(x => !tolti.has(x) || (mine.includes(x) && theirs.includes(x) && !b.includes(x)));
+      }
+      return mine;
+    }
+    if (oggetto(mine) && oggetto(theirs)) {
+      const b = oggetto(base) ? base : {}, out = {};
+      for (const k of new Set([...Object.keys(mine), ...Object.keys(theirs)])) {
+        const x = unisci(b[k], mine[k], theirs[k]);
+        if (x !== undefined) out[k] = x;
+      }
+      return out;
+    }
+    return mine;
+  }
+
   const C = {
     CONFIG, SDK, user: null, meta: null, key: null, db: null, _pronta: null,
-    encrypt, decrypt, deriveKey, keyOk, b64, unb64, authMsg,
+    encrypt, decrypt, deriveKey, keyOk, b64, unb64, authMsg, unisci,
 
     // Firebase del progetto di Bilancio, app predefinita: la stessa sessione di Bilancio sullo stesso sito
     async avvia() {
@@ -125,31 +170,64 @@
       parti.forEach(p => { tot.set(p, o); o += p.length; });
       return DEC.decode(tot);
     },
-    async leggi(col, id) {
+    // basi: per ogni voce la versione letta (rev e testo), da cui partono le modifiche di questa pagina (vedi scrivi)
+    basi: {},
+    // leggi: l'app adotta quello che legge (la base avanza); sbircia: solo per guardare (la base resta quella dello stato dell'app)
+    async leggi(col, id, sbircia) {
       const c = this.ref().collection(col), d = await c.doc(id).get();
-      if (!d.exists) return null;
-      return this._ricomponi(col, id, await decrypt(this.key, d.data(), col + '/' + id), async pid => (await c.doc(pid).get()).data());
+      if (!d.exists) { if (!sbircia) this.basi[col + '/' + id] = { rev: 0, txt: null }; return null; }
+      const txt = await this._ricomponi(col, id, await decrypt(this.key, d.data(), col + '/' + id), async pid => (await c.doc(pid).get()).data());
+      if (!sbircia) this.basi[col + '/' + id] = { rev: d.data().rev || 0, txt };
+      return txt;
     },
+    sbircia(col, id) { return this.leggi(col, id, true); },
     async tutti(col) {
       const snap = await this.ref().collection(col).get({ source: 'server' }), doc = {}, out = {}; // senza rete la cache darebbe un elenco vuoto: meglio un errore
       snap.docs.forEach(d => { doc[d.id] = d.data(); });
-      for (const id of Object.keys(doc)) if (!eParte(id))
+      for (const id of Object.keys(doc)) if (!eParte(id)) {
         out[id] = await this._ricomponi(col, id, await decrypt(this.key, doc[id], col + '/' + id), async pid => doc[pid]);
+        this.basi[col + '/' + id] = { rev: doc[id].rev || 0, txt: out[id] };
+      }
       return out;
     },
     // le scritture di una voce (con le sue parti, se è grande) dentro un batch; key/salt per ricifrare con una passphrase nuova
-    async nelBatch(b, col, id, txt, key = this.key, salt = this.meta.salt) {
+    // b: un batch o una transazione (hanno lo stesso set); rev: il numero del salvataggio, per accorgersi di quelli fatti altrove
+    async nelBatch(b, col, id, txt, key = this.key, salt = this.meta.salt, rev) {
       const c = this.ref().collection(col), up = firebase.firestore.FieldValue.serverTimestamp(), bytes = ENC.encode(txt);
-      if (bytes.length <= PARTE) return b.set(c.doc(id), { kid: salt, ...await encrypt(key, txt, col + '/' + id), updated: up });
+      const r = rev != null ? { rev } : {};
+      if (bytes.length <= PARTE) return b.set(c.doc(id), { kid: salt, ...await encrypt(key, txt, col + '/' + id), ...r, updated: up });
       const n = Math.ceil(bytes.length / PARTE);
       for (let k = 1; k <= n; k++) b.set(c.doc(parteId(id, k)), { kid: salt, ...await encryptBytes(key, bytes.subarray((k - 1) * PARTE, k * PARTE), col + '/' + parteId(id, k)), updated: up });
-      b.set(c.doc(id), { kid: salt, ...await encrypt(key, JSON.stringify({ __parti: n }), col + '/' + id), updated: up });
+      b.set(c.doc(id), { kid: salt, ...await encrypt(key, JSON.stringify({ __parti: n }), col + '/' + id), ...r, updated: up });
     },
+    /* Scrittura sicura: in una transazione si guarda la voce nel cloud. Se è cambiata dopo che questa pagina l'ha letta
+       (un altro dispositivo o un'altra scheda ha salvato), si unisce (unisci) invece di sovrascrivere. Torna il testo
+       scritto: se è diverso da txt, l'app deve adottarlo (o almeno sapere che nel cloud c'è di più).
+       Un testo vuoto o non valido non si scrive mai sopra una voce che ha dati. */
     async scrivi(col, id, txt) {
+      const k = col + '/' + id, base = this.basi[k];
+      let finale = txt, rev = 0;
+      if (txt == null || txt === '') throw new Error('scrittura vuota rifiutata (' + k + ')');
       try {
-        const b = this.db.batch();
-        await this.nelBatch(b, col, id, txt);
-        await b.commit();
+        const c = this.ref().collection(col);
+        await this.db.runTransaction(async t => {
+          finale = txt;
+          const d = await t.get(c.doc(id));
+          rev = d.exists ? (d.data().rev || 0) : 0;
+          if (d.exists && (!base || rev !== base.rev)) {
+            let loro = null;
+            try { loro = await this._ricomponi(col, id, await decrypt(this.key, d.data(), k), async pid => (await t.get(c.doc(pid))).data()); } catch (e) { loro = null; }
+            let lj, mj, bj;
+            try { lj = loro != null ? JSON.parse(loro) : undefined; mj = JSON.parse(txt); bj = base && base.txt != null ? JSON.parse(base.txt) : undefined; } catch (e) { lj = undefined; }
+            if (lj !== undefined) finale = JSON.stringify(unisci(bj, mj, lj));
+          }
+          await this.nelBatch(t, col, id, finale, this.key, this.meta.salt, rev + 1);
+        });
+        // la base avanza solo se quello scritto è quello che l'app ha: se si è unito, resta la vecchia finché l'app non rilegge
+        // (così il prossimo salvataggio unisce ancora e non cancella ciò che è arrivato da fuori)
+        this.basi[k] = finale === txt ? { rev: rev + 1, txt } : { rev: base ? base.rev : -1, txt: base ? base.txt : null };
+        this.scritti[k] = { rev: rev + 1, txt: finale };
+        return finale;
       } catch (e) {
         // rifiutata: la passphrase è stata cambiata da un altro dispositivo
         if (e.code === 'permission-denied') {
@@ -164,6 +242,9 @@
         throw e;
       }
     },
+    // l'app ha adottato il testo unito tornato da scrivi: da qui partono le sue prossime modifiche
+    scritti: {},
+    adottato(col, id) { const x = this.scritti[col + '/' + id]; if (x) this.basi[col + '/' + id] = { ...x }; },
 
     // finestra a tutto schermo con lo stile della porta (per esempio il trasloco di Mezzi)
     finestra(titolo, sotto) {

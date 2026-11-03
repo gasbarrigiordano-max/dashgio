@@ -252,7 +252,13 @@ async function invia(){
   salvando = true;
   const voci = [...sporche]; sporche.clear();
   try {
-    for (const v of voci) await Cassaforte.scrivi('palestra', v, JSON.stringify(P[v]));
+    let unite = 0;
+    for (const v of voci) {
+      const inviato = JSON.stringify(P[v]), scritto = await Cassaforte.scrivi('palestra', v, inviato);
+      // salvata anche altrove nel frattempo: si adotta l'unione, tenendo le modifiche fatte qui intanto
+      if (scritto !== inviato) { P[v] = Cassaforte.unisci(JSON.parse(inviato), P[v], JSON.parse(scritto)); Cassaforte.adottato('palestra', v); if (JSON.stringify(P[v]) !== scritto) sporche.add(v); unite++; }
+    }
+    if (unite) { disegna(); toast('Unite le modifiche fatte su un altro dispositivo'); if (sporche.size) { clearTimeout(tSalva); tSalva = setTimeout(invia, 500); } }
     setSync(sporche.size ? 'salvo' : 'ok');
   } catch(e) {
     console.error(e); voci.forEach(v => sporche.add(v)); setSync('err');

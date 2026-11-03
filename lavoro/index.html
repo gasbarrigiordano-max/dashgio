@@ -260,7 +260,16 @@ function salva(){ sporco = true; setSync('salvo'); clearTimeout(tSalva); tSalva 
 async function invia(){
   if (salvando) { tSalva = setTimeout(invia, 300); return; }
   salvando = true; sporco = false;
-  try { await Cassaforte.scrivi('dashboard', 'lavoro', JSON.stringify(L)); setSync(sporco ? 'salvo' : 'ok'); }
+  try {
+    const inviato = JSON.stringify(L), scritto = await Cassaforte.scrivi('dashboard', 'lavoro', inviato);
+    // salvato anche da un altro dispositivo nel frattempo: il cloud ha l'unione, qui si adotta tenendo le modifiche fatte intanto
+    if (scritto !== inviato) {
+      L = Cassaforte.unisci(JSON.parse(inviato), L, JSON.parse(scritto)); Cassaforte.adottato('dashboard', 'lavoro');
+      if (JSON.stringify(L) !== scritto) sporco = true;
+      disegna(); toast('Unite le modifiche fatte su un altro dispositivo'); if (sporco) { clearTimeout(tSalva); tSalva = setTimeout(invia, 500); }
+    }
+    setSync(sporco ? 'salvo' : 'ok');
+  }
   catch(e) { console.error(e); sporco = true; setSync('err'); toast(e.code === 'permission-denied' ? 'Salvataggio rifiutato: controlla le regole di Firestore (voce "dashboard")' : 'Salvataggio non riuscito: riprovo'); tSalva = setTimeout(invia, 4000); }
   salvando = false;
 }
