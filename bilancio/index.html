@@ -1474,7 +1474,7 @@ function renderMx(){
     </div>
     <div class="row" style="margin-bottom:12px">
       <div class="chips" style="margin:0"><button class="chip ${pers?'':'on'}" onclick="setMxSort('importo')">Per importo</button><button class="chip ${pers?'on':''}" onclick="setMxSort('pers')">Personalizzato</button></div>
-      <button class="btn sm ghost" onclick="openOrdine()">↕ Ordina</button></div>
+      <button class="btn sm ghost" onclick="openOrdine()">✎ Categorie</button></div>
     <div class="chips" style="margin:0 0 12px" role="group" aria-label="Mese"><button class="chip ${fm==null?'on':''}" onclick="mxFiltraMese(null)">Tutti</button>${M3.map((n,i)=>`<button class="chip ${fm===i?'on':''}" onclick="mxFiltraMese(${i})">${n}</button>`).join('')}</div>
     <div class="mx-wrap"><table class="mx">
       <tr><th>${tipo==='u'?'Uscite':'Entrate'} ${ui.year}</th>${mm.map(i=>`<th>${M3[i]}</th>`).join('')}<th>${fm==null?'Totale':'Anno'}</th></tr>
@@ -1582,15 +1582,45 @@ function openOrdine(){
 }
 function drawOrdine(){
   const d = ordDraft, top = $('ov').classList.contains('on') ? $('sheet').scrollTop : 0;
-  const btns = (k, ci, i, n) => `<button class="btn sm ghost" ${i===0?'disabled':''} onclick="event.stopPropagation();mvOrd('${k}',${ci},${i},-1)" aria-label="Su">▲</button><button class="btn sm ghost" ${i===n-1?'disabled':''} onclick="event.stopPropagation();mvOrd('${k}',${ci},${i},1)" aria-label="Giù">▼</button>`;
-  sheet(`<h3>Ordine delle ${d.tipo==='u'?'uscite':'entrate'}</h3>
-    <p class="note" style="margin:-6px 0 10px">Sposta le categorie con ▲▼. Tocca una categoria per ordinare le sue voci.</p>
+  const nome = (ci, i) => `<button class="btn sm ghost" onclick="event.stopPropagation();rinominaCat(${ci},${i})" aria-label="Rinomina" title="Rinomina">✎</button>`;
+  const btns = (k, ci, i, n) => (k==='c' ? nome(ci, -1) : nome(ci, i)) + `<button class="btn sm ghost" ${i===0?'disabled':''} onclick="event.stopPropagation();mvOrd('${k}',${ci},${i},-1)" aria-label="Su">▲</button><button class="btn sm ghost" ${i===n-1?'disabled':''} onclick="event.stopPropagation();mvOrd('${k}',${ci},${i},1)" aria-label="Giù">▼</button>`;
+  sheet(`<h3>Categorie delle ${d.tipo==='u'?'uscite':'entrate'}</h3>
+    <p class="note" style="margin:-6px 0 10px">✎ cambia il nome (in tutti i movimenti; con il nome di una categoria che c'è già, le unisce). Sposta con ▲▼. Tocca una categoria per le sue voci.</p>
     ${d.cats.map((c,ci)=>`<div class="ord" onclick="ordDraft.open=ordDraft.open===${ci}?-1:${ci};drawOrdine()"><span><b>${esc(c)}</b>${d.subs[c].length?` <small class="mut">${d.open===ci?'▾':'▸'} ${d.subs[c].length} ${d.subs[c].length===1?'voce':'voci'}</small>`:''}</span>${btns('c',ci,ci,d.cats.length)}</div>
       ${d.open===ci ? d.subs[c].map((s,i)=>`<div class="ord sub"><span>${esc(s)}</span>${btns('s',ci,i,d.subs[c].length)}</div>`).join('') : ''}`).join('') || '<div class="empty">Nessuna categoria</div>'}
     <button class="btn" style="margin-top:14px" onclick="saveOrdine()">Salva ordine</button>
     <button class="btn ghost" style="margin-top:8px" onclick="if(confirm('Tornare all\\'ordine per importo?')){ delete (S.opz.ordine||{})[ordDraft.tipo]; S.opz.mxSort='importo'; save(); closeSheet(); render(); }">Ripristina ordine per importo</button>
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Annulla</button>`);
   $('sheet').scrollTop = top;
+}
+/* Rinomina di una categoria (i<0) o di una sua voce: tutti i movimenti di quel tipo, gli abbonamenti e l'ordine personalizzato.
+   Le categorie usate dalle app collegate (Mezzi, Rate, Lavoro, Carte) restano col loro nome: le app le riconoscono così. */
+const CAT_FISSE = {u:['Mezzi','Rate','Carte'], e:['Lavoro']};
+function rinominaCat(ci, i){
+  const d = ordDraft, tipo = d.tipo, cat = d.cats[ci], sub = i>=0 ? d.subs[cat][i] : null;
+  if((CAT_FISSE[tipo]||[]).some(x=>x.toLowerCase()===String(cat).toLowerCase()))
+    return toast(`"${cat}" è usata da ${/mezzi/i.test(cat)?'Mezzi':/lavoro/i.test(cat)?'Lavoro':'Rate e carte'}: il nome resta questo`);
+  const vecchio = sub ?? cat, nuovo = (prompt(sub!=null ? `Nuovo nome per la voce "${sub}" (in ${cat}):` : `Nuovo nome per la categoria "${cat}":`, vecchio) || '').trim();
+  if(!nuovo || nuovo===vecchio) return;
+  if(nuovo.length>40) return toast('Nome troppo lungo (al massimo 40 caratteri)');
+  const esiste = sub!=null ? d.subs[cat].includes(nuovo) : d.cats.includes(nuovo);
+  if(esiste && !confirm(`"${nuovo}" c'è già: unire ${sub!=null?'le due voci':'le due categorie'}?`)) return;
+  let n = 0;
+  S.tx.forEach(t=>{ if(t.t!==tipo || t.cat!==cat) return;
+    if(sub==null){ t.cat = nuovo; n++; } else if((t.sub||'')===sub){ t.sub = nuovo; n++; } });
+  if(tipo==='u') (S.abbo||[]).forEach(a=>{ if(sub==null && (a.cat||'Ricorrenti')===cat) a.cat = nuovo; });
+  // ordine personalizzato salvato e quello in corso di modifica
+  const o = ((S.opz||{}).ordine||{})[tipo];
+  const ren = (l, a, b) => { const k = l.indexOf(a); if(k<0) return l; return l.includes(b) ? l.filter(x=>x!==a) : l.map(x=>x===a?b:x); };
+  if(sub==null){
+    if(o){ o.cats = ren(o.cats||[], cat, nuovo); if(o.subs && o.subs[cat]){ o.subs[nuovo] = [...new Set([...(o.subs[nuovo]||[]), ...o.subs[cat]])]; delete o.subs[cat]; } }
+    d.subs[nuovo] = [...new Set([...(d.subs[nuovo]||[]), ...d.subs[cat]])]; delete d.subs[cat]; d.cats = ren(d.cats, cat, nuovo);
+  } else {
+    if(o && o.subs && o.subs[cat]) o.subs[cat] = ren(o.subs[cat], sub, nuovo);
+    d.subs[cat] = ren(d.subs[cat], sub, nuovo);
+  }
+  save(); render(); drawOrdine();
+  toast(`Rinominata in "${nuovo}" · ${n} ${n===1?'movimento':'movimenti'}`);
 }
 function mvOrd(k, ci, i, dir){
   const a = k==='c' ? ordDraft.cats : ordDraft.subs[ordDraft.cats[ci]], j = i+dir;
