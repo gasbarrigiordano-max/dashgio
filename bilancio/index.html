@@ -2248,13 +2248,13 @@ function openAbbo(id){
     <div class="grid2">
       <div class="f"><label>Costo (€)</label><input id="ab-c" inputmode="decimal" value="${a.costo===''?'':String(a.costo).replace('.',',')}" placeholder="0,00 €"></div>
       <div class="f"><label>Ricorrenza</label><select id="ab-f" onchange="abboNext()">${FREQ.map(([v,l])=>`<option value="${v}" ${v===a.freq?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div class="f"><label>Ultimo pagamento</label><input type="date" id="ab-u" value="${ult}" oninput="abboNext()"></div>
+      <div class="f"><label>${id?'Ultimo pagamento':'Primo pagamento da registrare'}</label><input type="date" id="ab-u" value="${ult}" oninput="abboNext()"></div>
       <div class="f"><label>Prossima scadenza</label><input type="date" id="ab-d" value="${a.next||''}" oninput="abboPrev()"></div>
     </div>
     <p class="note" id="ab-prev" style="margin:-4px 0 12px"></p>
     <div class="f"><label>Categoria</label><input id="ab-cat" list="ab-cl" value="${esc(a.cat)}"><datalist id="ab-cl">${cats.map(c=>`<option>${esc(c)}`).join('')}</datalist></div>
     <div class="f"><label>Pagato con</label><select id="ab-p">${pagOptions(a.pag||'')}</select></div>
-    ${id?'':`<label class="chk" style="justify-content:flex-start;margin:0 0 8px"><input type="checkbox" id="ab-reg"> Registra anche questo pagamento tra le uscite</label>`}
+    ${id?'':`<label class="chk" style="justify-content:flex-start;margin:0 0 8px"><input type="checkbox" id="ab-reg" onchange="this.dataset.t=1;abboPrev()"> <span id="ab-reg-t">Registra anche i pagamenti già fatti</span></label>`}
     <label class="chk" style="justify-content:flex-start;margin:0 0 12px"><input type="checkbox" id="ab-on" ${a.attivo!==false?'checked':''}> Attivo (togli la spunta per sospenderlo)</label>
     <button class="btn" onclick="saveAbbo('${id||''}')">Salva</button>
     ${id?`<button class="btn danger" style="margin-top:8px" onclick="delAbbo('${id}')">Elimina</button>`:''}
@@ -2268,25 +2268,35 @@ function abboNext(){
   let d = addMonths(u, f); while(d < today()) d = addMonths(d, f);
   $('ab-d').value = d; abboPrev();
 }
+// pagamenti già fatti: dalla data indicata fino a oggi, ogni ricorrenza
+function abboPassati(u, f){ const l = []; if(!u || !f) return l; for(let d = u; d <= today() && l.length < 120; d = addMonths(d, f)) l.push(d); return l; }
 function abboPrev(){
   const d = $('ab-d').value, f = +$('ab-f').value, ogni = {1:'ogni mese',2:'ogni 2 mesi',3:'ogni 3 mesi',6:'ogni 6 mesi',12:'ogni anno'}[f];
-  $('ab-prev').textContent = d ? `Si rinnova ${ogni} · prossimo pagamento il ${fmtD(d)}, poi il ${fmtD(addMonths(d,f))}` : '';
+  const reg = $('ab-reg'), passati = abboPassati($('ab-u').value, f);
+  // finché non la tocchi: spuntata se ci sono pagamenti nei giorni passati (stai registrando un abbonamento già in corso)
+  if(reg && !reg.dataset.t) reg.checked = passati.some(x=>x<today());
+  const conPassati = reg && reg.checked && passati.length;
+  // registrando anche i pagamenti passati, la prossima scadenza è la prima dopo oggi
+  const prossima = conPassati ? addMonths(passati.at(-1), f) : d;
+  $('ab-prev').textContent = prossima ? `Si rinnova ${ogni} · prossimo pagamento il ${fmtD(prossima)}, poi il ${fmtD(addMonths(prossima,f))}` : '';
+  if(reg) $('ab-reg-t').textContent = passati.length ? `Registra anche ${passati.length===1 ? 'il pagamento del '+fmtD(passati[0]) : 'i '+passati.length+' pagamenti già fatti, dal '+fmtD(passati[0])+' al '+fmtD(passati.at(-1))}, ognuno nel suo mese (i saldi dei conti non cambiano${passati.at(-1)===today() ? ', tranne quello di oggi' : ''})` : 'Registra anche i pagamenti già fatti (nessuno: la data è nel futuro)';
 }
 function saveAbbo(id){
   const o = {n:$('ab-n').value.trim(), costo:round2(num($('ab-c').value)), freq:+$('ab-f').value, next:$('ab-d').value, pag:$('ab-p').value, cat:$('ab-cat').value.trim()||'Ricorrenti', attivo:$('ab-on').checked};
   if(!o.n) return toast('Inserisci il servizio');
   if(!o.costo) return toast('Inserisci il costo');
   if(!o.next) return toast('Inserisci la prossima scadenza');
+  // nuovo abbonamento con i pagamenti già fatti: tutti, ognuno nel suo mese, senza toccare i saldi (sono già quelli di oggi)
+  const passati = !id && $('ab-reg') && $('ab-reg').checked ? abboPassati($('ab-u').value, o.freq) : [];
+  if(passati.length) o.next = addMonths(passati.at(-1), o.freq);
   if(o.attivo && o.next<today() && !confirm(`La scadenza (${fmtD(o.next)}) è già passata: i pagamenti fino a oggi verranno registrati subito. Continuare?`)) return;
   const nid = id || uid();
   if(id) Object.assign(abbo().find(x=>x.id===id), o); else S.abbo.push({id:nid, ...o});
-  // pagamento appena fatto: lo registro con la data dell'ultimo pagamento
-  const u = $('ab-u').value;
-  if(!id && $('ab-reg') && $('ab-reg').checked && u && !S.tx.some(x=>x.id===`ab_${nid}_${u}`)){
-    const tx = {id:`ab_${nid}_${u}`, d:u, t:'u', cat:o.cat, sub:o.n, amt:o.costo, note:freqName(o.freq), abid:nid, ...pagParse(o.pag)};
-    S.tx.push(tx); applyPag(tx);
-  }
-  save(); closeSheet(); payAbbo(); render(); toast('Salvato');
+  passati.forEach(d=>{ const tid = `ab_${nid}_${d}`; if(S.tx.some(x=>x.id===tid)) return;
+    // quello di oggi è un pagamento nuovo: esce dal conto (o va sulla carta); quelli passati sono già nei saldi
+    if(d===today()){ const tx = {id:tid, d, t:'u', cat:o.cat, sub:o.n, amt:o.costo, note:freqName(o.freq), abid:nid, ...pagParse(o.pag)}; S.tx.push(tx); applyPag(tx); return; }
+    S.tx.push({id:tid, d, t:'u', cat:o.cat, sub:o.n, amt:o.costo, note:freqName(o.freq)+' (già pagato)', abid:nid, carta:'', pag:'', conto:''}); });
+  save(); closeSheet(); payAbbo(); render(); toast(passati.length ? `Salvato · ${passati.length} ${passati.length===1?'pagamento registrato':'pagamenti registrati'}` : 'Salvato');
 }
 function delAbbo(id){
   if(!confirm('Eliminare questo abbonamento? I pagamenti già registrati restano tra i movimenti.')) return;
