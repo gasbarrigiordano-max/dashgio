@@ -7,7 +7,14 @@
   catch (e) { document.documentElement.style.display = 'none'; try { window.top.location = location.href; } catch (x) {} }
   document.addEventListener('securitypolicyviolation', e => {
     console.error('CSP: bloccato ' + (e.blockedURI || 'inline') + ' (' + e.violatedDirective + ')');
-    try { if (window.Cassaforte && Cassaforte.segnala) Cassaforte.segnala('csp', (e.violatedDirective || '') + ' ' + String(e.blockedURI || 'inline').slice(0, 120)); } catch (x) {}
+    // nel registro una volta al giorno per indirizzo bloccato (non cento righe uguali)
+    try {
+      let dove = 'inline'; try { dove = new URL(e.blockedURI).host || e.blockedURI; } catch (x) { dove = e.blockedURI || 'inline'; }
+      const k = 'dg:csp:' + (e.violatedDirective || '') + ':' + dove, t = +localStorage.getItem(k) || 0;
+      if (Date.now() - t < 864e5) return;
+      localStorage.setItem(k, String(Date.now()));
+      if (window.Cassaforte && Cassaforte.segnala) Cassaforte.segnala('csp', (e.violatedDirective || '') + ' ' + String(e.blockedURI || 'inline').slice(0, 120));
+    } catch (x) {}
   });
 })();
 

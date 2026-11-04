@@ -400,6 +400,11 @@
       try { localStorage.removeItem('dg:registroAttesa'); localStorage.removeItem('dg:dispositivoNuovo'); } catch (e) {}
     },
     async registro() { const v = await this.sbircia('dashboard', 'registro'); return v ? JSON.parse(v) : []; },
+    // svuota il registro (resta una riga che dice quando e da dove)
+    async svuotaRegistro() {
+      await this.leggi('dashboard', 'registro');
+      await this.scrivi('dashboard', 'registro', JSON.stringify([{ id: 'e' + Date.now().toString(36), il: new Date().toISOString(), tipo: 'registro-svuotato', det: '', disp: this.dispositivo(), dove: this.dove() }]));
+    },
     // eventi da controllare successi su altri dispositivi dopo l'ultima volta che li hai visti qui
     async daControllare() {
       let visto = ''; try { visto = localStorage.getItem('dg:registroVisto') || ''; } catch (e) {}
