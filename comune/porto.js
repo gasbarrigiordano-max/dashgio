@@ -12,6 +12,8 @@
   const CHIAVE = 'dg:porto', DURATA = 30 * 60e3;
 
   // maiuscole, senza accenti né punteggiatura: "MSC Divina!" → "MSC DIVINA"
+  // moli e orari presi da un sito esterno: solo lettere, cifre e pochi segni (niente che possa diventare HTML)
+  const pulito = v => String(v || '').replace(/[^A-Za-z0-9À-ÿ /:.,\-]/g, '').trim().slice(0, 40);
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const pad = n => String(n).padStart(2, '0');
   const testo = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -42,7 +44,7 @@
         }
         if (!giorno || celle.length < 2 || norm(celle[0]) === 'NAVE') return;
         const nave = norm(celle[0]); if (!nave) return;
-        navi.push({ d: giorno, nave, banchina: celle[1] || '', orari: celle[2] || '' });
+        navi.push({ d: giorno, nave, banchina: pulito(celle[1]), orari: pulito(celle[2]) });
       });
     });
     const giorni = navi.map(n => n.d).sort();
@@ -60,8 +62,8 @@
       const c = [...tr.children].map(testo);
       if (c.length < 7 || !/^\d{1,2}$/.test(c[1]) || +c[2] !== mese + 1) return;
       const nave = norm(c[5]); if (!nave) return;
-      const banchina = /^(tbc|tbd|\/|-)?$/i.test(c[6]) ? '' : c[6];
-      navi.push({ d: `${anno}-${pad(mese + 1)}-${pad(+c[1])}`, nave, banchina, orari: [c[3], c[4]].filter(x => x && x !== '/').join('/'), fonte: 'mese' });
+      const banchina = /^(tbc|tbd|\/|-)?$/i.test(c[6]) ? '' : pulito(c[6]);
+      navi.push({ d: `${anno}-${pad(mese + 1)}-${pad(+c[1])}`, nave, banchina, orari: pulito([c[3], c[4]].filter(x => x && x !== '/').join('/')), fonte: 'mese' });
     });
     return navi;
   }

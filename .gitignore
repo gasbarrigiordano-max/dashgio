@@ -5,3 +5,11 @@
 *.xlsx
 
 .DS_Store
+
+# Segreti e copie: mai nel repo
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*backup*

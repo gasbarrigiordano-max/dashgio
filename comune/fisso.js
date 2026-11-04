@@ -1,3 +1,16 @@
+/* Sicurezza comune a tutte le pagine:
+   - dentro una cornice (iframe) solo del nostro sito (la Dashboard): una pagina di un altro sito che provasse a mostrarle
+     di nascosto per farti toccare qualcosa (clickjacking) trova la pagina vuota;
+   - le violazioni della Content-Security-Policy finiscono nella console e nel registro delle attività sospette. */
+(function () {
+  try { if (window.top !== window.self && window.top.location.origin !== location.origin) throw 0; }
+  catch (e) { document.documentElement.style.display = 'none'; try { window.top.location = location.href; } catch (x) {} }
+  document.addEventListener('securitypolicyviolation', e => {
+    console.error('CSP: bloccato ' + (e.blockedURI || 'inline') + ' (' + e.violatedDirective + ')');
+    try { if (window.Cassaforte && Cassaforte.segnala) Cassaforte.segnala('csp', (e.violatedDirective || '') + ' ' + String(e.blockedURI || 'inline').slice(0, 120)); } catch (x) {}
+  });
+})();
+
 /* Pagina ferma su iPhone e iPad: niente zoom con il pizzico o il doppio tocco (le mappe di Mezzi restano libere)
    e niente testo ingrandito ruotando il telefono. Lo zoom quando si tocca un campo lo evita il viewport (maximum-scale=1). */
 (function () {

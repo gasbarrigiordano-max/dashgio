@@ -2,6 +2,10 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
+<!-- Sicurezza: da dove possono arrivare script, stili e immagini e con chi si può parlare (CSP). Anche se un testo
+     malevolo riuscisse a entrare nella pagina, non potrebbe caricare codice da altri siti né mandare i dati altrove. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.googleusercontent.com https://www.gstatic.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://www.gstatic.com https://civitavecchia.portmobility.it https://api.coingecko.com https://api.binance.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://api.openrouteservice.org; frame-src 'self' https://accounts.google.com https://contabilit-1a500.firebaseapp.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a1411">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -319,6 +323,8 @@ const aperti = new Set();
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); Moto.entra($('vista')); });
 // la scheda scelta scivola sotto la voce; la Dashboard fa entrare la vista quando si apre l'app
 Moto.pillola(document.querySelector('.tabs')); window.motoVista = () => $('vista');
+// la Dashboard apre una scheda precisa (palestra/?t=abbo con l'app già aperta)
+window.vaiScheda = t => { tab = t; disegna(); };
 function disegna(){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('titolo').textContent = {oggi: P.inCorso ? P.inCorso.nome : 'Palestra', schede: 'Programma', storico: 'Storico', corpo: 'Corpo', abbo: 'Abbonamento'}[tab];

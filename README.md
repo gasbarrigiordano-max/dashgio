@@ -39,9 +39,33 @@ bilancio/{uid}/giornale/{voce}    kid, iv, ct         (Mezzi: trips, auto_expens
 bilancio/{uid}/palestra/{voce}    kid, iv, ct         (Palestra: schede, sessioni, corpo, abbonamento, inCorso)
 bilancio/{uid}/dashboard/google   kid, iv, ct         (Dashboard: chiave segreta del client Google e permessi di lunga durata)
 bilancio/{uid}/dashboard/lavoro   kid, iv, ct         (Lavoro: giornate, tariffe, fatture)
+bilancio/{uid}/dashboard/bk_AAAAMMGG  backup giornaliero cifrato e compresso di tutto (10 giorni + uno al mese per un anno)
+bilancio/{uid}/dashboard/registro    registro cifrato delle attività (accessi, sblocchi, errori, nuovi dispositivi…)
+bilancio/{uid}/giornale/chiaviApi    chiave personale di OpenRouteService (cifrata; non più nel codice)
 ```
 
-Dopo ogni modifica a `firestore.rules`: copiarle in console (Firestore → Regole), sostituire `IL_TUO_UID` con l'UID dell'utente e pubblicare.
+Ogni documento cifrato ha anche `rev` (numero del salvataggio): le app salvano in una transazione e, se nel frattempo un altro
+dispositivo ha salvato, **uniscono** le due versioni (`Cassaforte.unisci`) invece di sovrascrivere; le regole rifiutano un `rev`
+che non cresce. Il Bilancio legge solo dal server (mai una cache vuota presa per buona), non salva mai sezioni vuote e chiede
+conferma prima di togliere più di metà di una sezione.
+
+### Sicurezza
+
+- **Content-Security-Policy** in ogni pagina: script solo da questo sito, gstatic (Firebase), cdnjs (Excel, grafici, mappe) e
+  accounts.google.com; connessioni solo ai servizi usati; niente `eval`. Le violazioni finiscono nel registro attività.
+- **Testi esterni** (eventi e calendari Google, programma del porto) ripuliti all'arrivo; il resto passa da `esc()`.
+- **Clickjacking**: in una cornice di un altro sito le pagine non si mostrano. Messaggi tra Dashboard e app: solo stessa origine
+  (e, per il calendario, solo dalla cornice di Lavoro).
+- **Chiavi pubbliche per natura**: `apiKey` di Firebase e client ID Google identificano il progetto, non danno accesso ai dati
+  (lo decidono accesso + regole + passphrase). Vanno comunque **limitate** in Google Cloud (vedi sotto).
+
+Da fare in console (una volta):
+1. Firestore → Regole: incollare `firestore.rules` con l'UID al posto di `IL_TUO_UID` e pubblicare.
+2. Google Cloud → API e servizi → Credenziali → la chiave del browser: restrizione "Referrer HTTP" a
+   `https://gasbarrigiordano-max.github.io/*` e restrizione API a Identity Toolkit, Token Service e Cloud Firestore.
+3. Authentication → Impostazioni → Azioni utente: disattivare "Abilita creazione (registrazione)".
+4. Progetto vecchio `app-gommone`: i dati di Mezzi lì sono in chiaro; dopo il trasloco cancellarli (o il progetto).
+5. openrouteservice.org: rigenerare la chiave (quella vecchia era pubblica nel codice) e inserirla in Mezzi → Viaggio.
 
 ## Trasloco dalla vecchia app dei mezzi
 

@@ -2,6 +2,10 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
+<!-- Sicurezza: da dove possono arrivare script, stili e immagini e con chi si può parlare (CSP). Anche se un testo
+     malevolo riuscisse a entrare nella pagina, non potrebbe caricare codice da altri siti né mandare i dati altrove. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.googleusercontent.com https://www.gstatic.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://www.gstatic.com https://civitavecchia.portmobility.it https://api.coingecko.com https://api.binance.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://api.openrouteservice.org; frame-src 'self' https://accounts.google.com https://contabilit-1a500.firebaseapp.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a1411">
 <script>
@@ -680,7 +684,7 @@ const cloud = {
     this.chiedendo = true;
     const si = confirm('Il salvataggio toglierebbe molti dati in una volta:\n\n'+righe.join('\n')+'\n\nÈ quello che volevi? (Annulla = ricarico i dati dal cloud)');
     this.chiedendo = false;
-    if(si){ this.svuota = true; return this.flush(); }
+    if(si){ try{ Cassaforte.segnala('svuotamento', righe.join('; ')); }catch(x){} this.svuota = true; return this.flush(); }
     try { const f = await this.get(); S = f; this.adotta(S); this.v = S; render(); toast('Dati ricaricati dal cloud'); } catch(e){ toast('Non riesco a rileggere il cloud: riprova'); }
   },
   async flush(){
@@ -751,14 +755,16 @@ const cloud = {
       // last segue lo stato com'è (una sezione assente resta assente): con last '[]' e la sezione undefined il salvataggio dopo
       // avrebbe scritto un testo vuoto
       const revs = this.revs || {};
-      for(const k of SEZ){ last[k]=JSON.stringify(S[k]); revs[k]=(revs[k]||0)+1; b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await cifraSez(key,JSON.stringify(S[k]??[]),k), rev:revs[k], updated:ts()}); }
+      // rev nuovo e più alto di qualsiasi altro (le regole vogliono che cresca sempre)
+      const revNuovo = Date.now();
+      for(const k of SEZ){ last[k]=JSON.stringify(S[k]); revs[k]=Math.max(revNuovo, (revs[k]||0)+1); b.set(this.ref().collection('sez').doc(k), {kid:meta.salt, ...await cifraSez(key,JSON.stringify(S[k]??[]),k), rev:revs[k], updated:ts()}); }
       // Mezzi, Palestra e Dashboard stanno nella stessa cassaforte: lette con la chiave vecchia, riscritte con la nuova
       Cassaforte.adotta({db:this.db, user:this.user, meta:this.meta, key:this.key});
       for(const app of ['giornale','palestra','dashboard']){
         let voci;
         // 'dashboard' (accesso automatico a Google) c'è solo con le regole nuove: con quelle vecchie si salta
         try { voci = await Cassaforte.tutti(app); } catch(e){ if(app==='dashboard' && e.code==='permission-denied') continue; throw e; }
-        for(const [id,txt] of Object.entries(voci)) await Cassaforte.nelBatch(b, app, id, txt, key, meta.salt);
+        for(const [id,txt] of Object.entries(voci)) await Cassaforte.nelBatch(b, app, id, txt, key, meta.salt, Date.now());
       }
       await b.commit();
       Cassaforte.adotta({db:this.db, user:this.user, meta, key});
@@ -3336,7 +3342,7 @@ async function login(){
   if(!e || !p) return gateErr('Inserisci email e password');
   gateBtn(true,'Accedo…');
   try{ await firebase.auth().signInWithEmailAndPassword(e, p); }
-  catch(err){ gateBtn(false,'Accedi'); gateErr(authMsg(err)); }
+  catch(err){ try{ Cassaforte.segnala('accesso-fallito', err.code||'errore'); }catch(x){} gateBtn(false,'Accedi'); gateErr(authMsg(err)); }
 }
 async function resetPw(){
   const e=$('g-e').value.trim();
@@ -3383,7 +3389,7 @@ async function unlockVault(){
   const p=$('g-p').value; if(!p) return;
   gateBtn(true,'Verifico…');
   const key = await deriveKey(p, unb64(cloud.meta.salt), cloud.meta.iter);
-  if(!await keyOk(key, cloud.meta)){ gateBtn(false,'Sblocca'); return gateErr('Passphrase errata'); }
+  if(!await keyOk(key, cloud.meta)){ try{ Cassaforte.segnala('passphrase-errata','Bilancio'); }catch(x){} gateBtn(false,'Sblocca'); return gateErr('Passphrase errata'); }
   await remember(key);
   openVault(key);
 }
@@ -3405,7 +3411,7 @@ async function openVault(key){
   $('gate').classList.remove('on'); setSync(cloud.timer?'saving':'ok'); render();
   bordoLeggi(); // Mezzi, dalla stessa cassaforte
   lavoroLeggi(); // giornate di Lavoro → entrate
-  setTimeout(()=>{ try { Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); Cassaforte.backupGiornaliero().catch(e=>console.warn('backup', e)); } catch(e){} }, 25000); // backup giornaliero anche aprendo Bilancio da solo
+  setTimeout(()=>{ try { Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); Cassaforte.scriviRegistro().catch(()=>{}); Cassaforte.backupGiornaliero().catch(e=>console.warn('backup', e)); } catch(e){} }, 25000); // backup giornaliero anche aprendo Bilancio da solo
   // dalla Dashboard: bilancio/#passphrase o #impostazioni
   if(location.hash==='#passphrase' || location.hash==='#impostazioni'){ const h=location.hash; history.replaceState(null,'',location.pathname+location.search); openSettings(); if(h==='#passphrase') openPass(); }
 }
@@ -3429,6 +3435,7 @@ async function salvaRotte(){
     await b.commit();
   } catch(e){ console.warn('copia sezioni rotte', e); }
   const righe = Object.entries(r).map(([k,x])=>`${nomi[k]||k}: ${x.testo ? `${x.testo.length} caratteri, recuperati ${x.recuperati} ${x.recuperati===1?'elemento':'elementi'}` : 'vuota'}`);
+  try{ Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); Cassaforte.segnala('sezione-danneggiata', righe.join('; ')); }catch(x){}
   setTimeout(()=>alert('Attenzione: alcune parti del Bilancio erano danneggiate nel cloud.\n\n' + righe.join('\n') + '\n\nIl resto si è aperto normalmente. Fai uno screenshot di questo messaggio e mandalo a Claude.'), 300);
 }
 function resetVault(){
@@ -3473,7 +3480,7 @@ async function changePass(){
   const err = newPass($('p-1').value, $('p-2').value); if(err) return toast(err);
   if(!navigator.onLine) return toast('Serve la connessione');
   $('p-b').disabled=true; $('p-b').textContent='Ricifro…';
-  try{ await cloud.rekey($('p-1').value); closeSheet(); setSync('ok'); toast('Passphrase cambiata'); }
+  try{ await cloud.rekey($('p-1').value); closeSheet(); setSync('ok'); toast('Passphrase cambiata'); try{ Cassaforte.adotta({db:cloud.db, user:cloud.user, meta:cloud.meta, key:cloud.key}); Cassaforte.segnala('cambio-passphrase','da Bilancio'); }catch(x){} }
   catch(e){ console.error(e); $('p-b').disabled=false; $('p-b').textContent='Ricifra e salva'; toast('Errore: '+(e.code||e.message)); }
 }
 document.addEventListener('visibilitychange', async ()=>{

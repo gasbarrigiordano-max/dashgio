@@ -2,6 +2,10 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
+<!-- Sicurezza: da dove possono arrivare script, stili e immagini e con chi si può parlare (CSP). Anche se un testo
+     malevolo riuscisse a entrare nella pagina, non potrebbe caricare codice da altri siti né mandare i dati altrove. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.googleusercontent.com https://www.gstatic.com; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://www.gstatic.com https://civitavecchia.portmobility.it https://api.coingecko.com https://api.binance.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://api.openrouteservice.org; frame-src 'self' https://accounts.google.com https://contabilit-1a500.firebaseapp.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a1411">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -192,6 +196,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .bk-lista{display:flex;flex-direction:column;gap:6px;margin:0 0 10px;max-height:260px;overflow:auto}
 .bk-riga{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;font-size:13px;font-weight:700}
 .bk-riga small{display:block;font-size:11px;font-weight:600;color:var(--ink2)}
+.bk-riga.sospetto{border-color:rgba(255,140,120,.55);color:#ffb3a1}
 .bk-riga button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:99px;padding:0 12px;min-height:34px;font-size:12px;font-weight:700;cursor:pointer;flex:none}
 .ev-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .ev-form .tutta{grid-column:1/-1}
@@ -516,6 +521,9 @@ document.querySelectorAll('.giornale-link').forEach(a => a.href = GIORNALE_URL);
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// testi che arrivano da fuori (eventi e calendari di Google: chiunque può invitarti a un evento col titolo che vuole):
+// i caratteri che servono a scrivere codice HTML diventano innocui già all'arrivo, ovunque finiscano poi
+const sicuro = v => String(v ?? '').replace(/[<>"'`]/g, c => ({'<':'‹', '>':'›', '"':'”', "'":'’', '`':'ʼ'})[c]);
 // come in Bilancio: punto per le migliaia anche a 4 cifre (1.520 €), virgola per i decimali
 const migliaia = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const eur0 = v => (v<0?'-':'') + migliaia(Math.abs(Math.round(v))) + ' €';
@@ -590,15 +598,26 @@ function cerca(q){
 const bil = $('bil');
 let D = null, pronto = false, calOff = 0;
 const W = () => bil.contentWindow;
+/* Funzioni che lavorano sui dati di Bilancio (S, cloud…): la Dashboard le mette dentro la pagina di Bilancio con un piccolo
+   script (stesso sito) e poi le chiama. Niente eval, così la Content-Security-Policy può vietarlo a chiunque. */
+function ponte(){
+  const w = W(); if(!w || !w.document || !w.document.head) return null;
+  if(!w.__dash){
+    const sc = w.document.createElement('script');
+    sc.textContent = 'window.__dash = { pronto: () => (!CLOUD || !!cloud.key) && !!(S && S.carte), haMeta: () => !!cloud.meta, estrai: ' + estrai.toString() + ', cerca: ' + cerca.toString() + ' };';
+    w.document.head.appendChild(sc);
+  }
+  return w.__dash || null;
+}
 function bilancioPronto(){
-  try { return W().eval('(!CLOUD || !!cloud.key) && !!(S && S.carte)'); } catch(e){ return false; }
+  try { const p = ponte(); return !!(p && p.pronto()); } catch(e){ return false; }
 }
 // Bilancio chiede accesso o passphrase (o si è fermato su un errore); mentre carica si aspetta, fino a 20 secondi
 function bloccato(){
   try { const g = W().document.getElementById('gate'); return !!g && g.classList.contains('on') && (g.dataset.st !== 'loading' || attese > 20) && !bilancioPronto(); } catch(e){ return false; }
 }
 function leggi(){
-  try { D = W().eval('(' + estrai.toString() + ')()'); disegna(); } catch(e){ console.error(e); }
+  try { D = ponte().estrai(); disegna(); } catch(e){ console.error(e); }
 }
 
 /* ---- Disegno ---- */
@@ -804,7 +823,7 @@ async function gcalToken(r, atteso, nonLeggere){
     const l = await chiamaGoogle(r.access_token, `${API_G}/users/me/calendarList?minAccessRole=reader`);
     const prim = (l.items || []).find(c => c.primary); email = prim ? prim.id : (atteso || GC.inAttesa || 'Google');
     Object.assign(contoDi(email), { token: r.access_token, scade: Date.now() + (r.expires_in || 3600) * 1000 - 60000,
-      calendari: (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.primary ? 'Principale' : (c.summaryOverride || c.summary || c.id), primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary })) });
+      calendari: (l.items || []).map(c => ({ id: c.primary ? 'primary' : c.id, nome: c.primary ? 'Principale' : sicuro(c.summaryOverride || c.summary || c.id), primario: !!c.primary, scrivibile: c.accessRole === 'owner' || c.accessRole === 'writer' || !!c.primary })) });
     const ric = contiRicordati(); if(!ric.includes(email)) salvaPref('dg:gcalConti', [...ric, email]);
     GC.err = '';
   } catch(e){ GC.err = 'accesso a Google non riuscito: ' + e.message; if(atteso) throw e; }
@@ -842,9 +861,9 @@ async function leggiEventi(c, id, da, a, lavoro, comeLavoro){
       const tutto = !!e.start.date, inizio = tutto ? new Date(e.start.date + 'T00:00') : new Date(e.start.dateTime);
       const fine = e.end ? (e.end.date ? new Date(e.end.date + 'T00:00') : new Date(e.end.dateTime)) : new Date(inizio.getTime() + 36e5);
       const ora = tutto ? '' : inizio.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-      out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: e.summary || '(senza titolo)', app: nomeCal + (ora ? ' · ' + ora : ''),
-        conto: c.email, gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
-        descr: e.description || '', luogo: e.location || '',
+      out.push({ d: isoLocale(inizio), ts: inizio.getTime(), fineTs: fine.getTime(), ora, titolo: sicuro(e.summary) || '(senza titolo)', app: sicuro(nomeCal) + (ora ? ' · ' + ora : ''),
+        conto: sicuro(c.email), gid: e.id, cal: id, tutto, inizioL: tutto ? e.start.date : isoLocale(inizio) + 'T' + ora, fineL: tutto ? (e.end && e.end.date || e.start.date) : isoLocale(fine) + 'T' + fine.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
+        descr: sicuro(e.description), luogo: sicuro(e.location),
         tag: comeLavoro ? 'LAV' : 'GOO', amt: null, senzaImporto: true, google: true, lavoro, href: e.htmlLink || 'https://calendar.google.com/', dgid, dglav });
     });
     pagina = r.nextPageToken || '';
@@ -1195,7 +1214,7 @@ async function allineaLavoro(giornate){
   return (fatti ? `Calendario allineato: ${visibili.filter(x => x.tipo === 'sposta').length} spostati, ${visibili.filter(x => x.tipo === 'crea').length} aggiunti` : 'Il calendario era già allineato') + (p.orfani.length ? ` · ${p.orfani.length} eventi di lavoro senza giornata` : '');
 }
 addEventListener('message', async e => {
-  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea') return;
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea' || !(frames.lavoro && e.source === frames.lavoro.contentWindow)) return; // solo dalla cornice di Lavoro
   const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
   if(!contoLavoroAttivo()) return rispondi(`Collega Google${contoLavoro() ? ' (' + contoLavoro() + ')' : ''} nella Dashboard per allineare il calendario`);
   try { rispondi(await allineaLavoro(e.data.giornate || [])); } catch(err){ rispondi('Calendario non allineato: ' + err.message); }
@@ -1209,7 +1228,7 @@ setInterval(async () => {
   finally { codaLavoro.inCorso = false; }
 }, 3000);
 addEventListener('message', async e => {
-  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-cal') return;
+  if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-cal' || !(frames.lavoro && e.source === frames.lavoro.contentWindow)) return; // solo dalla cornice di Lavoro
   const rispondi = testo => { if(testo) try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
   if(!contoLavoroAttivo()){ codaLavoro.push({dati: e.data, rispondi}); return rispondi('Il calendario si aggiorna appena Google' + (contoLavoro() ? ' (' + contoLavoro() + ')' : '') + ' è collegato'); }
   try { rispondi(await calendarioLavoro(e.data)); } catch(err){ rispondi('Calendario non aggiornato: ' + err.message); }
@@ -1253,8 +1272,23 @@ function disegnaImpostazioni(){
     <section class="imp-sez"><h3>Backup automatici</h3><p>Ogni giorno una copia cifrata di tutto (Bilancio, Mezzi, Palestra, Lavoro): nel cloud gli ultimi 10 giorni e una al mese per un anno, e su questo dispositivo le ultime 5. Prima di un ripristino viene salvato anche lo stato attuale.</p>
       <div id="bk-imp"><p class="nota">Leggo i backup…</p></div>
       <div class="imp-az"><button type="button" onclick="backupOra()">Fai un backup adesso</button></div></section>
+    <section class="imp-sez"><h3>Attività e sicurezza</h3><p>Registro cifrato di accessi, sblocchi, passphrase o password sbagliate, nuovi dispositivi, cambi di passphrase, ripristini e contenuti bloccati. In rosso quello da controllare.</p>
+      <div id="reg-imp"><p class="nota">Leggo il registro…</p></div></section>
     <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
-  disegnaGoogle(); disegnaBackup();
+  disegnaGoogle(); disegnaBackup(); disegnaRegistro();
+}
+const NOMI_EVENTO = {'accesso':'Accesso', 'accesso-fallito':'Accesso non riuscito', 'sblocco':'Cassaforte sbloccata', 'passphrase-errata':'Passphrase errata', 'nuovo-dispositivo':'Nuovo dispositivo', 'apertura':'Apertura', 'cambio-passphrase':'Passphrase cambiata', 'ripristino':'Backup ripristinato', 'csp':'Contenuto bloccato (CSP)', 'sezione-danneggiata':'Dati danneggiati trovati', 'svuotamento':'Eliminazione grande confermata'};
+async function disegnaRegistro(){
+  const el = $('reg-imp'); if(!el) return;
+  try {
+    const me = Cassaforte.dispositivo(), l = (await Cassaforte.registro()).slice(-40).reverse();
+    el.innerHTML = l.length ? `<div class="bk-lista">${l.map(e => `<div class="bk-riga${Cassaforte.SOSPETTI.includes(e.tipo) ? ' sospetto' : ''}"><span>${esc(NOMI_EVENTO[e.tipo] || e.tipo)}<small>${esc(new Date(e.il).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))} · ${esc(e.dove || '')}${e.disp === me ? ' (questo)' : ''}${e.det ? ' · ' + esc(e.det) : ''}</small></span></div>`).join('')}</div>` : '<p class="nota">Ancora nessuna attività registrata.</p>';
+    Cassaforte.segnaVisto();
+  } catch(e){ el.innerHTML = `<p class="nota">Non riesco a leggere il registro (${esc(e.code || e.message)}).</p>`; }
+}
+// all'apertura: se su altri dispositivi è successo qualcosa da controllare, lo dico
+async function controllaAttivita(){
+  try { const l = await Cassaforte.daControllare(); if(l.length) toast(`Da controllare: ${l.length} ${l.length === 1 ? 'attività' : 'attività'} (${[...new Set(l.map(e => NOMI_EVENTO[e.tipo] || e.tipo))].join(', ')}) · Impostazioni → Attività`); } catch(e){}
 }
 // messaggio breve in basso (stesso riquadro dello stato di Bilancio)
 function toast(m){ const s = $('stato'); s.textContent = m; s.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => s.classList.remove('on'), 2600); }
@@ -1396,7 +1430,7 @@ function quando(ev){
 $('q').addEventListener('input', e => {
   const q = e.target.value.trim(), box = $('ris');
   if(q.length < 2 || !pronto){ box.classList.remove('on'); return; }
-  let r = []; try { r = W().eval('(' + cerca.toString() + ')(' + JSON.stringify(q) + ')'); } catch(err){}
+  let r = []; try { r = ponte().cerca(q); } catch(err){}
   box.innerHTML = r.length ? r.map(t => `<a class="ris" href="bilancio/"><div>${esc(t.testo)}<small>${esc(t.cat)} · ${fmtD(t.d)}</small></div><b class="mono" style="color:${t.amt<0?'#ffb3a1':'#9be3bd'}">${t.amt<0?'-':'+'}${eur2(Math.abs(t.amt))}</b></a>`).join('') : '<div class="vuoto" style="padding:10px">Nessun movimento.</div>';
   box.classList.add('on');
 });
@@ -1410,7 +1444,7 @@ function controlla(){
   attese++;
   // Bilancio aperto qui sotto chiede la passphrase (non ricordata su questo dispositivo): gli passo la chiave appena sbloccata
   if(!passata && Cassaforte.key){
-    try { const g = W().document.getElementById('gate'); if(g && g.dataset.st==='unlock' && W().eval('!!cloud.meta')){ passata = true; W().openVault(Cassaforte.key); return; } } catch(e){}
+    try { const g = W().document.getElementById('gate'); if(g && g.dataset.st==='unlock' && ponte() && ponte().haMeta()){ passata = true; W().openVault(Cassaforte.key); return; } } catch(e){}
   }
   if(bilancioPronto()){
     if(!pronto){ pronto = true; if($('sblocco').classList.contains('on')) chiudiSblocco(); $('stato').classList.remove('on');
@@ -1418,7 +1452,11 @@ function controlla(){
       setTimeout(() => precarica(['palestra', 'lavoro', 'mezzi']), 2000);
       // backup giornaliero (una volta al giorno, in sottofondo), e di nuovo ogni 6 ore se la Dashboard resta aperta
       const bk = () => Cassaforte.backupGiornaliero().catch(e => console.warn('backup', e));
-      setTimeout(bk, 20000); setInterval(bk, 6 * 3600e3); }
+      setTimeout(bk, 20000); setInterval(bk, 6 * 3600e3);
+      // registro: un'apertura ogni 12 ore per dispositivo, gli eventi in attesa, e l'avviso se altrove è successo qualcosa
+      try { const t = +localStorage.getItem('dg:apertura') || 0; if(Date.now() - t > 12 * 3600e3){ localStorage.setItem('dg:apertura', String(Date.now())); Cassaforte.segnala('apertura', 'Dashboard'); } } catch(e){}
+      setTimeout(() => Cassaforte.scriviRegistro().catch(() => {}), 5000);
+      setTimeout(controllaAttivita, 8000); }
     leggi();
     // Mezzi arriva qualche secondo dopo: poi basta ogni 30 secondi
     if(attese > 30 || (D && D.bordo!=='carico' && attese > 6)){ clearInterval(giro); giro = setInterval(leggi, 30000); }
@@ -1487,7 +1525,7 @@ function mostraVista(v, extra = ''){
   const nuovo = !frames[vista], f = frameDi(vista, extra); f.classList.add('on'); dimensiona();
   // palestra/?t=abbo: la scheda giusta anche se la Palestra è già aperta
   const t = new URLSearchParams((extra.split('#')[0] || '').replace(/^\?/, '')).get('t');
-  if(t && !nuovo){ try { f.contentWindow.eval(`tab=${JSON.stringify(t)};disegna()`); } catch(e){} }
+  if(t && !nuovo){ try { f.contentWindow.vaiScheda(t); } catch(e){} }
   if(!nuovo) entraApp(f);
   if(vista === 'mezzi' && !nuovo) avvisaMezzi(); // le spese dei mezzi possono essere arrivate da Bilancio
 }

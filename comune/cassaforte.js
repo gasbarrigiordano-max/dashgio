@@ -172,11 +172,16 @@
       this.key = null;
       return 'sblocca';
     },
-    async accedi(email, pw) { await this.avvia(); await firebase.auth().signInWithEmailAndPassword(email, pw); this.user = firebase.auth().currentUser; },
+    async accedi(email, pw) {
+      await this.avvia();
+      try { await firebase.auth().signInWithEmailAndPassword(email, pw); }
+      catch (e) { this.segnala('accesso-fallito', (e && e.code) || 'errore'); throw e; }
+      this.user = firebase.auth().currentUser; this.segnala('accesso', 'email e password');
+    },
     async sblocca(pass, ricorda) {
       const key = await deriveKey(pass, unb64(this.meta.salt), this.meta.iter);
-      if (!await keyOk(key, this.meta)) throw new Error('passphrase');
-      this.key = key;
+      if (!await keyOk(key, this.meta)) { this.segnala('passphrase-errata', 'sblocco'); throw new Error('passphrase'); }
+      this.key = key; this.segnala('sblocco', ricorda ? 'ricordata su questo dispositivo' : 'non ricordata');
       await kdb.set(this.user.uid, ricorda ? { key, salt: this.meta.salt } : null);
     },
     async blocca() { if (this.user) await kdb.set(this.user.uid, null); this.key = null; },
@@ -349,6 +354,7 @@
     async ripristina(f) {
       if (!f || f.v !== 1) throw new Error('backup non valido');
       await this.backupGiornaliero('prima');
+      this.segnala('ripristino', 'backup del ' + (f.il || '').slice(0, 10));
       const rev = Date.now(), up = firebase.firestore.FieldValue.serverTimestamp(), ops = [];
       for (const [k, txt] of Object.entries(f.sez || {})) ops.push(async b => b.set(this.ref().collection('sez').doc(k), { kid: this.meta.salt, ...await chiudiSez(this.key, txt, k), rev, updated: up }));
       for (const col of ['giornale', 'palestra', 'dashboard'])
@@ -362,6 +368,45 @@
       let giornate = 0; try { giornate = (JSON.parse(f.dashboard.lavoro).giornate || []).length; } catch (e) {}
       return { movimenti: n((f.sez || {}).tx), conti: n((f.sez || {}).conti), rate: n((f.sez || {}).rate), speseMezzi: spese, giornate, allenamenti: n((f.palestra || {}).sessioni) };
     },
+
+    /* ---- Registro delle attività (dashboard/registro, cifrato) ----
+       accessi, sblocchi, passphrase o password sbagliate, nuovo dispositivo, cambio passphrase, ripristini, contenuti bloccati
+       dalla CSP… Ogni voce: {id, il, tipo, det, disp (id del dispositivo), dove (browser e sistema)}. Gli eventi prima dello
+       sblocco (es. passphrase errata) aspettano sul dispositivo e si scrivono appena la cassaforte è aperta. Ultime 300 voci. */
+    SOSPETTI: ['accesso-fallito', 'passphrase-errata', 'nuovo-dispositivo', 'cambio-passphrase', 'ripristino', 'csp', 'sezione-danneggiata', 'svuotamento'],
+    dispositivo() {
+      try { let d = localStorage.getItem('dg:dispositivo'); if (!d) { d = 'd' + Math.random().toString(36).slice(2, 10); localStorage.setItem('dg:dispositivo', d); localStorage.setItem('dg:dispositivoNuovo', '1'); } return d; }
+      catch (e) { return 'sconosciuto'; }
+    },
+    dove() {
+      const u = navigator.userAgent || '';
+      const sis = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : /Linux/.test(u) ? 'Linux' : 'altro';
+      const br = /Edg\//.test(u) ? 'Edge' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'browser';
+      return br + ' su ' + sis;
+    },
+    segnala(tipo, det) {
+      const e = { id: 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), il: new Date().toISOString(), tipo, det: String(det || '').slice(0, 160), disp: this.dispositivo(), dove: this.dove() };
+      try { const l = JSON.parse(localStorage.getItem('dg:registroAttesa') || '[]'); l.push(e); localStorage.setItem('dg:registroAttesa', JSON.stringify(l.slice(-50))); } catch (x) {}
+      clearTimeout(this._tReg); this._tReg = setTimeout(() => this.scriviRegistro().catch(() => {}), 1500);
+    },
+    async scriviRegistro() {
+      if (!this.key || !this.user || !this.db) return;
+      let attesa = []; try { attesa = JSON.parse(localStorage.getItem('dg:registroAttesa') || '[]'); } catch (e) {}
+      try { if (localStorage.getItem('dg:dispositivoNuovo')) attesa.unshift({ id: 'e' + Date.now().toString(36) + 'n', il: new Date().toISOString(), tipo: 'nuovo-dispositivo', det: 'primo uso su questo dispositivo', disp: this.dispositivo(), dove: this.dove() }); } catch (e) {}
+      if (!attesa.length) return;
+      const v = await this.leggi('dashboard', 'registro');
+      const l = (v ? JSON.parse(v) : []).concat(attesa).slice(-300);
+      await this.scrivi('dashboard', 'registro', JSON.stringify(l));
+      try { localStorage.removeItem('dg:registroAttesa'); localStorage.removeItem('dg:dispositivoNuovo'); } catch (e) {}
+    },
+    async registro() { const v = await this.sbircia('dashboard', 'registro'); return v ? JSON.parse(v) : []; },
+    // eventi da controllare successi su altri dispositivi dopo l'ultima volta che li hai visti qui
+    async daControllare() {
+      let visto = ''; try { visto = localStorage.getItem('dg:registroVisto') || ''; } catch (e) {}
+      const me = this.dispositivo();
+      return (await this.registro()).filter(e => e.il > visto && this.SOSPETTI.includes(e.tipo) && (e.disp !== me || e.tipo === 'csp'));
+    },
+    segnaVisto() { try { localStorage.setItem('dg:registroVisto', new Date().toISOString()); } catch (e) {} },
 
     scritti: {},
     adottato(col, id) { const x = this.scritti[col + '/' + id]; if (x) this.basi[col + '/' + id] = { ...x }; },
