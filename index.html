@@ -1282,8 +1282,12 @@ const NOMI_EVENTO = {'accesso':'Accesso', 'accesso-fallito':'Accesso non riuscit
 async function disegnaRegistro(){
   const el = $('reg-imp'); if(!el) return;
   try {
-    const me = Cassaforte.dispositivo(), l = (await Cassaforte.registro()).slice(-40).reverse();
-    el.innerHTML = l.length ? `<div class="bk-lista">${l.map(e => `<div class="bk-riga${Cassaforte.SOSPETTI.includes(e.tipo) ? ' sospetto' : ''}"><span>${esc(NOMI_EVENTO[e.tipo] || e.tipo)}<small>${esc(new Date(e.il).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))} · ${esc(e.dove || '')}${e.disp === me ? ' (questo)' : ''}${e.det ? ' · ' + esc(e.det) : ''}</small></span></div>`).join('')}</div>` : '<p class="nota">Ancora nessuna attività registrata.</p>';
+    const me = Cassaforte.dispositivo(), tutti = (await Cassaforte.registro()).slice().reverse();
+    // righe uguali una dopo l'altra (stesso evento, stesso dispositivo, stesso indirizzo) diventano una sola con ×N
+    const chiave = e => e.tipo + '|' + e.disp + '|' + (e.tipo === 'csp' ? cspHost(e.det) : e.det || '');
+    const l = []; tutti.forEach(e => { const u = l[l.length - 1]; if(u && chiave(u.e) === chiave(e)){ u.n++; u.dal = e.il; } else l.push({e, n:1, dal:e.il}); });
+    const quando = x => new Date(x).toLocaleString('it-IT', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    el.innerHTML = l.length ? `<div class="bk-lista">${l.slice(0, 40).map(({e, n, dal}) => { const ok = cspRisolto(e); return `<div class="bk-riga${Cassaforte.SOSPETTI.includes(e.tipo) && !ok ? ' sospetto' : ''}"><span>${esc(NOMI_EVENTO[e.tipo] || e.tipo)}${n > 1 ? ` ×${n}` : ''}${ok ? ' · risolto' : ''}<small>${esc(n > 1 ? quando(dal) + ' → ' + quando(e.il) : quando(e.il))} · ${esc(e.dove || '')}${e.disp === me ? ' (questo)' : ''}${e.det ? ' · ' + esc(e.tipo === 'csp' ? (e.det.split(' ')[0] + ' ' + cspHost(e.det)) : e.det) : ''}</small></span></div>`; }).join('')}</div>` : '<p class="nota">Ancora nessuna attività registrata.</p>';
     Cassaforte.segnaVisto();
   } catch(e){ el.innerHTML = `<p class="nota">Non riesco a leggere il registro (${esc(e.code || e.message)}).</p>`; }
 }
@@ -1292,9 +1296,13 @@ async function svuotaRegistro(){
   try { await Cassaforte.svuotaRegistro(); toast('Registro svuotato'); } catch(e){ toast('Non riuscito: ' + (e.code || e.message)); }
   disegnaRegistro();
 }
+// CSP: l'indirizzo bloccato (solo il sito) e se ora è permesso (blocchi di prima di una correzione: non da controllare)
+const cspHost = det => { const u = String(det || '').split(' ')[1] || ''; try { return new URL(u).host; } catch(e){ return u.slice(0, 60); } };
+const CSP_PERMESSI = ['apis.google.com'];
+const cspRisolto = e => e.tipo === 'csp' && CSP_PERMESSI.includes(cspHost(e.det));
 // all'apertura: se su altri dispositivi è successo qualcosa da controllare, lo dico
 async function controllaAttivita(){
-  try { const l = await Cassaforte.daControllare(); if(l.length) toast(`Da controllare: ${l.length} ${l.length === 1 ? 'attività' : 'attività'} (${[...new Set(l.map(e => NOMI_EVENTO[e.tipo] || e.tipo))].join(', ')}) · Impostazioni → Attività`); } catch(e){}
+  try { const l = (await Cassaforte.daControllare()).filter(e => !cspRisolto(e)); if(l.length) toast(`Da controllare: ${l.length} ${l.length === 1 ? 'attività' : 'attività'} (${[...new Set(l.map(e => NOMI_EVENTO[e.tipo] || e.tipo))].join(', ')}) · Impostazioni → Attività`); } catch(e){}
 }
 // messaggio breve in basso (stesso riquadro dello stato di Bilancio)
 function toast(m){ const s = $('stato'); s.textContent = m; s.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => s.classList.remove('on'), 2600); }
