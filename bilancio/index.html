@@ -1383,9 +1383,20 @@ function renderMov(){
   $('v-mov').innerHTML = html;
   renderMovList();
 }
+// addebiti degli estratti conto delle carte (il giorno in cui escono dal conto): solo da vedere nei Movimenti, non sono
+// spese (le spese sono quelle fatte con la carta) e non entrano in totali, Mensile e Panoramica
+function addebitiCarte(){
+  const out = [];
+  carte().forEach(c=>(c.es||[]).forEach(e=>{ if(!e.d || !e.tot) return;
+    const mese = MESI[+e.m.slice(5)-1].toLowerCase() + (e.m.slice(0,4)!==e.d.slice(0,4) ? ' '+e.m.slice(0,4) : '');
+    out.push({id:'es_'+c.id+'_'+e.m, d:e.d, t:'ac', cat:'Carte', sub:'Addebito '+c.n, amt:e.tot, carta:c.id,
+      note:[`estratto di ${mese}`, e.pf ? `spese ${eur(e.spese)} + ${pfNome(c)} ${eur(e.pf)}` : '', contoName(e.conto||c.conto) ? 'da '+contoName(e.conto||c.conto) : ''].filter(Boolean).join(' · ')}); }));
+  return out;
+}
 function renderMovList(){
   let list = periodTx();
   if(ui.tipo!=='all') list = list.filter(t=>t.t===ui.tipo);
+  if(ui.tipo==='all' || ui.tipo==='u') list = list.concat(addebitiCarte().filter(inPeriod));
   const q = ui.q.trim().toLowerCase();
   if(q) list = list.filter(t=>(t.cat+' '+t.sub+' '+(t.det||'')+' '+t.note).toLowerCase().includes(q));
   list.sort((a,b)=> b.d.localeCompare(a.d) || a.cat.localeCompare(b.cat));
@@ -1396,6 +1407,8 @@ function renderMovList(){
     const head = `${+t.d.slice(8,10)} ${MESI[txMonth(t)]} ${txYear(t)}`;
     if(head!==cur){ cur=head; out+=`<div class="day">${head.toUpperCase()}</div>`; }
     const c = colorOf(t.cat);
+    if(t.t==='ac'){ out += `<div class="tx" onclick="ui.carta='${t.carta}';showTab('carte')"><div class="dot" style="background:${c}22;color:${c}">💳</div>
+      <div class="mid"><b>${esc(t.sub)}</b><small>${esc(t.note)} · non è una spesa</small></div><b class="mono mut">-${eur(t.amt)}</b></div>`; return; }
     out += `<div class="tx" onclick="openTx('${t.id}')">
       ${t.abid && SRV_RE.some(([k,re])=>re.test(t.sub)) ? srvIcon(t.sub, 34) : `<div class="dot" style="background:${c}22;color:${c}">${esc(t.cat[0]||'?')}</div>`}
       <div class="mid"><b>${t.t==='rb'?'Rimborso · ':''}${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([t.sub?t.cat:'', t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t)?'💳 '+pagLabel(t):''].filter(Boolean).join(' · ')||(t.sub?'':'Totale mensile'))}</small>${t.quota!=null?`<small>👥 pagati ${eur(t.amt)} · ${daRicevere(t)>0?`da ricevere ${eur(daRicevere(t))}`:'rimborsato'}</small>`:''}</div>
