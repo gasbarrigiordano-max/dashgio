@@ -20,6 +20,7 @@
 <title>Bilancio — Finanze personali</title>
 <script src="../comune/fisso.js?v=20261107b"></script>
 <script src="../comune/suggerimenti.js"></script>
+<script src="../comune/agenzie.js"></script>
 <script src="../comune/moto.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1420,7 +1421,7 @@ function renderMovList(){
     if(t.t==='ac'){ out += `<div class="tx" onclick="ui.carta='${t.carta}';showTab('carte')"><div class="dot" style="background:${c}22;color:${c}">💳</div>
       <div class="mid"><b>${esc(t.sub)}</b><small>${esc(t.note)} · non è una spesa</small></div><b class="mono mut">-${eur(t.amt)}</b></div>`; return; }
     out += `<div class="tx" onclick="openTx('${t.id}')">
-      ${t.abid && SRV_RE.some(([k,re])=>re.test(t.sub)) ? srvIcon(t.sub, 34) : `<div class="dot" style="background:${c}22;color:${c}">${esc(t.cat[0]||'?')}</div>`}
+      ${t.abid && SRV_RE.some(([k,re])=>re.test(t.sub)) ? srvIcon(t.sub, 34) : t.det && window.logoAgenzia && logoAgenzia(t.det) ? `<img class="logo" src="${logoAgenzia(t.det)}" alt="">` : `<div class="dot" style="background:${c}22;color:${c}">${esc(t.cat[0]||'?')}</div>`}
       <div class="mid"><b>${t.t==='rb'?'Rimborso · ':''}${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([t.sub?t.cat:'', t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t)?'💳 '+pagLabel(t):''].filter(Boolean).join(' · ')||(t.sub?'':'Totale mensile'))}</small>${t.quota!=null?`<small>👥 pagati ${eur(t.amt)} · ${daRicevere(t)>0?`da ricevere ${eur(daRicevere(t))}`:'rimborsato'}</small>`:''}</div>
       <b class="mono ${t.t==='e'?'pos':t.t==='r'||t.t==='rb'?'mut':''}">${t.t==='e'||t.t==='rb'?'+':'-'}${eur(spesa(t))}</b></div>`;
   });
@@ -1673,6 +1674,7 @@ const LOGHI = {
 };
 const LOGO_RE = [['wise',/wise/i],['ing',/\bing\b/i],['n26',/n26/i],['buddy',/buddy/i],['bbva',/bbva/i],['cro',/crypto/i],['ibkr',/interactive|ibkr|ibks|\bib\b|brokers/i],['bondora',/bondora/i],['crowdcube',/crowdcube/i]];
 function contoIcon(c){
+  const ag = window.logoAgenzia && logoAgenzia(c.n); if(ag) return `<img class="logo" src="${ag}" alt="">`;
   const m = LOGO_RE.find(([k,re])=>re.test(c.n));
   return m ? `<img class="logo" src="${LOGHI[m[0]]}" alt="">` : `<i class="logo l">${esc((c.n||'?')[0].toUpperCase())}</i>`;
 }
