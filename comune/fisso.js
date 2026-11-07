@@ -124,3 +124,61 @@
   const avvia = () => new MutationObserver(pianifica).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
   if (document.body) avvia(); else document.addEventListener('DOMContentLoaded', avvia);
 })();
+
+/* Campo dentro una finestra (nuovo movimento, saldo di un conto, categoria…) sul telefono: la finestra si aggancia IN ALTO e il
+   campo viene portato vicino alla sua cima. Prima la finestra stava attaccata al fondo dello schermo: il campo toccato finiva
+   proprio dove sale la tastiera, l'iPhone spostava tutta la pagina per mostrarlo e, appena la Dashboard rimetteva l'app al suo
+   posto, il campo tornava coperto e l'iPhone la rispostava (rimbalzi). Con il campo già in alto l'iPhone non deve spostare
+   niente. La finestra è alta quanto la parte visibile sopra la tastiera, quindi anche i pulsanti in fondo restano raggiungibili.
+   Lasciato il campo (tastiera chiusa) la finestra torna in basso come prima. Solo su schermi touch. */
+(function () {
+  if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches) && !('ontouchstart' in window)) return;
+  const FIN = '#ov,.ov,.velo,.modal-overlay,.pannello,.cf-porta';
+  const SCHEDA = '.sheet,.foglio,.modal,.box,.cf-box';
+  const st = document.createElement('style');
+  st.textContent = `
+html.campo-su #ov.on,html.campo-su .ov.on,html.campo-su .velo.on,html.campo-su .modal-overlay.show,html.campo-su .pannello.on,html.campo-su .cf-porta{
+  align-items:flex-start!important;padding-top:calc(env(safe-area-inset-top,0px) + 8px)!important;padding-bottom:0!important}
+html.campo-su .on>.sheet,html.campo-su .on>.foglio,html.campo-su .show>.modal,html.campo-su .pannello.on>.box,html.campo-su .cf-porta>.cf-box{
+  max-height:calc(var(--alto-campo,100vh) - 16px - env(safe-area-inset-top,0px))!important;border-radius:22px!important;animation:none!important}
+html.campo-su .scheda-piena{min-height:calc(var(--alto-campo,100vh) - 16px - env(safe-area-inset-top,0px))!important}`;
+  (document.head || document.documentElement).appendChild(st);
+  const NO = /^(checkbox|radio|button|submit|reset|range|color|file|image|hidden|date|time|datetime-local|month|week)$/i;
+  const scrive = el => !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el.tagName === 'INPUT' && !NO.test(el.type || ''))) && !el.disabled && !el.readOnly;
+  const vv = window.visualViewport, html = document.documentElement;
+  const alto = () => html.style.setProperty('--alto-campo', Math.round(Math.min(innerHeight, vv ? vv.height : innerHeight)) + 'px');
+  function scheda(el) { const f = el.closest(FIN); return f && el.closest(SCHEDA); }
+  // altezza visibile senza tastiera (per capire dove salirà la tastiera)
+  let pieno = 0; const vis = () => Math.min(innerHeight, vv ? vv.height : innerHeight);
+  const misura = () => { if (!html.classList.contains('campo-su')) pieno = Math.max(vis(), innerHeight * 0.6); };
+  misura();
+  let piena = null;
+  function libera() { if (piena) { piena.classList.remove('scheda-piena'); piena.style.paddingBottom = piena.dataset.pb || ''; delete piena.dataset.pb; piena = null; } }
+  function aggancia(el) {
+    const s = scheda(el); if (!s) return;
+    if (!html.classList.contains('campo-su')) misura();
+    alto(); html.classList.add('campo-su');
+    // il campo deve stare sopra dove salirà la tastiera (~metà bassa dello schermo); se è più giù la finestra lo porta
+    // a ~60px dalla sua cima (etichetta in vista), subito, prima che l'iPhone decida di spostare la pagina
+    const limite = Math.min(vis() - 70, pieno * 0.42);
+    let r = el.getBoundingClientRect(); if (r.bottom <= limite) return;
+    if (piena !== s) { libera(); piena = s; s.dataset.pb = s.style.paddingBottom; s.classList.add('scheda-piena'); }
+    r = el.getBoundingClientRect(); const rs = s.getBoundingClientRect();
+    const voglio = s.scrollTop + r.top - rs.top - 60, manca = voglio - (s.scrollHeight - s.clientHeight);
+    // finestra corta: spazio vuoto sotto (solo mentre si scrive) perché il campo possa salire
+    if (manca > 0) s.style.paddingBottom = (parseFloat(getComputedStyle(s).paddingBottom) || 0) + manca + 'px';
+    s.scrollTop = Math.max(0, voglio);
+  }
+  let t = 0;
+  document.addEventListener('focusin', e => { clearTimeout(t); if (scrive(e.target)) aggancia(e.target); }, true);
+  document.addEventListener('focusout', () => {
+    clearTimeout(t);
+    t = setTimeout(() => { const a = document.activeElement; if (!(scrive(a) && scheda(a))) { html.classList.remove('campo-su'); libera(); misura(); } }, 120);
+  }, true);
+  const ricalcola = () => { if (html.classList.contains('campo-su')) alto(); else misura(); };
+  addEventListener('resize', ricalcola);
+  if (vv) vv.addEventListener('resize', ricalcola);
+  // finestra chiusa mentre si scriveva: niente classe rimasta appesa
+  new MutationObserver(() => { if (html.classList.contains('campo-su') && !document.querySelector('#ov.on,.ov.on,.velo.on,.modal-overlay.show,.pannello.on,.cf-porta')) { html.classList.remove('campo-su'); libera(); } })
+    .observe(html, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
+})();
