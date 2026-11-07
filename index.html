@@ -546,7 +546,7 @@ function estrai(){
     ...rateDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
     ...abboDelMese(ym).map(x => ({amt:x.amt, paid:x.paid})),
     ...bordoDelMese(ym).map(x => ({amt:x.amt || 0, paid:x.paid}))];
-  const patr = sumA(S.conti, c => c.v), liq = sumA(S.conti.filter(c => c.g!=='Investimenti'), c => c.v);
+  const patr = sumA(S.conti, c => c.v), liq = sumA(S.conti.filter(c => c.g==='Banche' || c.g==='Cash'), c => c.v);
   // mezzi: le spese dell'anno in Mezzi › Auto / SH / Moto / Gommone (anche quelle arrivate da Mezzi)
   const mz = S.tx.filter(t => t.t==='u' && /^mezzi$/i.test(t.cat||'') && txYear(t)===y);
   const nomeMezzo = n => ({auto:'Auto', scooter:'SH', moto:'Moto', gommone:'Gommone', carrello:'Gommone'})[(n.split(' ').pop()||'').toLowerCase()];

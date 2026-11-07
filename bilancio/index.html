@@ -33,7 +33,7 @@
   --bg:#f6f4ef; --panel:#ffffff; --panel2:#f1eee7; --line:#e4dfd4;
   --ink:#1d2420; --ink2:#55605a; --ink3:#8a938d;
   --acc:#0f9f6e; --acc-dim:rgba(15,159,110,.12); --on-acc:#ffffff; --acc-shadow:rgba(15,159,110,.28);
-  --neg:#d9304f; --neg-line:#f1c3cc; --warn:#c97a06; --blue:#2a78d6;
+  --neg:#d9304f; --neg-line:#f1c3cc; --warn:#c97a06; --blue:#2a78d6; --fatt:#7c5cd6;
   --glass:rgba(246,244,239,.92); --sheet:#ffffff; --overlay:rgba(20,24,22,.35); --track:rgba(0,0,0,.07); --sub-bg:rgba(0,0,0,.02);
   --hero-bg:linear-gradient(160deg,#e3f3ea,#ffffff 65%); --hero-line:#bfe3cf; --hero-ink:#0b7a54; --gate-glow:#dff1e7;
   --solid:var(--panel); --solid2:var(--panel2);
@@ -48,7 +48,7 @@
   --bg:#1e2629; --panel:#273235; --panel2:#2f3b3f; --line:#3a474b;
   --ink:#eef3f1; --ink2:#b3c1bb; --ink3:#84928c;
   --acc:#4ade80; --acc-dim:rgba(74,222,128,.14); --on-acc:#0f1f15; --acc-shadow:rgba(74,222,128,.30);
-  --neg:#fb7185; --neg-line:#5a3440; --warn:#fbbf24; --blue:#60a5fa;
+  --neg:#fb7185; --neg-line:#5a3440; --warn:#fbbf24; --blue:#60a5fa; --fatt:#a78bfa;
   --glass:rgba(30,38,41,.92); --sheet:#232d30; --overlay:rgba(0,0,0,.5); --track:rgba(0,0,0,.22); --sub-bg:rgba(255,255,255,.02);
   --hero-bg:linear-gradient(160deg,#2f4d44,#273235 65%); --hero-line:#3f6357; --hero-ink:#a7e9c3; --gate-glow:#2f4d44;
   --brand-bg:#111a17; --brand-fg:#4ade80; --brand-cl:#0a0f0d; --brand-dot:#4ade80;
@@ -231,6 +231,7 @@ table.mx{border-collapse:separate;border-spacing:0;font-size:12px;min-width:max-
 .pat-leg em{font-style:normal;font-size:11px;color:var(--ink3);width:34px;text-align:right}
 .gh .dot{display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:8px;vertical-align:1px}
 .pat-add{margin-top:18px}
+.pat-add-r{display:flex;flex-direction:column;gap:8px;margin-top:18px} .pat-add-r .pat-add{margin-top:0}
 .logo{width:34px;height:34px;border-radius:9px;flex:none;object-fit:cover;display:block}
 .logo.l{font-style:normal;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--panel2);color:var(--ink2);border:1px solid var(--line)}
 .gh{display:flex;justify-content:space-between;align-items:baseline;margin:20px 2px 6px}
@@ -384,10 +385,11 @@ nav button.on{color:var(--acc)}
   /* Patrimonio: riepilogo su due colonne; Banche a sinistra, Cash e Investimenti impilati a destra */
   .pat-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);align-items:center;gap:40px;padding:22px 24px}
   .pat-hero .kpi b{font-size:38px}
-  .pgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"banche cash" "banche investimenti";grid-template-rows:auto 1fr;column-gap:16px;align-items:start}
-  .pg-banche{grid-area:banche} .pg-cash{grid-area:cash} .pg-investimenti{grid-area:investimenti}
+  .pgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"banche cash" "banche investimenti" "banche fatture";grid-template-rows:auto auto 1fr;column-gap:16px;align-items:start}
+  .pg-banche{grid-area:banche} .pg-cash{grid-area:cash} .pg-investimenti{grid-area:investimenti} .pg-fatture{grid-area:fatture}
   .pgs .gh{margin-top:20px}
   .pat-add{width:auto;padding:10px 20px;display:block;margin-left:auto}
+  .pat-add-r{flex-direction:row;justify-content:flex-end} .pat-add-r .pat-add{margin-left:0}
 
   /* Altro */
   .rgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -403,7 +405,7 @@ nav button.on{color:var(--acc)}
   --bg:#1f1814; --panel:rgba(40,32,28,.55); --panel2:rgba(255,255,255,.06); --line:rgba(255,255,255,.10);
   --ink:#ffffff; --ink2:rgba(255,255,255,.74); --ink3:rgba(255,255,255,.55);
   --acc:#F2711C; --acc-dim:rgba(242,113,28,.18); --on-acc:#1a1411; --acc-shadow:rgba(242,113,28,.40); --pos:#7fd3a8;
-  --neg:#ff8a73; --neg-line:rgba(255,138,115,.35); --warn:#f5c46b; --blue:#8ab4f8;
+  --neg:#ff8a73; --neg-line:rgba(255,138,115,.35); --warn:#f5c46b; --blue:#8ab4f8; --fatt:#c4a8ff;
   --glass:rgba(30,23,19,.72); --sheet:#2a211c; --overlay:rgba(10,8,6,.62); --track:rgba(0,0,0,.30); --sub-bg:rgba(255,255,255,.03);
   --hero-bg:rgba(40,32,28,.55); --hero-line:rgba(255,255,255,.10); --hero-ink:rgba(255,255,255,.82); --gate-glow:transparent;
   --solid:#2a211c; --solid2:#33281f;
@@ -465,7 +467,7 @@ html.incorporata .card,html.incorporata .seg,html.incorporata .mx-wrap,html.inco
   --bg:#e6dccf; --panel:rgba(255,255,255,.52); --panel2:rgba(255,255,255,.34); --line:rgba(255,255,255,.62);
   --ink:#1b1e1c; --ink2:#2f3431; --ink3:#4e534f; /* scritte secondarie scure: sul vetro chiaro il grigio si perdeva */
   --acc:#1f9d6b; --acc-dim:rgba(31,157,107,.14); --on-acc:#ffffff; --acc-shadow:rgba(20,30,25,.25);
-  --neg:#d33c55; --neg-line:rgba(211,60,85,.35); --warn:#b97206; --blue:#2a78d6;
+  --neg:#d33c55; --neg-line:rgba(211,60,85,.35); --warn:#b97206; --blue:#2a78d6; --fatt:#7c5cd6;
   --glass:rgba(255,255,255,.42); --sheet:rgba(248,245,240,.80); --overlay:rgba(40,30,20,.25); --track:rgba(255,255,255,.45); --sub-bg:rgba(255,255,255,.25);
   --hero-bg:rgba(255,255,255,.52); --hero-line:rgba(255,255,255,.62); --hero-ink:#4b514d; --gate-glow:transparent;
   --solid:#f4efe8; --solid2:#ebe3d8;
@@ -1102,11 +1104,16 @@ function applyPag(t, sign=1){
   const c = S.conti.find(x=>x.id===t.conto); if(c) c.v = round2(c.v - sign*(t.t==='e'||t.t==='rb'?-1:1)*t.amt);
 }
 /* ---- Storico del patrimonio: una "foto" per mese ----
-   {m:'YYYY-MM', d (giorno in cui è stata scattata), tot, g:{Banche,Cash,Investimenti}, conti:[{n,g,v}], tipo}
+   {m:'YYYY-MM', d (giorno in cui è stata scattata), tot, g:{Banche,Cash,Investimenti,Fatture}, conti:[{n,g,v}], tipo}
    tipo 'fine' = ultimo giorno del mese · 'tardi' = alla prima apertura dopo, con i saldi riportati
    a fine mese · 'ora' = salvata a mano durante il mese (versioni precedenti; sostituita da quella di fine mese) · 'inserito' = mese passato inserito a mano o da CSV
    (mai sovrascritto in automatico). */
-const GRUPPI = ['Banche','Cash','Investimenti'];
+const GRUPPI = ['Banche','Cash','Investimenti','Fatture'];
+// Fatture in sospeso: soldi che devono ancora arrivare. Contano nel patrimonio ma non nella liquidità
+// (non si possono spendere) e non si usano come conto da cui pagare.
+const nomeGruppo = g => g==='Fatture' ? 'Fatture in sospeso' : g;
+const liquido = c => c.g==='Banche' || c.g==='Cash';
+const pagabile = c => c.g!=='Fatture';
 // saldi dei conti a una data passata: tolgo gli effetti registrati dall'app dopo quella data
 function contiAl(data){
   const v = new Map(S.conti.map(c=>[c.id, c.v]));
@@ -1311,13 +1318,13 @@ function renderHome(){
 // (con "Anno" su un anno passato l'ultima foto di quell'anno); null = mese passato senza foto
 function contiVista(){
   const cur = thisMonth(), ym = ui.month==='all' ? (ui.year < now.getFullYear() ? `${ui.year}-12` : cur) : `${ui.year}-${String(ui.month+1).padStart(2,'0')}`;
-  const tot = conti => ({conti, patr:sum(conti.map(c=>c.v)), liq:sum(conti.filter(c=>c.g!=='Investimenti').map(c=>c.v))});
+  const tot = conti => ({conti, patr:sum(conti.map(c=>c.v)), liq:sum(conti.filter(liquido).map(c=>c.v)), fat:sum(conti.filter(c=>c.g==='Fatture').map(c=>c.v))});
   if(ym >= cur) return {...tot(S.conti), nota:''};
   const f = ui.month==='all' ? [...S.storico].reverse().find(x=>x.m.slice(0,4)===String(ui.year)) : S.storico.find(x=>x.m===ym);
   if(!f) return null;
   const nota = 'al '+fmtD(f.d && f.d.slice(0,7)===f.m ? f.d : lastDay(f.m));
   // foto inserita solo con i totali per gruppo (a mano o da CSV): niente elenco dei conti
-  return (f.conti||[]).length ? {...tot(f.conti), nota} : {conti:[], patr:f.tot, liq:round2((f.g.Banche||0)+(f.g.Cash||0)), nota};
+  return (f.conti||[]).length ? {...tot(f.conti), nota} : {conti:[], patr:f.tot, liq:round2((f.g.Banche||0)+(f.g.Cash||0)), fat:f.g.Fatture||0, nota};
 }
 // Liquidità con i conti principali, Patrimonio con l'anello liquidità / investito
 function kpiConti(){
@@ -1325,17 +1332,20 @@ function kpiConti(){
   if(!vista) return `<div class="card kpi k-liq" onclick="showTab('pat')"><small>Liquidità</small><b class="mono mut">–</b><small>Nessuna foto del patrimonio per questo mese</small></div>
     <div class="card kpi k-pat" onclick="showTab('pat')"><small>Patrimonio</small><b class="mono mut">–</b><small>Aggiungila in Patrimonio → Storico mensile</small></div>`;
   const {patr, liq} = vista, nota = vista.nota ? ` · ${vista.nota}` : '';
-  const conti = vista.conti.filter(c=>c.g!=='Investimenti' && c.v).sort((a,b)=>b.v-a.v), top = conti.slice(0,3), altri = conti.slice(3);
+  const conti = vista.conti.filter(c=>liquido(c) && c.v).sort((a,b)=>b.v-a.v), top = conti.slice(0,3), altri = conti.slice(3);
   const pl = patr>0 ? Math.min(1, Math.max(0, liq/patr)) : 0, R = 26, C = 2*Math.PI*R;
+  // fatture in sospeso: terza parte dell'anello, dopo la liquidità
+  const fat = vista.fat||0, pf = patr>0 && fat>0 ? Math.min(1-pl, fat/patr) : 0, P = x => Math.round(x*100);
   return `<div class="card kpi k-liq" onclick="showTab('pat')"><small>Liquidità${nota}</small><b class="mono">${eur0(liq)}</b>
       <div class="k-conti">${top.map(c=>`<div><span class="k-n">${contoIcon(c)}<span>${esc(c.n)}</span></span><span class="mono">${eurI(c.v)}</span></div>`).join('')
         || (vista.nota ? '<small>Foto con i soli totali: banche e contanti</small>' : '<small>Aggiungi i conti in Patrimonio</small>')}
         ${altri.length ? `<small>+ altri ${altri.length} · ${eurI(sum(altri.map(c=>c.v)))}</small>` : ''}</div></div>
     <div class="card kpi k-pat" onclick="showTab('pat')"><small>Patrimonio${nota}</small><b class="mono">${eur0(patr)}</b>
-      <div class="k-ring"><svg viewBox="0 0 64 64" role="img" aria-label="${Math.round(pl*100)}% liquidità, ${100-Math.round(pl*100)}% investito">
+      <div class="k-ring"><svg viewBox="0 0 64 64" role="img" aria-label="${P(pl)}% liquidità, ${pf?P(pf)+'% fatture in sospeso, ':''}${100-P(pl)-P(pf)}% investito">
           <circle cx="32" cy="32" r="${R}" fill="none" style="stroke:var(--blue)" stroke-width="9"/>
-          <circle cx="32" cy="32" r="${R}" fill="none" style="stroke:var(--acc)" stroke-width="9" stroke-dasharray="${pl*C} ${C-pl*C}"/></svg>
-        <div><span><i style="background:var(--acc)"></i><b class="mono">${Math.round(pl*100)}%</b> liquidità</span><span><i style="background:var(--blue)"></i><b class="mono">${100-Math.round(pl*100)}%</b> investito</span></div></div></div>`;
+          <circle cx="32" cy="32" r="${R}" fill="none" style="stroke:var(--acc)" stroke-width="9" stroke-dasharray="${pl*C} ${C-pl*C}"/>${pf ? `
+          <circle cx="32" cy="32" r="${R}" fill="none" style="stroke:var(--fatt)" stroke-width="9" stroke-dasharray="0 ${pl*C} ${pf*C} ${C}"/>` : ''}</svg>
+        <div><span><i style="background:var(--acc)"></i><b class="mono">${P(pl)}%</b> liquidità</span>${pf ? `<span><i style="background:var(--fatt)"></i><b class="mono">${P(pf)}%</b> fatture</span>` : ''}<span><i style="background:var(--blue)"></i><b class="mono">${100-P(pl)-P(pf)}%</b> investito</span></div></div></div>`;
 }
 
 // spese fisse del mese ym (abbonamenti, bollo, assicurazione…): pagate = già registrate, da pagare = scadenze future
@@ -1666,7 +1676,7 @@ function contoIcon(c){
   const m = LOGO_RE.find(([k,re])=>re.test(c.n));
   return m ? `<img class="logo" src="${LOGHI[m[0]]}" alt="">` : `<i class="logo l">${esc((c.n||'?')[0].toUpperCase())}</i>`;
 }
-const GRP = [['Banche','var(--acc)'],['Cash','var(--warn)'],['Investimenti','var(--blue)']];
+const GRP = [['Banche','var(--acc)'],['Cash','var(--warn)'],['Investimenti','var(--blue)'],['Fatture','var(--fatt)']];
 function renderPat(){
   const patr = sum(S.conti.map(c=>c.v)), base = patr>0 ? patr : 1;
   const tot = g => sum(S.conti.filter(c=>c.g===g).map(c=>c.v));
@@ -1676,14 +1686,14 @@ function renderPat(){
     <div class="kpi"><small>Patrimonio totale</small><b class="mono">${eur(patr,0)}</b>
       <div class="note" style="color:var(--hero-ink);margin-top:4px">Liquidità ${eur(tot('Banche')+tot('Cash'),0)}</div></div>
     <div><div class="pat-bar">${GRP.map(([g,col])=>tot(g)>0?`<div style="flex:${tot(g)};background:${col}"></div>`:'').join('')}</div>
-      <div class="pat-leg">${GRP.map(([g,col])=>`<div><i style="background:${col}"></i><span>${g}</span><b class="mono">${eur(tot(g),0)}</b><em class="mono">${pct(tot(g))}</em></div>`).join('')}</div></div>
+      <div class="pat-leg">${GRP.map(([g,col])=>`<div><i style="background:${col}"></i><span>${nomeGruppo(g)}</span><b class="mono">${eur(tot(g),0)}</b><em class="mono">${pct(tot(g))}</em></div>`).join('')}</div></div>
   </div><div class="pgs">`;
   GRP.forEach(([g,col])=>{
     const items = S.conti.filter(c=>c.g===g);
-    html += `<div class="pg-${g.toLowerCase()}"><div class="gh"><b><i class="dot" style="background:${col}"></i>${g}</b><span class="mono">${eur(tot(g),0)}</span></div><div class="card" style="padding:4px 14px">
-      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${pct(c.v)} del patrimonio${c.cripto&&c.cripto.length ? ' · '+c.cripto.map(r=>fmtQ(r.q)+' '+esc(r.sim)).join(', ')+' · in tempo reale' : ''}</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty" style="padding:12px 0;font-size:12.5px">Nessun conto</div>'}</div></div>`;
+    html += `<div class="pg-${g.toLowerCase()}"><div class="gh"><b><i class="dot" style="background:${col}"></i>${nomeGruppo(g)}</b><span class="mono">${eur(tot(g),0)}</span></div><div class="card" style="padding:4px 14px">
+      ${items.map(c=>`<div class="acct" onclick="openConto('${c.id}')"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${g==='Fatture' ? fattInfo(c) : pct(c.v)+' del patrimonio'}${c.cripto&&c.cripto.length ? ' · '+c.cripto.map(r=>fmtQ(r.q)+' '+esc(r.sim)).join(', ')+' · in tempo reale' : ''}</small></span></span><b class="mono ${c.v?'':'mut'}">${eur(c.v,0)}</b></div>`).join('') || '<div class="empty" style="padding:12px 0;font-size:12.5px">Nessun conto</div>'}</div></div>`;
   });
-  html += `</div><button class="btn ghost pat-add" onclick="openConto()">+ Aggiungi conto</button>`;
+  html += `</div><div class="pat-add-r"><button class="btn ghost pat-add" onclick="openConto()">+ Aggiungi conto</button><button class="btn ghost pat-add" onclick="openConto('', 'Fatture')">+ Fattura in sospeso</button></div>`;
   html += storicoHTML();
   $('v-pat').innerHTML = html;
   drawPatrChart();
@@ -1753,7 +1763,7 @@ function drawPatrChart(){
     tip.replaceChildren();
     const line = (t, cls) => { const e = document.createElement('div'); e.textContent = t; if(cls) e.className = cls; tip.appendChild(e); };
     line(eur(f.tot,0), 'v'); line(`${MESI[+f.m.slice(5)-1]} ${f.m.slice(0,4)}`, 'm');
-    GRUPPI.forEach(k=>line(`${k} ${eur(f.g[k]||0,0)}`));
+    GRUPPI.forEach(k=>{ if(k!=='Fatture' || f.g[k]) line(`${nomeGruppo(k)} ${eur(f.g[k]||0,0)}`); });
     if(d) line(dTxt(d), d.v>=0?'pos':'neg');
     tip.style.display = 'block';
     const tx = Math.min(Math.max(x(i) - tip.offsetWidth/2, 0), W - tip.offsetWidth);
@@ -1774,10 +1784,10 @@ function openFoto(m){
   const f = m && S.storico.find(x=>x.m===m);
   const val = k => f ? String(f.g[k]||0).replace('.',',') : '';
   sheet(`<h3>${f ? `Patrimonio · ${MESI[+f.m.slice(5)-1]} ${f.m.slice(0,4)}` : 'Aggiungi un mese passato'}</h3>
-    ${f && f.conti && f.conti.length && f.tipo!=='inserito' ? `<div class="card" style="padding:4px 14px;margin-bottom:12px">${f.conti.map(c=>`<div class="acct" style="cursor:default"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${c.g}</small></span></span><b class="mono">${eur(c.v,0)}</b></div>`).join('')}</div>
+    ${f && f.conti && f.conti.length && f.tipo!=='inserito' ? `<div class="card" style="padding:4px 14px;margin-bottom:12px">${f.conti.map(c=>`<div class="acct" style="cursor:default"><span class="acct-n">${contoIcon(c)}<span>${esc(c.n)}<small>${nomeGruppo(c.g)}</small></span></span><b class="mono">${eur(c.v,0)}</b></div>`).join('')}</div>
       <p class="note" style="margin:-4px 0 12px">Salvato il ${fmtD(f.d)}. Puoi correggere i totali qui sotto: il mese diventa "inserito a mano" e non verrà più aggiornato in automatico.</p>` : ''}
     ${f ? '' : `<div class="f"><label>Mese</label><input type="month" id="sf-m" value="${addYM(thisMonth(),-1)}" max="${thisMonth()}"></div>`}
-    <div class="grid2">${GRUPPI.map((k,i)=>`<div class="f" ${i===2?'style="grid-column:1/-1"':''}><label>${k} (€)</label><input id="sf-${i}" inputmode="decimal" value="${val(k)}" placeholder="0 €"></div>`).join('')}</div>
+    <div class="grid2">${GRUPPI.map((k,i)=>`<div class="f"><label>${nomeGruppo(k)} (€)</label><input id="sf-${i}" inputmode="decimal" value="${val(k)}" placeholder="0 €"></div>`).join('')}</div>
     <button class="btn" onclick="saveFoto('${f?f.m:''}')">Salva</button>
     ${f?`<button class="btn danger" style="margin-top:8px" onclick="if(confirm('Eliminare questo mese dallo storico?')){S.storico=S.storico.filter(x=>x.m!=='${f.m}');save();closeSheet();render();}">Elimina mese</button>`:''}
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Annulla</button>`);
@@ -1792,11 +1802,12 @@ function saveFoto(m){
   putFoto(fotoPatr(mese, today(), 'inserito', GRUPPI.map((k,i)=>({n:k, g:k, v:vals[i]}))));
   save(); closeSheet(); render(); toast('Mese salvato');
 }
-function openConto(id){
-  const c = id ? S.conti.find(x=>x.id===id) : {g:'Banche',n:'',v:0};
+function openConto(id, g0){
+  const c = id ? S.conti.find(x=>x.id===id) : {g:g0||'Banche',n:'',v:0};
+  if(c.g==='Fatture') return openFattura(id);
   crBozza = (c.cripto||[]).map(r=>({...r}));
   sheet(`<h3>${id?'Modifica conto':'Nuovo conto'}</h3>
-    <div class="f"><label>Gruppo</label><select id="c-g" onchange="$('c-cr').style.display=this.value==='Investimenti'?'':'none';crTotale()">${['Banche','Cash','Investimenti'].map(g=>`<option ${c.g===g?'selected':''}>${g}</option>`).join('')}</select></div>
+    <div class="f"><label>Gruppo</label><select id="c-g" onchange="if(this.value==='Fatture'){ openFattura('', {n:$('c-n').value.trim(), v:num($('c-v').value)}); return; } $('c-cr').style.display=this.value==='Investimenti'?'':'none';crTotale()">${['Banche','Cash','Investimenti'].map(g=>`<option ${c.g===g?'selected':''}>${g}</option>`).join('')}<option value="Fatture">Fatture in sospeso</option></select></div>
     <div class="f"><label>Nome</label><input id="c-n" value="${esc(c.n)}" placeholder="es. ING"></div>
     <div class="f"><label>Saldo (€)</label><input id="c-v" inputmode="decimal" class="amt" value="${c.v||''}" placeholder="0 €"></div>
     <div class="f" id="c-cr" style="${c.g==='Investimenti'?'':'display:none'}"><label>Criptovalute · valore in tempo reale</label>
@@ -1824,6 +1835,51 @@ function saveConto(id){
   save(); closeSheet(); render(); toast('Salvato'); if(o.cripto) aggiornaCripto(true);
 }
 function delConto(id){ S.conti=S.conti.filter(x=>x.id!==id); save(); closeSheet(); render(); }
+
+/* ---- Fatture in sospeso: {id, g:'Fatture', n:cliente, v:importo, num, df:data fattura, sc:scadenza} ----
+   Contano nel patrimonio finché non arrivano i soldi. "Incassata" porta l'importo sul conto dove sono arrivati e toglie la
+   fattura: il patrimonio non cambia (era già contata). L'entrata nel bilancio di solito c'è già (es. le giornate del porto
+   arrivano da Lavoro): si registra solo se lo chiedi. */
+function fattInfo(c){
+  const sc = c.sc ? (c.sc < today() ? `<b class="neg" style="font-weight:700">scaduta il ${fmtD(c.sc)}</b>` : 'scade il '+fmtD(c.sc)) : '';
+  return [c.num ? 'n. '+esc(c.num) : '', c.df ? 'del '+fmtD(c.df) : '', sc].filter(Boolean).join(' · ') || 'da incassare';
+}
+function openFattura(id, bozza){
+  const c = id ? S.conti.find(x=>x.id===id) : {g:'Fatture', n:'', v:0, df:today(), ...(bozza||{})};
+  const dest = S.conti.filter(liquido);
+  sheet(`<h3>${id?'Fattura in sospeso':'Nuova fattura in sospeso'}</h3>
+    <p class="note" style="margin:-4px 0 12px">Soldi che ti devono ancora arrivare: contano nel patrimonio totale, non nella liquidità.</p>
+    <div class="f"><label>Importo da incassare (€)</label><input id="fa-v" inputmode="decimal" class="amt" value="${c.v||''}" placeholder="0 €"></div>
+    <div class="f"><label>Cliente</label><input id="fa-n" value="${esc(c.n)}" placeholder="es. Agenzia Rossi"></div>
+    <div class="grid2"><div class="f"><label>Numero fattura</label><input id="fa-num" value="${esc(c.num||'')}" placeholder="facoltativo"></div>
+      <div class="f"><label>Data fattura</label><input type="date" id="fa-df" value="${c.df||''}"></div></div>
+    <div class="f"><label>Scadenza del pagamento</label><input type="date" id="fa-sc" value="${c.sc||''}"></div>
+    <button class="btn" onclick="saveFattura('${id||''}')">Salva</button>
+    ${id ? `<div class="card" style="margin-top:14px;padding:12px 14px"><b>Incassata</b>
+      <div class="f" style="margin-top:8px"><label>Arrivata su</label><select id="fa-c">${dest.map(x=>`<option value="${x.id}">${esc(x.g==='Cash'?'Contanti · '+x.n:x.n)}</option>`).join('')}</select></div>
+      <div class="f"><label>Arrivata il</label><input type="date" id="fa-d" value="${today()}"></div>
+      <label class="chk"><input type="checkbox" id="fa-e"> Registra anche come entrata nel bilancio</label>
+      <p class="note" style="margin:4px 0 10px">Lascialo spento se l'entrata è già registrata (le giornate del porto arrivano da Lavoro): così non si conta due volte.</p>
+      <button class="btn" type="button" onclick="incassaFattura('${id}')" ${dest.length?'':'disabled'}>Segna come incassata</button></div>
+      <button class="btn danger" style="margin-top:8px" onclick="if(confirm('Eliminare questa fattura senza incassarla?')) delConto('${id}')">Elimina</button>` : ''}
+    <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Annulla</button>`);
+}
+function saveFattura(id){
+  const o = {g:'Fatture', n:$('fa-n').value.trim(), v:round2(num($('fa-v').value)), num:$('fa-num').value.trim()||undefined, df:$('fa-df').value||undefined, sc:$('fa-sc').value||undefined};
+  if(!o.n) return toast('Inserisci il cliente');
+  if(!(o.v>0)) return toast("Inserisci l'importo");
+  if(id) Object.assign(S.conti.find(x=>x.id===id), o); else S.conti.push({id:uid(), ...o});
+  save(); closeSheet(); render(); toast('Fattura salvata');
+}
+function incassaFattura(id){
+  const f = S.conti.find(x=>x.id===id), c = S.conti.find(x=>x.id===$('fa-c').value); if(!f || !c) return;
+  const d = $('fa-d').value || today(), ent = $('fa-e').checked;
+  if(!confirm(`${eur(f.v)} arrivati su ${c.n}: la fattura esce dalle fatture in sospeso e il saldo di ${c.n} sale di ${eur(f.v)}.`)) return;
+  c.v = round2((c.v||0) + f.v);
+  if(ent) S.tx.push({id:uid(), d, t:'e', cat:'Lavoro', sub:'Fatture', det:f.n, amt:f.v, note:['Fattura', f.num ? 'n. '+f.num : ''].filter(Boolean).join(' ')});
+  S.conti = S.conti.filter(x=>x.id!==id);
+  save(); closeSheet(); render(); toast('Fattura incassata');
+}
 
 /* ---- Criptovalute: il saldo dei conti dalla quotazione in tempo reale ----
    conto.cripto = [{sim:'BTC', q:0.05, cg:'bitcoin'}], conto.extra = euro nel conto; saldo = Σ quantità × prezzo in euro + extra.
@@ -1975,7 +2031,7 @@ function openRata(id){
   const v = r ? {tipo:r.tipo, prod:r.prod, acq, tot:dec(r.tot), n:r.n||'', res:residue(r), next:r.first ? dueDate(r,pagate(r)) : addMonths(today(),1), conto:r.conto}
               : {tipo:servizi()[0]||'PayPal', prod:'', acq, tot:'', n:'', res:'', next:addMonths(acq,1), conto:(S.conti.find(c=>c.g==='Banche')||{}).id||''};
   const sel = r && r.carta ? 'k:'+r.carta : v.conto ? 'c:'+v.conto : '';
-  const conti = `<option value="">Nessun conto (non scalare)</option><optgroup label="Conti">` + S.conti.map(c=>`<option value="c:${c.id}" ${'c:'+c.id===sel?'selected':''}>${esc(c.n)} · ${c.g}</option>`).join('')
+  const conti = `<option value="">Nessun conto (non scalare)</option><optgroup label="Conti">` + S.conti.filter(pagabile).map(c=>`<option value="c:${c.id}" ${'c:'+c.id===sel?'selected':''}>${esc(c.n)} · ${c.g}</option>`).join('')
     + `</optgroup><optgroup label="Carte di credito">` + carte().map(c=>`<option value="k:${c.id}" ${'k:'+c.id===sel?'selected':''}>${esc(c.n)}</option>`).join('') + '</optgroup>';
   const srv = [...new Set([...servizi(), v.tipo].filter(Boolean))];
   sheet(`<h3>${id?'Modifica rata':'Nuova rata'}</h3>
@@ -2381,7 +2437,7 @@ function openCarta(id){
       <div class="f"><label>Giorni lavorativi per contabilizzare</label><input id="k-cb" inputmode="numeric" value="${c.contab??2}"></div>
     </div>
     <div class="f"><label>Colore della carta</label><select id="k-col">${COLORI_CARTA.map(([v,l])=>`<option value="${v}" ${v===cartaColore(c)?'selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="f"><label>Conto di addebito</label><select id="k-c"><option value="">—</option>${S.conti.map(x=>`<option value="${x.id}" ${x.id===c.conto?'selected':''}>${esc(x.n)} · ${x.g}</option>`).join('')}</select></div>
+    <div class="f"><label>Conto di addebito</label><select id="k-c"><option value="">—</option>${S.conti.filter(pagabile).map(x=>`<option value="${x.id}" ${x.id===c.conto?'selected':''}>${esc(x.n)} · ${x.g}</option>`).join('')}</select></div>
     <label class="chk" style="justify-content:flex-start;margin:0 0 10px"><input type="checkbox" id="k-solo" ${c.solo?'checked':''}> Solo per i rifornimenti di carburante (es. Telepass)</label>
     <label class="chk" style="justify-content:flex-start;margin:0 0 10px"><input type="checkbox" id="k-pf" ${c.pf?'checked':''} onchange="$('k-pf-w').style.display=this.checked?'grid':'none'"> Rateizzazione delle spese</label>
     <div class="grid2" id="k-pf-w" style="display:${c.pf?'grid':'none'}">
@@ -2714,7 +2770,7 @@ function delTx(id){
 // rimborso ricevuto per un acquisto di gruppo: entra nel conto scelto, non è un'entrata
 function openRimb(gid, id){
   const G = gruppo(gid), g = G.g, x = id ? S.tx.find(y=>y.id===id) : {amt:daRicevere(g), d:today(), conto:'', note:''};
-  const conti = S.conti.filter(c=>c.g!=='Investimenti');
+  const conti = S.conti.filter(liquido);
   sheet(`<h3>${id?'Rimborso ricevuto':'Nuovo rimborso'}</h3>
     <p class="note" style="margin:-6px 0 12px"><b style="color:var(--ink)">${esc(G.nome)}</b> · pagati ${eur(G.tot)} · tua quota ${eur(g.quota)} · da ricevere ${eur(daRicevere(g) + (id ? x.amt : 0))}</p>
     <div class="f"><input id="rb-a" class="amt" inputmode="decimal" placeholder="0,00 €" value="${x.amt>0?String(x.amt).replace('.',','):''}"></div>
@@ -3309,7 +3365,7 @@ function importCSV(f){
         out.push({id:uid(),d,t,cat:c[2],sub:c[3]||'',amt:Math.abs(a),note:c[5]||''});
       } else if(kind==='conti'){
         const v=csvNum(c[2]); if(!c[1]||v==null) return skipped++;
-        out.push({id:uid(),g:c[0]||'Banche',n:c[1],v});
+        out.push({id:uid(),g:/fattur/i.test(c[0]||'') ? 'Fatture' : c[0]||'Banche',n:c[1],v});
       } else if(kind==='rate'){
         const rt=csvNum(c[2]), rs=csvNum(c[3]); if(rt==null||rs==null) return skipped++;
         const ct = c[5] ? S.conti.find(x=>x.n.toLowerCase()===c[5].toLowerCase()) : null;
@@ -3322,7 +3378,7 @@ function importCSV(f){
         const t=String(c[0]||'').trim(); let m=t.match(/^(\d{4})-(\d{1,2})/)||t.match(/^(?:\d{1,2}[\/.-])?(\d{1,2})[\/.-](\d{4})$/);
         if(!m) return skipped++;
         const ym = m[1].length===4 ? `${m[1]}-${m[2].padStart(2,'0')}` : `${m[2]}-${m[1].padStart(2,'0')}`;
-        const v = [1,2,3].map(i=>csvNum(c[i])||0);
+        const v = [1,2,3,4].map(i=>csvNum(c[i])||0);
         out.push(fotoPatr(ym, today(), 'inserito', GRUPPI.map((k,i)=>({n:k, g:k, v:v[i]}))));
       } else {
         const d=csvDate(c[0]), v=csvNum(c[1]); if(!d||v==null) return skipped++;
