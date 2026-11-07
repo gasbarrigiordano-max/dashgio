@@ -170,6 +170,7 @@ html.largo .wrap{max-width:100%}
 .lg-ag.grande{width:44px;height:44px;border-radius:12px;margin:0;vertical-align:middle;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .cg .lg-ag{width:15px;height:15px;border-radius:4px;margin:1px 0 0}
 .filtri .lg-ag{width:16px;height:16px;vertical-align:-3px}
+.lg-ag.lg-nave.media{width:26px;height:26px;border-radius:7px;vertical-align:-3px;margin-right:8px}
 .prossima-testa{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .cal-leg{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11px;color:var(--ink2)}
 .cal-leg span::before{content:'';display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
@@ -297,6 +298,8 @@ const totale = g => netto(g) + (num(g.extra) || 0);
 const ordinate = () => [...L.giornate].sort((a, b) => a.d.localeCompare(b.d));
 const agenzie = () => [...new Set(L.giornate.map(g => g.agenzia).filter(Boolean))].sort();
 // logo dell'agenzia (se è una di quelle conosciute), da mettere prima del nome
+// logo della compagnia della nave (Costa…), prima del nome della nave
+const logoNv = (n, grande) => { const src = window.logoNave ? logoNave(n) : ''; return src ? `<img class="lg-ag lg-nave${grande ? ' media' : ''}" src="${src}" alt="">` : ''; };
 const logoAg = (a, cl = '') => { const src = window.logoAgenzia ? logoAgenzia(a) : ''; return src ? `<img class="lg-ag ${cl}" src="${src}" alt="">` : ''; };
 const statoDi = g => g.stato === 'pagato' ? 'pagato' : g.stato === 'fatturato' ? 'fatturato' : g.d > oggiISO() ? 'futura' : 'da';
 const ETICH = { pagato: 'pagata', fatturato: 'fatturata', da: 'da fatturare', futura: 'in programma' };
@@ -328,9 +331,9 @@ function naviProbabili(g){
 const proposta = g => { const l = naviProbabili(g); return l.length === 1 ? l[0] : ''; };
 // testo della nave: quella inserita, o la proposta da confermare, o "da inserire" con le navi della compagnia in porto
 function nomeNave(g, grande){
-  if (g.nave) return esc(g.nave);
+  if (g.nave) return logoNv(g.nave, grande) + esc(g.nave);
   const l = naviProbabili(g);
-  if (l.length === 1) return `<span class="proposta">${esc(l[0])}</span> <small class="manca">da confermare</small>`;
+  if (l.length === 1) return `${logoNv(l[0], grande)}<span class="proposta">${esc(l[0])}</span> <small class="manca">da confermare</small>`;
   return `<span class="manca">${grande ? 'Nave da inserire' : 'nave da inserire'}</span>${l.length ? ` <small class="manca">· in porto ${esc(l.join(', '))}</small>` : ''}`;
 }
 // conferma in una volta le navi proposte (una sola possibile per giornata); anche il calendario si aggiorna
