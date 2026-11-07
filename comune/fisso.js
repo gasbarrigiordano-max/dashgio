@@ -22,7 +22,9 @@
    e niente testo ingrandito ruotando il telefono. Lo zoom quando si tocca un campo lo evita il viewport (maximum-scale=1). */
 (function () {
   const st = document.createElement('style');
-  st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}';
+  st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}'
+    // lo scorrimento dentro una finestra non trascina la pagina sotto (niente rimbalzi)
+    + '.sheet,.modal,.pannello .box,.cf-box{overscroll-behavior:contain}';
   document.head.appendChild(st);
   const blocca = e => { if (!(e.target && e.target.closest && e.target.closest('.leaflet-container'))) e.preventDefault(); };
   ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, blocca, { passive: false }));
@@ -96,4 +98,29 @@
   const presto = ms => { clearTimeout(t); t = setTimeout(inVista, ms); };
   addEventListener('resize', () => presto(60));
   document.addEventListener('focusin', () => presto(350));
+})();
+
+/* Finestra aperta (nuovo movimento, saldo di un conto, impostazioni…): la pagina dietro resta ferma. Su iPhone, toccando un
+   campo, Safari faceva scorrere la pagina di sfondo e la finestra andava su con lei (spazio vuoto sotto, rimbalzi muovendo il
+   dito). Con la pagina bloccata (body fisso alla sua posizione) scorre solo il contenuto della finestra; chiusa la finestra,
+   la pagina torna esattamente dov'era. */
+(function () {
+  const APERTI = '.pannello.on,#sblocco.on,#ov.on,#velo.on,.modal-overlay.show,.show[id$="-overlay"],.sheet.on,.cf-porta';
+  let bloccata = false, y = 0, raf = 0;
+  function aggiorna() {
+    raf = 0;
+    const aperta = !!document.querySelector(APERTI), b = document.body; if (!b) return;
+    if (aperta && !bloccata) {
+      y = window.scrollY || document.documentElement.scrollTop || 0;
+      Object.assign(b.style, { position: 'fixed', top: -y + 'px', left: '0', right: '0', width: '100%' });
+      bloccata = true; document.documentElement.classList.add('finestra-aperta');
+    } else if (!aperta && bloccata) {
+      Object.assign(b.style, { position: '', top: '', left: '', right: '', width: '' });
+      bloccata = false; document.documentElement.classList.remove('finestra-aperta');
+      window.scrollTo(0, y);
+    }
+  }
+  const pianifica = () => { if (!raf) raf = requestAnimationFrame(aggiorna); };
+  const avvia = () => new MutationObserver(pianifica).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  if (document.body) avvia(); else document.addEventListener('DOMContentLoaded', avvia);
 })();
