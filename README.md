@@ -9,11 +9,12 @@ Le mie app personali in un solo sito, con un solo account e una sola cassaforte 
 | `/giornale/` | Mezzi (prima "Giornale di Bordo"): auto, scooter, moto e gommone. |
 | `/palestra/` | Palestra: schede, registro degli allenamenti e record, progressi del corpo, abbonamento e ingressi. |
 | `/lavoro/` | Lavoro al porto: giornate per agenzia e nave, tariffa lorda e netta, extra, fatture e pagamenti; molo dal porto. |
+| `/locali/` | Locali: dashboard da PR. Tavoli fatti nelle serate e percentuale calcolata da sola (Room 26 15%, In Space/HYN 20%, Grotta Aurelia 15%, Sunbay 15%; Zona Calda ha una gestione separata e non si conta). |
 | `/comune/cassaforte.js` | Accesso e cifratura condivisi (login, sblocco, lettura e scrittura cifrata). |
 | `/comune/programma.js` | Calcoli del programma della Palestra (coppie di muscoli, blocchi), usati da Palestra e Dashboard. |
 | `/comune/porto.js` | Legge i moli delle navi dal porto di Civitavecchia (settimana e pagine dei mesi). |
 
-Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`, `#lavoro`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
+Le app si aprono dentro la Dashboard (`#bilancio`, `#mezzi`, `#palestra`, `#lavoro`, `#locali`): la barra a sinistra resta, e dentro la Dashboard le app nascondono il proprio pulsante "Dashboard" e usano la chiave già sbloccata. Aperte da sole funzionano lo stesso.
 
 Sito: GitHub Pages dal ramo `main`, cartella principale → `https://gasbarrigiordano-max.github.io/dashgio/`.
 
@@ -42,6 +43,7 @@ bilancio/{uid}/dashboard/lavoro   kid, iv, ct         (Lavoro: giornate, tariffe
 bilancio/{uid}/dashboard/bk_AAAAMMGG  backup giornaliero cifrato e compresso di tutto (10 giorni + uno al mese per un anno)
 bilancio/{uid}/dashboard/registro    registro cifrato delle attività (accessi, sblocchi, errori, nuovi dispositivi…)
 bilancio/{uid}/giornale/chiaviApi    chiave personale di OpenRouteService (cifrata; non più nel codice)
+bilancio/{uid}/locali/locali      kid, iv, ct         (Locali: locali con nome e percentuale, tavoli per serata)
 ```
 
 Ogni documento cifrato ha anche `rev` (numero del salvataggio): le app salvano in una transazione e, se nel frattempo un altro

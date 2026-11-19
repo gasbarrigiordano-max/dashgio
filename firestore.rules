@@ -53,12 +53,12 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // app nella stessa cassaforte: Mezzi (giornale), Palestra e Dashboard (Lavoro, Google, backup). Una voce cifrata per
+      // app nella stessa cassaforte: Mezzi (giornale), Palestra, Dashboard (Lavoro, Google, backup) e Locali (tavoli da PR). Una voce cifrata per
       // chiave (le voci grandi in parti voce__p1, __p2…), stesso controllo sul sale e sulla revisione delle sezioni
       match /{app}/{voce} {
-        allow read: if isOwner(uid) && app in ['giornale', 'palestra', 'dashboard'];
+        allow read: if isOwner(uid) && app in ['giornale', 'palestra', 'dashboard', 'locali'];
         allow create, update: if isOwner(uid)
-          && app in ['giornale', 'palestra', 'dashboard']
+          && app in ['giornale', 'palestra', 'dashboard', 'locali']
           && voce.matches('^[A-Za-z0-9_]{1,60}$')
           && cifrato(request.resource.data)
           && request.resource.data.kid == sale(uid)

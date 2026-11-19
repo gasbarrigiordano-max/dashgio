@@ -393,6 +393,7 @@ main{container-type:inline-size}
     <a class="p" href="giornale/" aria-label="Mezzi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0"/></svg>Mezzi</a>
     <a class="p" href="palestra/" aria-label="Palestra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>Palestra</a>
     <a class="p" href="lavoro/" aria-label="Lavoro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg>Lavoro</a>
+    <a class="p" href="locali/" aria-label="Locali"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14l-7 8z"/><path d="M12 12v8M8 20h8"/></svg>Locali</a>
     <button class="p" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Impostazioni</button>
   </div>
   <div class="grp">
@@ -412,8 +413,8 @@ main{container-type:inline-size}
   <a class="navbtn giornale-link" href="#" aria-label="Mezzi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M8 10h8"/></svg><span class="tip">Mezzi</span></a>
   <a class="navbtn" href="palestra/" aria-label="Palestra"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg><span class="tip">Palestra</span></a>
   <a class="navbtn" href="lavoro/" aria-label="Lavoro"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg><span class="tip">Lavoro</span></a>
+  <a class="navbtn" href="locali/" aria-label="Locali"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14l-7 8z"/><path d="M12 12v8M8 20h8"/></svg><span class="tip">Locali</span></a>
   <button class="navbtn" type="button" onclick="apriCalendario()" aria-label="Calendario"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="tip">Calendario</span></button>
-  <button class="navbtn" disabled aria-label="Altre app, in arrivo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Altre app, in arrivo</span></button>
   <div class="nav-spazio"></div>
   <button class="navbtn" type="button" onclick="apriImpostazioni()" aria-label="Impostazioni"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="tip">Impostazioni</span></button>
 </nav>
@@ -1322,7 +1323,7 @@ async function backupOra(){
 async function ripristinaBackup(id){
   let f; try { f = await Cassaforte.apriBackup(id); } catch(e){ return toast('Non riesco ad aprire il backup: ' + (e.message || e.code)); }
   const c = Cassaforte.conteggi(f);
-  if(!confirm(`Ripristinare il backup del ${dataBackup(id)}?\n\nContiene: ${c.movimenti} movimenti, ${c.conti} conti, ${c.rate} rate, ${c.speseMezzi} spese dei mezzi, ${c.giornate} giornate di lavoro, ${c.allenamenti} allenamenti.\n\nPrima salvo una copia dello stato attuale, così puoi tornare indietro.`)) return;
+  if(!confirm(`Ripristinare il backup del ${dataBackup(id)}?\n\nContiene: ${c.movimenti} movimenti, ${c.conti} conti, ${c.rate} rate, ${c.speseMezzi} spese dei mezzi, ${c.giornate} giornate di lavoro, ${c.allenamenti} allenamenti, ${c.tavoli || 0} tavoli dei locali.\n\nPrima salvo una copia dello stato attuale, così puoi tornare indietro.`)) return;
   toast('Ripristino…');
   try { await Cassaforte.ripristina(f); toast('Ripristinato: ricarico'); setTimeout(() => location.reload(), 800); }
   catch(e){ toast('Ripristino non riuscito: ' + (e.code || e.message)); }
@@ -1480,10 +1481,10 @@ function controlla(){
 document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && pronto) setTimeout(leggi, 1500); });
 async function bloccaTutto(){ await Cassaforte.blocca(); location.reload(); }
 
-/* ---- Le app si aprono qui dentro (#bilancio, #mezzi, #palestra): la barra a sinistra resta ---- */
+/* ---- Le app si aprono qui dentro (#bilancio, #mezzi, #palestra, #lavoro, #locali): la barra a sinistra resta ---- */
 let vista = 'panoramica';
 var graficoVisto; // il grafico della panoramica si è già disegnato una volta
-const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/', lavoro: 'lavoro/' };
+const PERCORSI = { bilancio: 'bilancio/', mezzi: 'giornale/', palestra: 'palestra/', lavoro: 'lavoro/', locali: 'locali/' };
 const frames = {};
 // la prossima parte solo quando la precedente ha finito di caricarsi e il telefono è libero (Mezzi, la più pesante, per ultima)
 function precarica(lista){
@@ -1495,7 +1496,7 @@ function precarica(lista){
 function frameDi(v, extra){
   if(!frames[v]){
     const f = document.createElement('iframe');
-    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro'}[v];
+    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro', locali:'Locali'}[v];
     $('app-vista').appendChild(f); frames[v] = f;
   }
   return frames[v];
@@ -1519,7 +1520,7 @@ function mostraVista(v, extra = ''){
   chiudiPannello(); if($('sblocco').classList.contains('on')) chiudiSblocco();
   document.body.classList.toggle('in-app', vista !== 'panoramica');
   { const l = vista !== 'panoramica' ? largoDi(vista) : {si: false, px: 0}; applicaLargo(l.si, l.px); }
-  const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro'}[vista];
+  const etich = {panoramica:'Panoramica', bilancio:'Bilancio', mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro', locali:'Locali'}[vista];
   document.querySelectorAll('nav .navbtn, .v5top .p').forEach(b => { const on = b.getAttribute('aria-label') === etich; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   document.querySelectorAll('.seg a').forEach(a => a.classList.toggle('on', a.textContent.trim() === etich));
   Object.entries(frames).forEach(([k, f]) => f.classList.toggle('on', k === vista));
@@ -1610,9 +1611,9 @@ if(window.ResizeObserver) new ResizeObserver(() => dimensiona()).observe($('app-
 function entraApp(f){ try { const w = f.contentWindow; if(w.Moto && w.motoVista) w.Moto.entra(w.motoVista()); } catch(e){} }
 // l'evidenziazione della voce attiva scivola da una voce all'altra (dock e barra in alto)
 Moto.pillola(document.querySelector('nav.glass')); Moto.pillola(document.querySelector('.v5top .centro'));
-const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra', '#lavoro':'lavoro'})[location.hash] || 'panoramica';
+const vistaDaHash = () => ({'#bilancio':'bilancio', '#mezzi':'mezzi', '#palestra':'palestra', '#lavoro':'lavoro', '#locali':'locali'})[location.hash] || 'panoramica';
 function dashVai(dest){
-  const m = String(dest || '').match(/^(bilancio|giornale|palestra|lavoro)\/(.*)$/);
+  const m = String(dest || '').match(/^(bilancio|giornale|palestra|lavoro|locali)\/(.*)$/);
   const v = m ? (m[1] === 'giornale' ? 'mezzi' : m[1]) : 'panoramica';
   const h = v === 'panoramica' ? '' : '#' + v;
   if(location.hash !== h) history.pushState(null, '', location.pathname + h);
@@ -1625,7 +1626,7 @@ addEventListener('resize', dimensiona);
 document.addEventListener('click', e => {
   const a = e.target.closest('a[href]'); if(!a || a.target === '_blank' || e.defaultPrevented || a.closest('.cf-porta')) return; // la porta (prima volta) apre Bilancio da solo
   const h = a.getAttribute('href');
-  if(/^(bilancio|giornale|palestra|lavoro)\//.test(h)){
+  if(/^(bilancio|giornale|palestra|lavoro|locali)\//.test(h)){
     e.preventDefault();
     // di nuovo Mezzi dalla barra mentre si è dentro un mezzo: si torna alla scelta del mezzo
     if(h.startsWith('giornale/') && vista === 'mezzi' && (a.closest('nav') || a.closest('.v5top')) && frames.mezzi){
@@ -1642,7 +1643,7 @@ document.addEventListener('click', e => {
   bil.src = 'bilancio/index.html';
   // arrivato da un'app aperta da sola (?torna=…): si apre qui dentro
   const torna = new URLSearchParams(location.search).get('torna');
-  if(['bilancio/', 'giornale/', 'palestra/', 'lavoro/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
+  if(['bilancio/', 'giornale/', 'palestra/', 'lavoro/', 'locali/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
   else if(vistaDaHash() !== 'panoramica') mostraVista(vistaDaHash());
   giro = setInterval(controlla, 1000);
   leggiPalestra(); setInterval(leggiPalestra, 60000);

@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<!-- Sicurezza (CSP): script solo da questo sito e da gstatic (Firebase), connessioni solo a Firebase -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://www.gstatic.com; frame-src 'self' https://contabilit-1a500.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1411">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Locali">
+<link rel="icon" type="image/png" href="../dashboard-favicon.png">
+<link rel="apple-touch-icon" href="../dashboard-180.png">
+<title>Locali</title>
+<script src="../comune/fisso.js?v=20261107b"></script>
+<script src="../comune/moto.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!--
+  Locali: la dashboard da PR. Si segnano i tavoli fatti nelle serate e la propria percentuale si calcola da sola
+  (Room 26 15%, In Space 20% = HYN sul sito Elite, Grotta Aurelia 15%, Sunbay 15%; Zona Calda ha una gestione separata:
+  niente tavoli e niente totali). Dati cifrati nella cassaforte comune (comune/cassaforte.js), voce bilancio/{uid}/locali/locali:
+  {v:2, locali:[{id, nome, perc}], tavoli:[{id, locale, data:'AAAA-MM-GG', cent, perc, nome, pagata}]}
+  Ogni tavolo tiene la percentuale del momento in cui è stato segnato. Loghi in locali/loghi/ (Room 26 e HYN dal sito Elite,
+  il diavoletto dal sito di Zona Calda).
+-->
+<style>
+  :root{
+    --ink:#fff; --ink2:rgba(255,255,255,.74); --ink3:rgba(255,255,255,.6);
+    --acc:#F2711C; --acc-soft:#ffb07a; --acc-ink:#a04a0c;
+    --glass:rgba(40,32,28,.55); --line:rgba(255,255,255,.10);
+    --tile:rgba(255,255,255,.94); --tile-ink:#1d1a18; --tile-ink2:#5e5650;
+    --ok:#1b8752;
+    --sat:env(safe-area-inset-top); --sab:env(safe-area-inset-bottom);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{min-height:100vh;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#17120f;-webkit-font-smoothing:antialiased}
+  body::before{content:'';position:fixed;inset:0;z-index:-1;background:url(../comune/sfondo.svg) center/cover no-repeat}
+  /* dentro la Dashboard: niente sfondo né margini dello schermo; il blocco e il "PR" li ha già la Dashboard */
+  html.incorporata body{background:transparent} html.incorporata body::before{display:none}
+  html.incorporata{--sat:0px;--sab:0px}
+  html.incorporata .wrap{padding:14px;max-width:none}
+  html.incorporata #blocca,html.incorporata nav .brand{display:none}
+  /* come Lavoro: senza "dark" il riquadro dentro la Dashboard si dipinge bianco */
+  :root{color-scheme:dark}
+  /* dentro la Dashboard la sfocatura vede solo il fondo trasparente della pagina: vetro semplice, come nelle altre app */
+  html.incorporata .glass{background:rgba(30,18,10,.42);-webkit-backdrop-filter:none;backdrop-filter:none;border-color:rgba(255,255,255,.22)}
+  html.incorporata dialog .glass{background:rgba(30,20,14,.92)}
+  a{color:var(--acc-soft)} a:hover{color:#ffd2b0}
+  button{font:inherit;color:inherit}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+  .glass{background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(140%);backdrop-filter:blur(26px) saturate(140%);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08)}
+  .wrap{max-width:1440px;margin:0 auto;padding:calc(20px + var(--sat)) 20px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* barra dei locali */
+  nav{border-radius:26px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto;align-self:flex-start;position:sticky;top:20px;z-index:10}
+  .brand{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--acc);font-weight:800;font-size:15px}
+  .navbtn{width:48px;height:48px;border-radius:14px;border:0;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;position:relative;font-size:12.5px;font-weight:800;letter-spacing:.02em;padding:0}
+  .navbtn:hover{background:rgba(255,255,255,.08);color:#fff}
+  .navbtn[aria-current="true"]{background:var(--acc);color:#fff;box-shadow:0 8px 20px rgba(242,113,28,.45)}
+  .navbtn.logo[aria-current="true"]{background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px var(--acc), 0 8px 20px rgba(242,113,28,.3)}
+  .navbtn img{width:34px;height:34px;object-fit:contain;display:block}
+  .navbtn .tip{position:absolute;left:58px;z-index:11;box-shadow:0 6px 18px rgba(0,0,0,.35);white-space:nowrap;background:rgba(0,0,0,.75);color:#fff;font-size:12px;font-weight:600;letter-spacing:0;padding:6px 10px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .15s}
+  .navbtn:hover .tip,.navbtn:focus-visible .tip{opacity:1}
+  .nav-sep{width:28px;height:1px;background:var(--line);margin:2px 0}
+  .nav-spazio{flex:1 1 auto;min-height:24px}
+
+  /* logo in un quadrato scuro (schede e titolo) */
+  .lg{flex:none;width:48px;height:48px;border-radius:14px;background:#221a15;display:grid;place-items:center;color:var(--acc-soft);font-weight:800;font-size:14px;overflow:hidden}
+  .lg img{width:80%;height:80%;object-fit:contain}
+  .lg.grande{width:56px;height:56px;border-radius:16px;border:1px solid var(--line)}
+
+  main{border-radius:28px;padding:24px;flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px}
+  .head{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+  .head h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em;overflow-wrap:anywhere}
+  .head p{margin:4px 0 0;font-size:13px;color:var(--ink2)}
+  .pill{background:var(--acc);color:#fff;border:0;cursor:pointer;text-decoration:none;font-weight:700;font-size:13px;border-radius:99px;padding:0 18px;min-height:44px;box-shadow:0 8px 20px rgba(242,113,28,.35);display:inline-flex;align-items:center;gap:6px}
+  .pill:hover{filter:brightness(1.08)}
+  .pill[disabled]{opacity:.6;cursor:default}
+  .titolo{display:flex;align-items:center;gap:12px;min-width:0}
+  .tondo{width:40px;height:40px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none;padding:0}
+  .tondo:hover{background:rgba(255,255,255,.14)}
+  .mese{display:flex;align-items:center;gap:6px}
+  .mese b{min-width:132px;text-align:center;font-size:13.5px;font-weight:800}
+
+  /* riquadri bianchi */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+  .tile{background:var(--tile);border:0;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0;color:var(--tile-ink);text-align:left;text-decoration:none;transition:transform .15s}
+  button.tile{cursor:pointer}
+  button.tile:hover{transform:translateY(-3px)}
+  .tile-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .tile-h small{font-size:12px;font-weight:700;color:#3c3631}
+  .tile-h span{font-size:11px;font-weight:700;color:var(--acc-ink)}
+  .tile .v{font-size:26px;font-weight:700;color:var(--acc-ink);letter-spacing:-.02em}
+  .tile .s{font-size:11.5px;color:var(--tile-ink2)}
+  .tile.forte{background:var(--acc);color:#fff}
+  .tile.forte .tile-h small,.tile.forte .tile-h span,.tile.forte .v,.tile.forte .s{color:#fff}
+
+  .locale .riga{display:flex;align-items:center;gap:12px}
+  .locale .nome{font-size:16px;font-weight:800;color:var(--tile-ink);overflow-wrap:anywhere}
+  .locale .perc{font-size:11px;font-weight:700;color:var(--acc-ink)}
+  .locale .dati{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;text-align:center}
+  .locale .dati div{background:#f3ece6;border-radius:12px;padding:8px 4px}
+  .locale .dati b{display:block;font-size:15px;color:var(--acc-ink)}
+  .locale .dati small{font-size:10.5px;color:var(--tile-ink2);font-weight:600}
+  .locale.esclusa .dati{display:none}
+
+  .sez{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .sez h2{margin:0;font-size:14px;font-weight:800;padding-left:10px;border-left:3px solid var(--acc)}
+  .serate{display:flex;flex-direction:column;gap:12px}
+  .serata{background:var(--tile);color:var(--tile-ink);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .serata-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid #e8dfd8}
+  .serata-h b{font-size:14px;font-weight:800}
+  .serata-h span{font-size:12px;font-weight:700;color:var(--acc-ink)}
+  .tav{display:flex;align-items:center;gap:12px;padding:6px 0;min-height:52px}
+  .tav + .tav{border-top:1px solid #f0e8e2}
+  .tav .lg{width:36px;height:36px;border-radius:10px;font-size:11px}
+  .tav .t{flex:1 1 auto;min-width:0}
+  .tav .t div{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tav .t small{display:block;font-size:11.5px;color:var(--tile-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tav .g{text-align:right;flex:none}
+  .tav .g b{display:block;font-size:14px;color:var(--acc-ink)}
+  .tav .g small{font-size:11px;color:var(--tile-ink2)}
+  .stato{flex:none;min-height:36px;border-radius:99px;padding:0 12px;font-size:11.5px;font-weight:800;cursor:pointer;border:1px solid #e3d8cf;background:#fff;color:var(--tile-ink2)}
+  .stato.pagata{background:#e3f4ea;border-color:#bfe3cd;color:var(--ok)}
+  .apri{flex:none;width:36px;height:36px;border-radius:99px;border:1px solid #e3d8cf;background:#fff;color:var(--tile-ink2);cursor:pointer;display:grid;place-items:center;padding:0}
+  .apri:hover{color:var(--tile-ink)}
+  .vuoto{background:var(--tile);color:var(--tile-ink2);border-radius:18px;padding:22px 16px;font-size:13px}
+  .avviso{font-size:12.5px;color:#ffb3a1;margin:0}
+
+  /* finestra per aggiungere o modificare */
+  dialog{border:0;padding:0;background:transparent;color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 24px)}
+  dialog::backdrop{background:rgba(10,8,6,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .box{border-radius:28px;padding:20px;overflow:auto}
+  .box-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .box-h h2{margin:0;font-size:20px;font-weight:800}
+  .campi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .campi .tutta{grid-column:1/-1}
+  .campi label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
+  .campi input,.campi select{height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.28);color:#fff;padding:0 12px;font:500 15px Manrope,sans-serif;outline:0;min-width:0;width:100%}
+  .campi input:focus,.campi select:focus{border-color:var(--acc)}
+  .campi input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
+  .campi select option{background:#2a211c}
+  .campi .chk{flex-direction:row;align-items:center;gap:8px;min-height:44px}
+  .campi .chk input{width:18px;height:18px;accent-color:var(--acc)}
+  .calcolo{grid-column:1/-1;border-radius:14px;background:rgba(242,113,28,.14);border:1px solid rgba(242,113,28,.35);padding:12px 14px;font-size:13px;color:var(--ink2)}
+  .calcolo b{font-size:18px;color:#fff}
+  .azioni{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center}
+  .azioni .spazio{flex:1 1 auto}
+  .sec{min-height:44px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;padding:0 16px;font-size:13px;font-weight:700;cursor:pointer}
+  .sec.rosso{color:#ffb3a1}
+  .err{margin:10px 0 0;font-size:12.5px;color:#ffb3a1;min-height:1em}
+
+  /* strumenti */
+  .chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;font-size:12px;font-weight:700;border-radius:99px;padding:0 12px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:#fff;text-decoration:none}
+  .chip:hover{background:rgba(255,255,255,.14);color:#fff}
+
+  /* barra in basso (telefono) */
+  .seg{width:fit-content;max-width:calc(100% - 24px);margin:0 auto calc(20px + var(--sab));border-radius:99px;padding:5px;display:none;gap:4px;overflow-x:auto;scrollbar-width:none}
+  .seg::-webkit-scrollbar{display:none}
+  .seg button{background:transparent;border:0;cursor:pointer;color:var(--ink2);font-weight:600;font-size:12.5px;padding:10px 14px;border-radius:99px;white-space:nowrap;flex:0 0 auto}
+  .seg button[aria-current="true"]{background:var(--acc);color:#fff}
+
+  @media (max-width:700px){
+    .wrap{padding:calc(12px + var(--sat)) 12px 12px;gap:12px}
+    nav{display:none}
+    .seg{display:flex;position:sticky;bottom:calc(10px + var(--sab));margin-bottom:calc(10px + var(--sab))}
+    main{padding:18px;border-radius:22px}
+    .campi{grid-template-columns:1fr}
+    .tav{flex-wrap:wrap}
+    .tav .t{flex-basis:calc(100% - 48px)}
+    .tav .g{text-align:left;margin-left:48px;flex:1 1 auto}
+  }
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="glass" aria-label="Locali">
+    <div class="brand" aria-hidden="true">PR</div>
+    <div id="nav" style="display:flex;flex-direction:column;gap:10px;align-items:center"></div>
+    <div class="nav-spazio"></div>
+    <a class="navbtn" href="https://keep.google.com" target="_blank" rel="noopener noreferrer" aria-label="Google Keep (si apre in una nuova scheda)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+      <span class="tip">Google Keep ↗</span>
+    </a>
+    <button class="navbtn" id="blocca" type="button" aria-label="Blocca la cassaforte">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span class="tip">Blocca</span>
+    </button>
+  </nav>
+
+  <main class="glass">
+    <div class="head">
+      <div style="flex:1 1 260px;min-width:0">
+        <div class="titolo">
+          <div class="lg grande" id="title-logo" hidden></div>
+          <div style="min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <h1 id="title">Tutti i locali</h1>
+              <button class="tondo" id="impostazioni" type="button" aria-label="Modifica nome e percentuale del locale" title="Modifica nome e percentuale" hidden>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+              </button>
+            </div>
+            <p id="subtitle">I tuoi tavoli e le tue percentuali</p>
+          </div>
+        </div>
+      </div>
+      <div class="mese" id="mese-box">
+        <button class="tondo" type="button" id="mese-prec" aria-label="Mese precedente">‹</button>
+        <b id="mese" aria-live="polite"></b>
+        <button class="tondo" type="button" id="mese-succ" aria-label="Mese successivo">›</button>
+      </div>
+      <button class="pill" type="button" id="nuovo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Aggiungi tavolo
+      </button>
+    </div>
+
+    <p class="avviso" id="avviso" hidden></p>
+
+    <section class="tiles" id="kpi" aria-label="Riepilogo del mese"></section>
+
+    <section id="schede" class="tiles" aria-label="Locali"></section>
+
+    <section id="esclusa" hidden>
+      <div class="vuoto">Zona Calda ha una gestione separata: i suoi tavoli non si segnano qui e non entrano nei totali.</div>
+    </section>
+
+    <section id="elenco" style="display:flex;flex-direction:column;gap:12px">
+      <div class="sez"><h2 id="elenco-tit">Serate del mese</h2></div>
+      <div class="serate" id="serate"></div>
+    </section>
+  </main>
+
+</div>
+
+<div class="seg glass" id="seg" role="navigation" aria-label="Locali"></div>
+
+<!-- aggiungi o modifica un tavolo -->
+<dialog id="dlg-tavolo" aria-labelledby="tav-tit">
+  <form class="box glass" id="form-tavolo" method="dialog" novalidate>
+    <div class="box-h"><h2 id="tav-tit">Nuovo tavolo</h2><button class="tondo" type="button" data-chiudi aria-label="Chiudi">✕</button></div>
+    <div class="campi">
+      <label>Locale<select id="f-locale" required></select></label>
+      <label>Serata<input id="f-data" type="date" required></label>
+      <label class="tutta">Importo del tavolo (€)<input id="f-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 500" required></label>
+      <label class="tutta">Tavolo o cliente (facoltativo)<input id="f-nome" type="text" maxlength="60" autocomplete="off" placeholder="es. Tavolo 4 · Marco"></label>
+      <label class="chk tutta"><input id="f-pagata" type="checkbox"> Percentuale già incassata</label>
+      <div class="calcolo" id="f-calcolo" aria-live="polite"></div>
+    </div>
+    <p class="err" id="f-err" role="alert"></p>
+    <div class="azioni">
+      <button class="sec rosso" type="button" id="f-elimina" hidden>Elimina</button>
+      <span class="spazio"></span>
+      <button class="sec" type="button" data-chiudi>Annulla</button>
+      <button class="pill" type="submit" id="f-salva">Salva</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- nome e percentuale del locale -->
+<dialog id="dlg-locale" aria-labelledby="loc-tit">
+  <form class="box glass" id="form-locale" method="dialog" novalidate>
+    <div class="box-h"><h2 id="loc-tit">Locale</h2><button class="tondo" type="button" data-chiudi aria-label="Chiudi">✕</button></div>
+    <div class="campi">
+      <label class="tutta">Nome<input id="l-nome" type="text" maxlength="40" autocomplete="off" required></label>
+      <label class="tutta" id="l-perc-box">Percentuale sui tavoli (%)<input id="l-perc" type="text" inputmode="decimal" autocomplete="off" required></label>
+      <p class="tutta" style="margin:0;font-size:12px;color:var(--ink2)" id="l-nota">La nuova percentuale vale per i tavoli che aggiungi da ora: quelli già segnati tengono la loro.</p>
+    </div>
+    <p class="err" id="l-err" role="alert"></p>
+    <div class="azioni">
+      <span class="spazio"></span>
+      <button class="sec" type="button" data-chiudi>Annulla</button>
+      <button class="pill" type="submit" id="l-salva">Salva</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="../comune/cassaforte.js"></script>
+<script>
+  /* Locali (dashboard da PR): i tavoli fatti nelle serate e la percentuale guadagnata.
+     Dati nella cassaforte comune: bilancio/{uid}/locali/locali, cifrato nel browser:
+     {"v":2,
+      "locali":[{"id","nome","perc"}],
+      "tavoli":[{"id","locale","data":"AAAA-MM-GG","cent":importo in centesimi,"perc":% al momento del tavolo,"nome","pagata"}]}
+     Zona Calda ha una gestione separata: niente tavoli e niente totali. */
+  const COL = "locali", VOCE = "locali";
+  const VENUES = [
+    { id: "room26", nome: "Room 26", perc: 15, logo: "loghi/room26.png" },
+    { id: "inspace", nome: "In Space", perc: 20, logo: "loghi/inspace.png" },
+    { id: "zonacalda", nome: "Zona Calda", perc: null, logo: "loghi/zonacalda.svg", esclusa: true },
+    { id: "grottaaurelia", nome: "Grotta Aurelia", perc: 15, logo: null },
+    { id: "sunbay", nome: "Sunbay", perc: 15, logo: null },
+  ];
+  let TAVOLI = [];
+  let corrente = "all";
+  const oggi = new Date();
+  let mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+
+  const $ = (id) => document.getElementById(id);
+  const trova = (id) => VENUES.find((v) => v.id === id);
+  const contati = () => VENUES.filter((v) => !v.esclusa);
+  const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
+  const soldi = (cent) => euro.format(cent / 100);
+  const provv = (t) => Math.round(t.cent * t.perc / 100);
+  const percTxt = (p) => String(p).replace(".", ",") + "%";
+  const chiaveMese = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  const isoOggi = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const nuovoId = () => "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  // sigla quando manca il logo: iniziali delle parole, oppure lettera + numero ("Room 26" → "R26")
+  function sigla(n) {
+    const p = n.trim().split(/\s+/);
+    if (p.length === 1) return n.trim().slice(0, 2).toUpperCase();
+    if (/^\d+$/.test(p[1])) return p[0][0].toUpperCase() + p[1].slice(0, 2);
+    return p.map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  }
+  function logo(v, cls) {
+    const box = el("span", "lg" + (cls ? " " + cls : ""));
+    if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; box.appendChild(i); }
+    else box.textContent = sigla(v.nome);
+    return box;
+  }
+  // "500", "1.500", "1500,50", "€ 1.500,50" → centesimi
+  function leggiEuro(s) {
+    s = String(s || "").replace(/[€\s]/g, "");
+    if (!s) return null;
+    if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    return Math.round(parseFloat(s) * 100);
+  }
+  function leggiPerc(s) {
+    s = String(s || "").replace(/[%\s]/g, "").replace(",", ".");
+    if (!/^\d{1,2}(\.\d{1,2})?$/.test(s)) return null;
+    const n = parseFloat(s);
+    return n > 0 && n <= 100 ? n : null;
+  }
+
+  // --- dati: cloud (cassaforte comune)
+  function applica(txt) {
+    let d = null;
+    try { d = JSON.parse(txt); } catch (e) {}
+    if (!d) return;
+    (d.locali || []).forEach((x) => {
+      const v = x && trova(x.id);
+      if (!v) return;
+      if (typeof x.nome === "string" && x.nome.trim()) v.nome = x.nome.trim().slice(0, 40);
+      if (!v.esclusa && typeof x.perc === "number" && x.perc > 0 && x.perc <= 100) v.perc = x.perc;
+    });
+    TAVOLI = (d.tavoli || []).filter((t) => t && t.id && trova(t.locale) && !trova(t.locale).esclusa
+      && /^\d{4}-\d{2}-\d{2}$/.test(t.data) && Number.isInteger(t.cent) && t.cent > 0 && typeof t.perc === "number");
+  }
+  const testo = () => JSON.stringify({
+    v: 2,
+    locali: VENUES.map(({ id, nome, perc }) => ({ id, nome, perc })),
+    tavoli: TAVOLI,
+  });
+  // salva; se non va, si torna allo stato di prima
+  async function salva(cambia) {
+    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES) };
+    cambia();
+    const txt = testo();
+    try {
+      const fin = await Cassaforte.scrivi(COL, VOCE, txt);
+      // un altro dispositivo aveva salvato nel frattempo: si tiene l'unione
+      if (fin !== txt) { applica(fin); Cassaforte.adottato(COL, VOCE); }
+      avviso("");
+    } catch (e) {
+      TAVOLI = JSON.parse(prima.tav);
+      JSON.parse(prima.loc).forEach((x, i) => Object.assign(VENUES[i], x));
+      throw e;
+    } finally {
+      disegna();
+    }
+  }
+  function msgErrore(e) {
+    if (e && e.code === "permission-denied") return "Firebase non accetta i dati dei locali: controlla che \"locali\" sia nelle regole Firestore.";
+    if (e && e.code === "unavailable") return "Nessuna connessione: non salvato.";
+    return "Non salvato: " + ((e && (e.code || e.message)) || "errore");
+  }
+  function avviso(m) { $("avviso").textContent = m || ""; $("avviso").hidden = !m; }
+
+  async function carica() {
+    $("subtitle").textContent = "Carico i tavoli…";
+    try {
+      const txt = await Cassaforte.leggi(COL, VOCE);
+      if (txt) applica(txt);
+      else {
+        await Cassaforte.scrivi(COL, VOCE, testo());
+      }
+      pronto = true;
+    } catch (e) {
+      avviso(e && e.code === "permission-denied"
+        ? "Firebase non accetta i dati dei locali: controlla che \"locali\" sia nelle regole Firestore."
+        : "Non riesco a leggere i tavoli dal cloud: " + ((e && (e.code || e.message)) || "errore"));
+    }
+    disegna();
+  }
+  let pronto = false;
+
+  // --- disegno
+  function tavoliDelMese(id) {
+    const k = chiaveMese(mese);
+    return TAVOLI.filter((t) => t.data.startsWith(k) && (!id || id === "all" || t.locale === id));
+  }
+  function somma(l, f) { return l.reduce((a, t) => a + f(t), 0); }
+
+  function tile(lab, tag, v, s, forte) {
+    const t = el("div", "tile" + (forte ? " forte" : ""));
+    const h = el("div", "tile-h"); h.appendChild(el("small", "", lab)); h.appendChild(el("span", "", tag)); t.appendChild(h);
+    t.appendChild(el("div", "v mono", v));
+    t.appendChild(el("div", "s", s));
+    return t;
+  }
+
+  function disegnaNav() {
+    const nav = $("nav"), seg = $("seg");
+    nav.innerHTML = ""; seg.innerHTML = "";
+    const voci = [{ id: "all", nome: "Panoramica" }].concat(VENUES);
+    voci.forEach((v) => {
+      const b = el("button", "navbtn" + (v.id !== "all" && v.logo ? " logo" : ""));
+      b.type = "button"; b.dataset.id = v.id;
+      b.setAttribute("aria-label", v.nome);
+      if (v.id === "all") b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>';
+      else if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; b.appendChild(i); }
+      else b.appendChild(el("span", "", sigla(v.nome)));
+      b.appendChild(el("span", "tip", v.nome + (v.esclusa ? " · gestione separata" : "")));
+      b.addEventListener("click", () => vai(v.id));
+      nav.appendChild(b);
+      if (v.id === "all") nav.appendChild(el("div", "nav-sep"));
+
+      const s = el("button", "", v.nome); s.type = "button"; s.dataset.id = v.id;
+      s.addEventListener("click", () => vai(v.id));
+      seg.appendChild(s);
+    });
+  }
+
+  function disegna() {
+    disegnaNav();
+    const isAll = corrente === "all";
+    const v = isAll ? null : trova(corrente);
+    const esclusa = !!(v && v.esclusa);
+    const nomeMese = mese.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+    // intestazione
+    $("title").textContent = isAll ? "I tuoi tavoli" : v.nome;
+    $("subtitle").textContent = isAll ? "Tavoli segnati e percentuali di tutti i locali"
+      : esclusa ? "Gestione separata" : "Percentuale " + percTxt(v.perc) + " su ogni tavolo";
+    const tl = $("title-logo"); tl.hidden = isAll; tl.innerHTML = "";
+    if (v) { if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; tl.appendChild(i); } else tl.textContent = sigla(v.nome); }
+    $("impostazioni").hidden = isAll;
+    $("mese").textContent = nomeMese.charAt(0).toUpperCase() + nomeMese.slice(1);
+    $("mese-box").hidden = esclusa;
+    $("nuovo").hidden = esclusa;
+    $("nuovo").disabled = !pronto;
+    document.querySelectorAll("[data-id]").forEach((b) => b.setAttribute("aria-current", String(b.dataset.id === corrente)));
+
+    // riepilogo
+    const kpi = $("kpi"); kpi.innerHTML = ""; kpi.hidden = esclusa;
+    $("esclusa").hidden = !esclusa;
+    $("elenco").hidden = esclusa;
+    $("schede").hidden = !isAll;
+    if (esclusa) return;
+    const delMese = tavoliDelMese(corrente);
+    const tutti = TAVOLI.filter((t) => isAll || t.locale === corrente);
+    const daIncassare = tutti.filter((t) => !t.pagata);
+    kpi.appendChild(tile("Guadagno del mese", isAll ? "Tutti i locali" : percTxt(v.perc), soldi(somma(delMese, provv)),
+      delMese.length ? "su " + soldi(somma(delMese, (t) => t.cent)) + " di tavoli" : "Nessun tavolo questo mese", true));
+    kpi.appendChild(tile("Tavoli del mese", "Tavoli", String(delMese.length),
+      delMese.length ? ((n) => n + (n === 1 ? " serata" : " serate"))(new Set(delMese.map((t) => t.data + t.locale)).size) : "—"));
+    kpi.appendChild(tile("Da incassare", "Tutti i mesi", soldi(somma(daIncassare, provv)),
+      daIncassare.length ? daIncassare.length + (daIncassare.length === 1 ? " tavolo non ancora pagato" : " tavoli non ancora pagati") : "Tutto incassato"));
+
+    // schede dei locali (Panoramica)
+    if (isAll) {
+      const sc = $("schede"); sc.innerHTML = "";
+      VENUES.forEach((x) => {
+        const c = el("button", "tile locale" + (x.esclusa ? " esclusa" : "")); c.type = "button";
+        const r = el("div", "riga"); r.appendChild(logo(x));
+        const n = el("div"); n.appendChild(el("div", "nome", x.nome)); n.appendChild(el("div", "perc", x.esclusa ? "Gestione separata" : "Percentuale " + percTxt(x.perc)));
+        r.appendChild(n); c.appendChild(r);
+        const l = tavoliDelMese(x.id), dati = el("div", "dati");
+        [[String(l.length), "Tavoli del mese"], [soldi(somma(l, provv)), "Guadagno del mese"]].forEach(([b, s]) => {
+          const d = el("div"); d.appendChild(el("b", "mono", b)); d.appendChild(el("small", "", s)); dati.appendChild(d);
+        });
+        c.appendChild(dati);
+        c.addEventListener("click", () => vai(x.id));
+        sc.appendChild(c);
+      });
+    }
+
+    // serate del mese
+    $("elenco-tit").textContent = "Serate di " + nomeMese;
+    const box = $("serate"); box.innerHTML = "";
+    if (!delMese.length) {
+      box.appendChild(el("div", "vuoto", pronto ? "Nessun tavolo segnato in questo mese. Premi «Aggiungi tavolo» per segnarne uno." : "I tavoli compaiono qui dopo lo sblocco."));
+      return;
+    }
+    const gruppi = new Map();
+    delMese.slice().sort((a, b) => b.data.localeCompare(a.data) || a.locale.localeCompare(b.locale))
+      .forEach((t) => { const k = t.data + "|" + t.locale; if (!gruppi.has(k)) gruppi.set(k, []); gruppi.get(k).push(t); });
+    gruppi.forEach((l, k) => {
+      const [data, id] = k.split("|"), x = trova(id);
+      const s = el("div", "serata");
+      const h = el("div", "serata-h");
+      const g = new Date(data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+      h.appendChild(el("b", "", g.charAt(0).toUpperCase() + g.slice(1) + " · " + x.nome));
+      h.appendChild(el("span", "mono", l.length + (l.length === 1 ? " tavolo · " : " tavoli · ") + soldi(somma(l, provv))));
+      s.appendChild(h);
+      l.forEach((t) => {
+        const r = el("div", "tav");
+        r.appendChild(logo(x));
+        const tt = el("div", "t");
+        tt.appendChild(el("div", "", t.nome || "Tavolo"));
+        tt.appendChild(el("small", "", "Tavolo da " + soldi(t.cent) + " · " + percTxt(t.perc)));
+        r.appendChild(tt);
+        const gg = el("div", "g"); gg.appendChild(el("b", "mono", soldi(provv(t)))); gg.appendChild(el("small", "", "la tua parte")); r.appendChild(gg);
+        const st = el("button", "stato" + (t.pagata ? " pagata" : ""), t.pagata ? "Incassata" : "Da incassare");
+        st.type = "button";
+        st.setAttribute("aria-pressed", String(!!t.pagata));
+        st.setAttribute("aria-label", (t.pagata ? "Incassata" : "Da incassare") + ": cambia lo stato della percentuale di " + (t.nome || "questo tavolo"));
+        st.addEventListener("click", () => {
+          salva(() => { const y = TAVOLI.find((z) => z.id === t.id); if (y) y.pagata = !y.pagata; }).catch((e) => avviso(msgErrore(e)));
+        });
+        r.appendChild(st);
+        const ap = el("button", "apri"); ap.type = "button";
+        ap.setAttribute("aria-label", "Modifica " + (t.nome || "tavolo"));
+        ap.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+        ap.addEventListener("click", () => apriTavolo(t));
+        r.appendChild(ap);
+        s.appendChild(r);
+      });
+      box.appendChild(s);
+    });
+  }
+
+  function vai(id) { corrente = id; disegna(); if (window.Moto) Moto.entra(document.querySelector("main")); }
+
+  // --- mese
+  $("mese-prec").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegna(); });
+  $("mese-succ").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegna(); });
+
+  // --- finestre
+  document.querySelectorAll("[data-chiudi]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+  document.querySelectorAll("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
+
+  // aggiungi o modifica un tavolo
+  let inModifica = null;
+  const fLocale = $("f-locale"), fData = $("f-data"), fImporto = $("f-importo"), fNome = $("f-nome"), fPagata = $("f-pagata");
+  function aggiornaCalcolo() {
+    const cent = leggiEuro(fImporto.value);
+    const perc = inModifica && inModifica.locale === fLocale.value ? inModifica.perc : (trova(fLocale.value) || {}).perc;
+    $("f-calcolo").innerHTML = "";
+    if (cent && perc) {
+      $("f-calcolo").append("La tua parte (" + percTxt(perc) + "): ");
+      $("f-calcolo").appendChild(el("b", "mono", soldi(Math.round(cent * perc / 100))));
+    } else $("f-calcolo").textContent = "Scrivi l'importo: la tua percentuale si calcola da sola.";
+  }
+  function apriTavolo(t) {
+    inModifica = t || null;
+    fLocale.innerHTML = "";
+    contati().forEach((v) => { const o = el("option", "", v.nome + " · " + percTxt(v.perc)); o.value = v.id; fLocale.appendChild(o); });
+    fLocale.value = t ? t.locale : (corrente !== "all" ? corrente : contati()[0].id);
+    const k = chiaveMese(mese);
+    fData.value = t ? t.data : (k === chiaveMese(oggi) ? isoOggi() : k + "-01");
+    fImporto.value = t ? (t.cent / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
+    fNome.value = t ? t.nome || "" : "";
+    fPagata.checked = !!(t && t.pagata);
+    $("tav-tit").textContent = t ? "Modifica tavolo" : "Nuovo tavolo";
+    $("f-elimina").hidden = !t;
+    $("f-err").textContent = "";
+    aggiornaCalcolo();
+    $("dlg-tavolo").showModal();
+    setTimeout(() => (t ? fNome : fImporto).focus(), 30);
+  }
+  $("nuovo").addEventListener("click", () => apriTavolo(null));
+  fImporto.addEventListener("input", aggiornaCalcolo);
+  fLocale.addEventListener("change", aggiornaCalcolo);
+  $("form-tavolo").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cent = leggiEuro(fImporto.value), err = $("f-err");
+    if (!fData.value) { err.textContent = "Scegli la serata."; return; }
+    if (!cent || cent <= 0) { err.textContent = "Scrivi l'importo del tavolo, per esempio 500 o 1.200,50."; return; }
+    const v = trova(fLocale.value);
+    const dati = {
+      locale: v.id, data: fData.value, cent,
+      // la percentuale resta quella del momento in cui il tavolo è stato segnato (cambia solo se si sposta di locale)
+      perc: inModifica && inModifica.locale === v.id ? inModifica.perc : v.perc,
+      nome: fNome.value.trim().replace(/\s+/g, " ").slice(0, 60),
+      pagata: fPagata.checked,
+    };
+    const b = $("f-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
+    try {
+      const id = inModifica ? inModifica.id : nuovoId();
+      await salva(() => {
+        if (inModifica) Object.assign(TAVOLI.find((z) => z.id === id) || {}, dati);
+        else TAVOLI.push({ id, ...dati });
+      });
+      // si mostra il mese della serata appena segnata
+      mese = new Date(+dati.data.slice(0, 4), +dati.data.slice(5, 7) - 1, 1);
+      disegna();
+      $("dlg-tavolo").close();
+    } catch (x) { err.textContent = msgErrore(x); }
+    finally { b.disabled = false; b.textContent = "Salva"; }
+  });
+  $("f-elimina").addEventListener("click", async () => {
+    if (!inModifica || !confirm("Eliminare questo tavolo?")) return;
+    const id = inModifica.id;
+    try { await salva(() => { TAVOLI = TAVOLI.filter((z) => z.id !== id); }); $("dlg-tavolo").close(); }
+    catch (x) { $("f-err").textContent = msgErrore(x); }
+  });
+
+  // nome e percentuale del locale
+  $("impostazioni").addEventListener("click", () => {
+    const v = trova(corrente);
+    $("loc-tit").textContent = v.nome;
+    $("l-nome").value = v.nome;
+    $("l-perc-box").hidden = $("l-nota").hidden = !!v.esclusa;
+    $("l-perc").value = v.esclusa ? "" : String(v.perc).replace(".", ",");
+    $("l-err").textContent = "";
+    $("dlg-locale").showModal();
+    setTimeout(() => $("l-nome").select(), 30);
+  });
+  $("form-locale").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const v = trova(corrente), err = $("l-err");
+    const nome = $("l-nome").value.trim().replace(/\s+/g, " ");
+    const perc = v.esclusa ? null : leggiPerc($("l-perc").value);
+    if (!nome) { err.textContent = "Scrivi un nome."; return; }
+    if (VENUES.some((x) => x.id !== v.id && x.nome.toLowerCase() === nome.toLowerCase())) { err.textContent = "C'è già un locale con questo nome."; return; }
+    if (!v.esclusa && perc == null) { err.textContent = "Scrivi una percentuale tra 1 e 100, per esempio 15."; return; }
+    const b = $("l-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
+    try {
+      await salva(() => { v.nome = nome; if (!v.esclusa) v.perc = perc; });
+      $("dlg-locale").close();
+      $("impostazioni").focus();
+    } catch (x) { err.textContent = msgErrore(x); }
+    finally { b.disabled = false; b.textContent = "Salva"; }
+  });
+
+  $("blocca").addEventListener("click", async () => {
+    await Cassaforte.blocca();
+    (Cassaforte.dashboard() || window).location.reload();
+  });
+
+  // avvio: accesso e sblocco come in dashgio (se è già aperta lì, su questo dispositivo si apre da sola)
+  disegna();
+  window.motoVista = () => document.querySelector("main");
+  Cassaforte.porta({ nome: "i Locali", bilancio: "../bilancio/", torna: "locali/" })
+    .then(carica)
+    .catch((e) => avviso("Cassaforte non disponibile: " + ((e && e.message) || e)));
+</script>
+</body>
+</html>

@@ -291,9 +291,9 @@
         try { sez[d.id] = await apriSez(this.key, d.data(), d.id); } catch (e) { console.warn('backup: sezione illeggibile', d.id); }
       }
       const bk = id => /^bk_/.test(id);
-      return { v: 1, il: new Date().toISOString(), sez, giornale: await this._testiCol('giornale'), palestra: await this._testiCol('palestra'), dashboard: await this._testiCol('dashboard', bk) };
+      return { v: 1, il: new Date().toISOString(), sez, giornale: await this._testiCol('giornale'), palestra: await this._testiCol('palestra'), dashboard: await this._testiCol('dashboard', bk), locali: await this._testiCol('locali') };
     },
-    _vuota(f) { return !Object.keys(f.sez).length && !Object.keys(f.giornale).length && !Object.keys(f.palestra).length && !Object.keys(f.dashboard).length; },
+    _vuota(f) { return !Object.keys(f.sez).length && !Object.keys(f.giornale).length && !Object.keys(f.palestra).length && !Object.keys(f.dashboard).length && !Object.keys(f.locali || {}).length; },
     async _idBackup() {
       const snap = await this.ref().collection('dashboard').get({ source: 'server' });
       return snap.docs.map(d => d.id).filter(id => /^bk_\d{8}(_\d{6})?$/.test(id)).sort().reverse();
@@ -357,7 +357,7 @@
       this.segnala('ripristino', 'backup del ' + (f.il || '').slice(0, 10));
       const rev = Date.now(), up = firebase.firestore.FieldValue.serverTimestamp(), ops = [];
       for (const [k, txt] of Object.entries(f.sez || {})) ops.push(async b => b.set(this.ref().collection('sez').doc(k), { kid: this.meta.salt, ...await chiudiSez(this.key, txt, k), rev, updated: up }));
-      for (const col of ['giornale', 'palestra', 'dashboard'])
+      for (const col of ['giornale', 'palestra', 'dashboard', 'locali'])
         for (const [id, txt] of Object.entries(f[col] || {})) if (!/^bk_/.test(id)) ops.push(b => this.nelBatch(b, col, id, txt, this.key, this.meta.salt, rev));
       for (let i = 0; i < ops.length; i += 100) { const b = this.db.batch(); for (const op of ops.slice(i, i + 100)) await op(b); await b.commit(); }
       this.basi = {};
@@ -366,7 +366,8 @@
       const n = t => { try { const v = JSON.parse(t); return Array.isArray(v) ? v.length : 0; } catch (e) { return 0; } };
       let spese = 0; Object.entries(f.giornale || {}).forEach(([k, t]) => { if (/expenses$/i.test(k)) spese += n(t); });
       let giornate = 0; try { giornate = (JSON.parse(f.dashboard.lavoro).giornate || []).length; } catch (e) {}
-      return { movimenti: n((f.sez || {}).tx), conti: n((f.sez || {}).conti), rate: n((f.sez || {}).rate), speseMezzi: spese, giornate, allenamenti: n((f.palestra || {}).sessioni) };
+      let tavoli = 0; try { tavoli = (JSON.parse(f.locali.locali).tavoli || []).length; } catch (e) {}
+      return { movimenti: n((f.sez || {}).tx), conti: n((f.sez || {}).conti), rate: n((f.sez || {}).rate), speseMezzi: spese, giornate, allenamenti: n((f.palestra || {}).sessioni), tavoli };
     },
 
     /* ---- Registro delle attività (dashboard/registro, cifrato) ----
@@ -538,7 +539,7 @@
       const u = new URL(a.getAttribute('href'), location.href), base = new URL('../', location.href);
       if (u.origin !== location.origin || !u.pathname.startsWith(base.pathname)) return;
       const resto = u.pathname.slice(base.pathname.length);
-      if (!/^(bilancio|giornale|palestra|lavoro)\/|^$/.test(resto)) return;
+      if (!/^(bilancio|giornale|palestra|lavoro|locali)\/|^$/.test(resto)) return;
       e.preventDefault();
       d.dashVai(resto + u.search + u.hash);
     }, true);
