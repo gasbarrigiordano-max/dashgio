@@ -277,8 +277,13 @@
        - nel cloud: dashboard/bk_AAAAMMGG (in parti se grande); si tengono gli ultimi 10 giorni e il primo di ogni mese per un anno;
        - su questo dispositivo (IndexedDB, cifrata con la stessa chiave): le ultime 5.
        Prima di un ripristino si fa una foto dello stato attuale (bk_AAAAMMGG_hhmmss), così anche il ripristino si annulla. */
-    async _testiCol(col, salta) {
-      const snap = await this.ref().collection(col).get({ source: 'server' }), doc = {}, out = {};
+    // mancanti (facoltativo): se le regole Firestore non permettono di leggere questa app (es. regole non ancora
+    // aggiornate dopo l'arrivo di una nuova app), si salta solo lei e si annota, invece di far fallire tutto il backup
+    async _testiCol(col, salta, mancanti) {
+      let snap;
+      try { snap = await this.ref().collection(col).get({ source: 'server' }); }
+      catch (e) { if (!mancanti || e.code !== 'permission-denied') throw e; console.warn('backup: senza', col, '(regole Firestore)'); mancanti.push(col); return {}; }
+      const doc = {}, out = {};
       snap.docs.forEach(d => { doc[d.id] = d.data(); });
       for (const id of Object.keys(doc)) if (!eParte(id) && !(salta && salta(id))) {
         try { out[id] = await this._ricomponi(col, id, await decrypt(this.key, doc[id], col + '/' + id), async pid => doc[pid]); } catch (e) { console.warn('backup: voce illeggibile', col, id); }
@@ -290,8 +295,17 @@
       for (const d of snap.docs) if (/^[a-z]{2,16}$/.test(d.id) && !/rotta$/.test(d.id)) {
         try { sez[d.id] = await apriSez(this.key, d.data(), d.id); } catch (e) { console.warn('backup: sezione illeggibile', d.id); }
       }
-      const bk = id => /^bk_/.test(id);
-      return { v: 1, il: new Date().toISOString(), sez, giornale: await this._testiCol('giornale'), palestra: await this._testiCol('palestra'), dashboard: await this._testiCol('dashboard', bk), locali: await this._testiCol('locali') };
+      const bk = id => /^bk_/.test(id), mancanti = [];
+      // dashboard resta obbligatoria (i backup stessi stanno lì); le altre app, se le regole non le lasciano leggere, si saltano
+      const f = { v: 1, il: new Date().toISOString(), sez, giornale: await this._testiCol('giornale', null, mancanti), palestra: await this._testiCol('palestra', null, mancanti),
+        dashboard: await this._testiCol('dashboard', bk), locali: await this._testiCol('locali', null, mancanti) };
+      this.mancanti = mancanti;
+      if (mancanti.length) {
+        f.mancanti = mancanti;
+        // una volta al giorno nel registro: è da sistemare (regole Firestore da ripubblicare)
+        try { const k = 'dg:bk-parziale', g = new Date().toISOString().slice(0, 10); if (localStorage.getItem(k) !== g) { localStorage.setItem(k, g); this.segnala('backup-parziale', 'senza ' + mancanti.join(', ') + ': ripubblica le regole Firestore'); } } catch (e) {}
+      }
+      return f;
     },
     _vuota(f) { return !Object.keys(f.sez).length && !Object.keys(f.giornale).length && !Object.keys(f.palestra).length && !Object.keys(f.dashboard).length && !Object.keys(f.locali || {}).length; },
     async _idBackup() {
@@ -353,14 +367,18 @@
     // rimette tutto com'era nella foto: prima una foto dello stato attuale; rev nuovo, così gli altri dispositivi se ne accorgono
     async ripristina(f) {
       if (!f || f.v !== 1) throw new Error('backup non valido');
+      this.mancanti = [];
       await this.backupGiornaliero('prima');
-      this.segnala('ripristino', 'backup del ' + (f.il || '').slice(0, 10));
+      // le app che le regole non lasciano leggere non si possono nemmeno riscrivere: si saltano (il resto si ripristina)
+      const saltate = (this.mancanti || []).filter(col => Object.keys(f[col] || {}).length);
+      this.segnala('ripristino', 'backup del ' + (f.il || '').slice(0, 10) + (saltate.length ? ' (senza ' + saltate.join(', ') + ')' : ''));
       const rev = Date.now(), up = firebase.firestore.FieldValue.serverTimestamp(), ops = [];
       for (const [k, txt] of Object.entries(f.sez || {})) ops.push(async b => b.set(this.ref().collection('sez').doc(k), { kid: this.meta.salt, ...await chiudiSez(this.key, txt, k), rev, updated: up }));
-      for (const col of ['giornale', 'palestra', 'dashboard', 'locali'])
+      for (const col of ['giornale', 'palestra', 'dashboard', 'locali']) if (!(this.mancanti || []).includes(col))
         for (const [id, txt] of Object.entries(f[col] || {})) if (!/^bk_/.test(id)) ops.push(b => this.nelBatch(b, col, id, txt, this.key, this.meta.salt, rev));
       for (let i = 0; i < ops.length; i += 100) { const b = this.db.batch(); for (const op of ops.slice(i, i + 100)) await op(b); await b.commit(); }
       this.basi = {};
+      return { saltate };
     },
     conteggi(f) {
       const n = t => { try { const v = JSON.parse(t); return Array.isArray(v) ? v.length : 0; } catch (e) { return 0; } };
@@ -374,7 +392,7 @@
        accessi, sblocchi, passphrase o password sbagliate, nuovo dispositivo, cambio passphrase, ripristini, contenuti bloccati
        dalla CSP… Ogni voce: {id, il, tipo, det, disp (id del dispositivo), dove (browser e sistema)}. Gli eventi prima dello
        sblocco (es. passphrase errata) aspettano sul dispositivo e si scrivono appena la cassaforte è aperta. Ultime 300 voci. */
-    SOSPETTI: ['accesso-fallito', 'passphrase-errata', 'nuovo-dispositivo', 'cambio-passphrase', 'ripristino', 'csp', 'sezione-danneggiata', 'svuotamento'],
+    SOSPETTI: ['accesso-fallito', 'passphrase-errata', 'nuovo-dispositivo', 'cambio-passphrase', 'ripristino', 'csp', 'sezione-danneggiata', 'svuotamento', 'backup-parziale'],
     dispositivo() {
       try { let d = localStorage.getItem('dg:dispositivo'); if (!d) { d = 'd' + Math.random().toString(36).slice(2, 10); localStorage.setItem('dg:dispositivo', d); localStorage.setItem('dg:dispositivoNuovo', '1'); } return d; }
       catch (e) { return 'sconosciuto'; }
@@ -410,7 +428,7 @@
     async daControllare() {
       let visto = ''; try { visto = localStorage.getItem('dg:registroVisto') || ''; } catch (e) {}
       const me = this.dispositivo();
-      return (await this.registro()).filter(e => e.il > visto && this.SOSPETTI.includes(e.tipo) && (e.disp !== me || e.tipo === 'csp'));
+      return (await this.registro()).filter(e => e.il > visto && this.SOSPETTI.includes(e.tipo) && (e.disp !== me || e.tipo === 'csp' || e.tipo === 'backup-parziale'));
     },
     segnaVisto() { try { localStorage.setItem('dg:registroVisto', new Date().toISOString()); } catch (e) {} },
 
