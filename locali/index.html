@@ -108,6 +108,13 @@
   .locale .dati b{display:block;font-size:15px;color:var(--acc-ink)}
   .locale .dati small{font-size:10.5px;color:var(--tile-ink2);font-weight:600}
   .locale.esclusa .dati{display:none}
+  .locale{position:relative;padding:0}
+  .locale .apri-loc{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:18px;cursor:pointer;width:100%;min-height:100%}
+  .locale .apri-loc:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+  .locale:has(.apri-loc:hover){transform:translateY(-3px)}
+  .locale .riga{padding-right:8px}
+  .perc-btn{display:inline-flex;align-items:center;gap:5px;min-height:32px;margin-top:4px;padding:0 10px;border-radius:99px;border:1px solid #f0c9ad;background:#fff4ec;color:var(--acc-ink);font-size:12px;font-weight:800;cursor:pointer}
+  .perc-btn:hover{background:#ffe7d6}
 
   .sez{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
   .sez h2{margin:0;font-size:14px;font-weight:800;padding-left:10px;border-left:3px solid var(--acc)}
@@ -249,7 +256,8 @@
     <div class="campi">
       <label>Locale<select id="f-locale" required></select></label>
       <label>Serata<input id="f-data" type="date" required></label>
-      <label class="tutta">Importo del tavolo (€)<input id="f-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 500" required></label>
+      <label>Importo del tavolo (€)<input id="f-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 500" required></label>
+      <label>Percentuale (%)<input id="f-perc" type="text" inputmode="decimal" autocomplete="off" required></label>
       <label class="tutta">Tavolo o cliente (facoltativo)<input id="f-nome" type="text" maxlength="60" autocomplete="off" placeholder="es. Tavolo 4 · Marco"></label>
       <label class="chk tutta"><input id="f-pagata" type="checkbox"> Percentuale già incassata</label>
       <div class="calcolo" id="f-calcolo" aria-live="polite"></div>
@@ -271,7 +279,7 @@
     <div class="campi">
       <label class="tutta">Nome<input id="l-nome" type="text" maxlength="40" autocomplete="off" required></label>
       <label class="tutta" id="l-perc-box">Percentuale sui tavoli (%)<input id="l-perc" type="text" inputmode="decimal" autocomplete="off" required></label>
-      <p class="tutta" style="margin:0;font-size:12px;color:var(--ink2)" id="l-nota">La nuova percentuale vale per i tavoli che aggiungi da ora: quelli già segnati tengono la loro.</p>
+      <p class="tutta" style="margin:0;font-size:12px;color:var(--ink2)" id="l-nota">La nuova percentuale vale per i tavoli che aggiungi da ora: quelli già segnati tengono la loro (puoi cambiarla tavolo per tavolo dalla matita del tavolo).</p>
     </div>
     <p class="err" id="l-err" role="alert"></p>
     <div class="azioni">
@@ -488,16 +496,32 @@
     if (isAll) {
       const sc = $("schede"); sc.innerHTML = "";
       VENUES.forEach((x) => {
-        const c = el("button", "tile locale" + (x.esclusa ? " esclusa" : "")); c.type = "button";
+        // la scheda: un pulsante apre il locale, il bottone della percentuale (accanto al logo) la cambia
+        const c = el("div", "tile locale" + (x.esclusa ? " esclusa" : ""));
+        const a = el("button", "apri-loc"); a.type = "button";
+        a.setAttribute("aria-label", "Apri " + x.nome);
         const r = el("div", "riga"); r.appendChild(logo(x));
-        const n = el("div"); n.appendChild(el("div", "nome", x.nome)); n.appendChild(el("div", "perc", x.esclusa ? "Gestione separata" : "Percentuale " + percTxt(x.perc)));
-        r.appendChild(n); c.appendChild(r);
+        const n = el("div"); n.appendChild(el("div", "nome", x.nome));
+        if (x.esclusa) n.appendChild(el("div", "perc", "Gestione separata"));
+        r.appendChild(n); a.appendChild(r);
         const l = tavoliDelMese(x.id), dati = el("div", "dati");
         [[String(l.length), "Tavoli del mese"], [soldi(somma(l, provv)), "Guadagno del mese"]].forEach(([b, s]) => {
           const d = el("div"); d.appendChild(el("b", "mono", b)); d.appendChild(el("small", "", s)); dati.appendChild(d);
         });
-        c.appendChild(dati);
-        c.addEventListener("click", () => vai(x.id));
+        a.appendChild(dati);
+        a.addEventListener("click", () => vai(x.id));
+        c.appendChild(a);
+        if (!x.esclusa) {
+          const pb = el("button", "perc-btn"); pb.type = "button";
+          pb.setAttribute("aria-label", "Percentuale di " + x.nome + ": " + percTxt(x.perc) + ". Modifica");
+          pb.append(percTxt(x.perc)); pb.insertAdjacentHTML("beforeend", '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>');
+          pb.addEventListener("click", () => apriLocale(x.id, true));
+          n.appendChild(pb);
+          // il bottone sta dentro la riga del nome ma fuori dal pulsante che apre il locale
+          a.removeChild(r); c.insertBefore(r, a); r.style.padding = "16px 16px 0"; a.style.paddingTop = "10px";
+        } else {
+          a.removeChild(r); a.insertBefore(r, a.firstChild);
+        }
         sc.appendChild(c);
       });
     }
@@ -559,15 +583,20 @@
 
   // aggiungi o modifica un tavolo
   let inModifica = null;
-  const fLocale = $("f-locale"), fData = $("f-data"), fImporto = $("f-importo"), fNome = $("f-nome"), fPagata = $("f-pagata");
+  const fLocale = $("f-locale"), fData = $("f-data"), fImporto = $("f-importo"), fNome = $("f-nome"), fPagata = $("f-pagata"), fPerc = $("f-perc");
+  const percCampo = (p) => String(p).replace(".", ",");
+  // la percentuale proposta: quella del tavolo se lo si modifica nello stesso locale, se no quella del locale
+  function percProposta() {
+    return inModifica && inModifica.locale === fLocale.value ? inModifica.perc : (trova(fLocale.value) || {}).perc;
+  }
   function aggiornaCalcolo() {
     const cent = leggiEuro(fImporto.value);
-    const perc = inModifica && inModifica.locale === fLocale.value ? inModifica.perc : (trova(fLocale.value) || {}).perc;
+    const perc = leggiPerc(fPerc.value);
     $("f-calcolo").innerHTML = "";
     if (cent && perc) {
       $("f-calcolo").append("La tua parte (" + percTxt(perc) + "): ");
       $("f-calcolo").appendChild(el("b", "mono", soldi(Math.round(cent * perc / 100))));
-    } else $("f-calcolo").textContent = "Scrivi l'importo: la tua percentuale si calcola da sola.";
+    } else $("f-calcolo").textContent = perc ? "Scrivi l'importo: la tua parte si calcola da sola." : "Scrivi una percentuale tra 1 e 100.";
   }
   function apriTavolo(t) {
     inModifica = t || null;
@@ -579,6 +608,7 @@
     fImporto.value = t ? (t.cent / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
     fNome.value = t ? t.nome || "" : "";
     fPagata.checked = !!(t && t.pagata);
+    fPerc.value = percCampo(percProposta());
     $("tav-tit").textContent = t ? "Modifica tavolo" : "Nuovo tavolo";
     $("f-elimina").hidden = !t;
     $("f-err").textContent = "";
@@ -588,17 +618,21 @@
   }
   $("nuovo").addEventListener("click", () => apriTavolo(null));
   fImporto.addEventListener("input", aggiornaCalcolo);
-  fLocale.addEventListener("change", aggiornaCalcolo);
+  fPerc.addEventListener("input", aggiornaCalcolo);
+  // cambiando locale si propone la sua percentuale
+  fLocale.addEventListener("change", () => { fPerc.value = percCampo(percProposta()); aggiornaCalcolo(); });
   $("form-tavolo").addEventListener("submit", async (e) => {
     e.preventDefault();
     const cent = leggiEuro(fImporto.value), err = $("f-err");
     if (!fData.value) { err.textContent = "Scegli la serata."; return; }
     if (!cent || cent <= 0) { err.textContent = "Scrivi l'importo del tavolo, per esempio 500 o 1.200,50."; return; }
+    const percTav = leggiPerc(fPerc.value);
+    if (percTav == null) { err.textContent = "Scrivi una percentuale tra 1 e 100, per esempio 15."; return; }
     const v = trova(fLocale.value);
     const dati = {
       locale: v.id, data: fData.value, cent,
-      // la percentuale resta quella del momento in cui il tavolo è stato segnato (cambia solo se si sposta di locale)
-      perc: inModifica && inModifica.locale === v.id ? inModifica.perc : v.perc,
+      // la percentuale di questo tavolo: proposta quella del locale, ma si può cambiare tavolo per tavolo
+      perc: percTav,
       nome: fNome.value.trim().replace(/\s+/g, " ").slice(0, 60),
       pagata: fPagata.checked,
     };
@@ -624,19 +658,22 @@
   });
 
   // nome e percentuale del locale
-  $("impostazioni").addEventListener("click", () => {
-    const v = trova(corrente);
+  let locDlg = null;
+  function apriLocale(id, suPerc) {
+    locDlg = id;
+    const v = trova(id);
     $("loc-tit").textContent = v.nome;
     $("l-nome").value = v.nome;
     $("l-perc-box").hidden = $("l-nota").hidden = !!v.esclusa;
     $("l-perc").value = v.esclusa ? "" : String(v.perc).replace(".", ",");
     $("l-err").textContent = "";
     $("dlg-locale").showModal();
-    setTimeout(() => $("l-nome").select(), 30);
-  });
+    setTimeout(() => (suPerc && !v.esclusa ? $("l-perc") : $("l-nome")).select(), 30);
+  }
+  $("impostazioni").addEventListener("click", () => apriLocale(corrente, false));
   $("form-locale").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const v = trova(corrente), err = $("l-err");
+    const v = trova(locDlg), err = $("l-err");
     const nome = $("l-nome").value.trim().replace(/\s+/g, " ");
     const perc = v.esclusa ? null : leggiPerc($("l-perc").value);
     if (!nome) { err.textContent = "Scrivi un nome."; return; }
@@ -646,7 +683,6 @@
     try {
       await salva(() => { v.nome = nome; if (!v.esclusa) v.perc = perc; });
       $("dlg-locale").close();
-      $("impostazioni").focus();
     } catch (x) { err.textContent = msgErrore(x); }
     finally { b.disabled = false; b.textContent = "Salva"; }
   });
