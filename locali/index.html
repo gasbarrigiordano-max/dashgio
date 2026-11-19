@@ -200,6 +200,11 @@
   .riep .nulla{font-size:12.5px;color:var(--tile-ink2)}
   .spesa .ic{flex:none;width:36px;height:36px;border-radius:10px;background:#f3ece6;color:var(--acc-ink);display:grid;place-items:center;font-size:12px;font-weight:800}
   .stato.dapagare{background:#fff4ec;border-color:#f0c9ad;color:var(--acc-ink)}
+  .sito-zc{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .sito-zc .sz-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)}
+  .sito-zc .sz-h b{color:#fff;font-size:13.5px}
+  .sito-zc .sz-l{display:flex;gap:8px;flex-wrap:wrap}
+  .sito-zc .chip svg{opacity:.8}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -255,6 +260,8 @@
 
     <!-- Zona Calda: organizzazione, le sue spese con i riepiloghi -->
     <section id="org" hidden style="display:flex;flex-direction:column;gap:14px">
+      <!-- l'altro progetto: il sito di Zona Calda (lista, inviti, porta, staff, backstage, regia) -->
+      <div class="sito-zc" id="org-sito"></div>
       <div class="filtri" id="org-per" role="group" aria-label="Periodo dei riepiloghi"></div>
       <section class="tiles" id="org-kpi" aria-label="Riepilogo delle spese"></section>
       <div class="riepiloghi" id="org-riep"></div>
@@ -360,6 +367,12 @@
   const CAT_BASE = ["Location", "DJ e artisti", "Promozione e social", "Grafiche e stampa", "Bevande", "Personale e staff",
     "Sicurezza", "SIAE e permessi", "Service e allestimento", "Trasporti", "Altro"];
   let orgPer = "mese"; // periodo dei riepiloghi: mese, anno, tutto
+  /* Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo sito-zonacalda), con lista d'attesa, inviti,
+     porta, staff, backstage e regia, collegati al Foglio Google. Da qui si aprono le sue pagine; le serate qui sotto
+     sono proposte come evento nelle spese. Nuova serata: aggiungerla qui (la data sul sito resta segreta fino all'annuncio). */
+  const ZC_SITO = "https://zonacaldaclubuse.it/";
+  const ZC_PAGINE = [["regia/", "Regia"], ["porta/", "Porta"], ["staff/", "Staff"], ["backstage/", "Backstage"], ["lista/", "Lista d'attesa"], ["", "Sito"]];
+  const ZC_SERATE = [{ data: "2026-11-28", nome: "Serata 28 novembre" }];
   let corrente = "all";
   const oggi = new Date();
   let mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
@@ -661,7 +674,28 @@
     const m = new Map(); l.forEach((x) => { const k = chiave(x); m.set(k, (m.get(k) || []).concat(x)); });
     return [...m].map(([k, xs]) => [k, somma(xs, (x) => x.cent), xs.length]).sort((a, b) => b[1] - a[1]);
   }
+  function disegnaSito() {
+    const box = $("org-sito"); box.innerHTML = "";
+    const h = el("div", "sz-h"), t = el("div"); t.appendChild(el("b", "", "Sito di Zona Calda"));
+    t.append(" · lista, inviti, porta e regia");
+    h.appendChild(t);
+    const prossima = ZC_SERATE.filter((x) => x.data >= isoOggi()).sort((a, b) => a.data.localeCompare(b.data))[0];
+    if (prossima) {
+      const g = new Date(prossima.data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+      h.appendChild(el("span", "", "Prossima serata: " + g));
+    }
+    box.appendChild(h);
+    const l = el("div", "sz-l");
+    ZC_PAGINE.forEach(([p, nome]) => {
+      const a = el("a", "chip"); a.href = ZC_SITO + p; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.setAttribute("aria-label", nome + " del sito di Zona Calda (si apre in una nuova scheda)");
+      a.append(nome); a.insertAdjacentHTML("beforeend", '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>');
+      l.appendChild(a);
+    });
+    box.appendChild(l);
+  }
   function disegnaOrg(v) {
+    disegnaSito();
     const per = $("org-per"); per.innerHTML = "";
     [["mese", "Mese"], ["anno", "Anno"], ["tutto", "Tutto"]].forEach(([k, t]) => {
       const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-pressed", String(orgPer === k));
@@ -785,7 +819,7 @@
     $("s-nota").value = x ? x.nota : "";
     $("s-pagata").checked = x ? x.pagata : true;
     opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat)));
-    opzioni("l-ev", SPESE.map((z) => z.evento));
+    opzioni("l-ev", ZC_SERATE.map((z) => z.nome).concat(SPESE.map((z) => z.evento)));
     $("sp-tit").textContent = x ? "Modifica spesa" : "Nuova spesa";
     $("s-elimina").hidden = !x;
     $("s-err").textContent = "";
@@ -801,7 +835,7 @@
     const dati = { data: $("s-data").value, cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", evento: pulito("s-ev", 60), nota: pulito("s-nota", 120), pagata: $("s-pagata").checked };
     // la stessa categoria scritta in un altro modo (maiuscole) diventa quella già usata
     const gia = CAT_BASE.concat(SPESE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;
-    const evGia = SPESE.map((z) => z.evento).find((c) => c && c.toLowerCase() === dati.evento.toLowerCase()); if (evGia) dati.evento = evGia;
+    const evGia = ZC_SERATE.map((z) => z.nome).concat(SPESE.map((z) => z.evento)).find((c) => c && c.toLowerCase() === dati.evento.toLowerCase()); if (evGia) dati.evento = evGia;
     const b = $("s-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
     try {
       const id = spesaMod ? spesaMod.id : nuovoId();
