@@ -1279,7 +1279,7 @@ function disegnaImpostazioni(){
     <section class="imp-sez"><h3>Sicurezza</h3><p>Dati cifrati end-to-end (AES-GCM 256, chiave dalla passphrase con PBKDF2 600.000 iterazioni). Su Firebase solo testo cifrato; la passphrase non esce mai dal dispositivo.</p></section>`;
   disegnaGoogle(); disegnaBackup(); disegnaRegistro();
 }
-const NOMI_EVENTO = {'accesso':'Accesso', 'accesso-fallito':'Accesso non riuscito', 'sblocco':'Cassaforte sbloccata', 'passphrase-errata':'Passphrase errata', 'nuovo-dispositivo':'Nuovo dispositivo', 'apertura':'Apertura', 'cambio-passphrase':'Passphrase cambiata', 'ripristino':'Backup ripristinato', 'csp':'Contenuto bloccato (CSP)', 'sezione-danneggiata':'Dati danneggiati trovati', 'svuotamento':'Eliminazione grande confermata', 'registro-svuotato':'Registro svuotato'};
+const NOMI_EVENTO = {'backup-parziale':'Backup incompleto', 'accesso':'Accesso', 'accesso-fallito':'Accesso non riuscito', 'sblocco':'Cassaforte sbloccata', 'passphrase-errata':'Passphrase errata', 'nuovo-dispositivo':'Nuovo dispositivo', 'apertura':'Apertura', 'cambio-passphrase':'Passphrase cambiata', 'ripristino':'Backup ripristinato', 'csp':'Contenuto bloccato (CSP)', 'sezione-danneggiata':'Dati danneggiati trovati', 'svuotamento':'Eliminazione grande confermata', 'registro-svuotato':'Registro svuotato'};
 async function disegnaRegistro(){
   const el = $('reg-imp'); if(!el) return;
   try {
@@ -1325,7 +1325,7 @@ async function ripristinaBackup(id){
   const c = Cassaforte.conteggi(f);
   if(!confirm(`Ripristinare il backup del ${dataBackup(id)}?\n\nContiene: ${c.movimenti} movimenti, ${c.conti} conti, ${c.rate} rate, ${c.speseMezzi} spese dei mezzi, ${c.giornate} giornate di lavoro, ${c.allenamenti} allenamenti, ${c.tavoli || 0} tavoli dei locali.\n\nPrima salvo una copia dello stato attuale, così puoi tornare indietro.`)) return;
   toast('Ripristino…');
-  try { await Cassaforte.ripristina(f); toast('Ripristinato: ricarico'); setTimeout(() => location.reload(), 800); }
+  try { const r = await Cassaforte.ripristina(f) || {}; const s = (r.saltate || []).length; toast(s ? `Ripristinato tranne ${r.saltate.join(', ')} (regole Firestore da ripubblicare): ricarico` : 'Ripristinato: ricarico'); setTimeout(() => location.reload(), s ? 3500 : 800); }
   catch(e){ toast('Ripristino non riuscito: ' + (e.code || e.message)); }
 }
 async function esciTutto(){ if(!confirm('Uscire dall\'account su questo dispositivo?')) return; await Cassaforte.esci(); location.reload(); }
