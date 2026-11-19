@@ -15,14 +15,17 @@
 <title>Locali</title>
 <script src="../comune/fisso.js?v=20261107b"></script>
 <script src="../comune/moto.js"></script>
+<script src="../comune/suggerimenti.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <!--
   Locali: la dashboard da PR. Si segnano i tavoli fatti nelle serate e la propria percentuale si calcola da sola
-  (Room 26 15%, In Space 20% = HYN sul sito Elite, Grotta Aurelia 15%, Sunbay 15%; Zona Calda ha una gestione separata:
-  niente tavoli e niente totali). Dati cifrati nella cassaforte comune (comune/cassaforte.js), voce bilancio/{uid}/locali/locali:
-  {v:2, locali:[{id, nome, perc}], tavoli:[{id, locale, data:'AAAA-MM-GG', cent, perc, nome, pagata}]}
+  (Room 26 15%, In Space 20% = HYN sul sito Elite, Grotta Aurelia 15%, Sunbay 15%). Zona Calda non è un locale ma
+  un'organizzazione: niente tavoli, si segnano le sue spese con i riepiloghi (per categoria, per evento, per mese).
+  Dati cifrati nella cassaforte comune (comune/cassaforte.js), voce bilancio/{uid}/locali/locali:
+  {v:3, locali:[{id, nome, perc}], tavoli:[{id, locale, data:'AAAA-MM-GG', cent, perc, nome, pagata}],
+   spese:[{id, data:'AAAA-MM-GG', cent, desc, cat, evento, nota, pagata}]}
   Ogni tavolo tiene la percentuale del momento in cui è stato segnato. Loghi in locali/loghi/ (Room 26 e HYN dal sito Elite,
   il diavoletto dal sito di Zona Calda).
 -->
@@ -107,7 +110,6 @@
   .locale .dati div{background:#f3ece6;border-radius:12px;padding:8px 4px}
   .locale .dati b{display:block;font-size:15px;color:var(--acc-ink)}
   .locale .dati small{font-size:10.5px;color:var(--tile-ink2);font-weight:600}
-  .locale.esclusa .dati{display:none}
   .locale{position:relative;padding:0}
   .locale .apri-loc{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:18px;cursor:pointer;width:100%;min-height:100%}
   .locale .apri-loc:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
@@ -182,6 +184,22 @@
     .tav .t{flex-basis:calc(100% - 48px)}
     .tav .g{text-align:left;margin-left:48px;flex:1 1 auto}
   }
+  /* Zona Calda (organizzazione): spese e riepiloghi */
+  .filtri{display:flex;gap:6px;flex-wrap:wrap}
+  .filtri button{min-height:36px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;padding:0 14px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .filtri button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc)}
+  .riepiloghi{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .riep{background:var(--tile);color:var(--tile-ink);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .riep h3{margin:0 0 2px;font-size:13px;font-weight:800;color:#3c3631}
+  .riep .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-size:13px}
+  .riep .r span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+  .riep .r b{font-size:13px;color:var(--acc-ink);text-align:right}
+  .riep .r small{color:var(--tile-ink2);font-size:11px;font-weight:600;margin-left:6px}
+  .riep .r i{grid-column:1/-1;height:6px;border-radius:99px;background:#f0e4da;overflow:hidden;display:block}
+  .riep .r i em{display:block;height:100%;background:var(--acc);border-radius:99px}
+  .riep .nulla{font-size:12.5px;color:var(--tile-ink2)}
+  .spesa .ic{flex:none;width:36px;height:36px;border-radius:10px;background:#f3ece6;color:var(--acc-ink);display:grid;place-items:center;font-size:12px;font-weight:800}
+  .stato.dapagare{background:#fff4ec;border-color:#f0c9ad;color:var(--acc-ink)}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -225,7 +243,7 @@
       </div>
       <button class="pill" type="button" id="nuovo">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        Aggiungi tavolo
+        <span id="nuovo-t">Aggiungi tavolo</span>
       </button>
     </div>
 
@@ -235,8 +253,13 @@
 
     <section id="schede" class="tiles" aria-label="Locali"></section>
 
-    <section id="esclusa" hidden>
-      <div class="vuoto">Zona Calda ha una gestione separata: i suoi tavoli non si segnano qui e non entrano nei totali.</div>
+    <!-- Zona Calda: organizzazione, le sue spese con i riepiloghi -->
+    <section id="org" hidden style="display:flex;flex-direction:column;gap:14px">
+      <div class="filtri" id="org-per" role="group" aria-label="Periodo dei riepiloghi"></div>
+      <section class="tiles" id="org-kpi" aria-label="Riepilogo delle spese"></section>
+      <div class="riepiloghi" id="org-riep"></div>
+      <div class="sez"><h2 id="org-tit">Spese</h2></div>
+      <div class="serate" id="org-lista"></div>
     </section>
 
     <section id="elenco" style="display:flex;flex-direction:column;gap:12px">
@@ -272,6 +295,30 @@
   </form>
 </dialog>
 
+<!-- aggiungi o modifica una spesa di Zona Calda -->
+<dialog id="dlg-spesa" aria-labelledby="sp-tit">
+  <form class="box glass" id="form-spesa" method="dialog" novalidate>
+    <div class="box-h"><h2 id="sp-tit">Nuova spesa</h2><button class="tondo" type="button" data-chiudi aria-label="Chiudi">✕</button></div>
+    <div class="campi">
+      <label>Data<input id="s-data" type="date" required></label>
+      <label>Importo (€)<input id="s-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 250" required></label>
+      <label class="tutta">Descrizione<input id="s-desc" type="text" maxlength="80" autocomplete="off" placeholder="es. DJ della serata"></label>
+      <label>Categoria<input id="s-cat" type="text" list="l-cat" maxlength="40" autocomplete="off" placeholder="es. DJ e artisti"></label>
+      <label>Evento (facoltativo)<input id="s-ev" type="text" list="l-ev" maxlength="60" autocomplete="off" placeholder="es. Halloween"></label>
+      <label class="tutta">Nota (facoltativa)<input id="s-nota" type="text" maxlength="120" autocomplete="off"></label>
+      <label class="chk tutta"><input id="s-pagata" type="checkbox"> Già pagata</label>
+    </div>
+    <datalist id="l-cat"></datalist><datalist id="l-ev"></datalist>
+    <p class="err" id="s-err" role="alert"></p>
+    <div class="azioni">
+      <button class="sec rosso" type="button" id="s-elimina" hidden>Elimina</button>
+      <span class="spazio"></span>
+      <button class="sec" type="button" data-chiudi>Annulla</button>
+      <button class="pill" type="submit" id="s-salva">Salva</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- nome e percentuale del locale -->
 <dialog id="dlg-locale" aria-labelledby="loc-tit">
   <form class="box glass" id="form-locale" method="dialog" novalidate>
@@ -296,17 +343,23 @@
      Dati nella cassaforte comune: bilancio/{uid}/locali/locali, cifrato nel browser:
      {"v":2,
       "locali":[{"id","nome","perc"}],
-      "tavoli":[{"id","locale","data":"AAAA-MM-GG","cent":importo in centesimi,"perc":% al momento del tavolo,"nome","pagata"}]}
-     Zona Calda ha una gestione separata: niente tavoli e niente totali. */
+      "tavoli":[{"id","locale","data":"AAAA-MM-GG","cent":importo in centesimi,"perc":% al momento del tavolo,"nome","pagata"}],
+      "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","evento","nota","pagata"}]}
+     Zona Calda è un'organizzazione, non un locale: niente tavoli, si segnano le sue spese (riepiloghi per categoria,
+     evento e mese). Le spese non entrano nei totali dei tavoli. */
   const COL = "locali", VOCE = "locali";
   const VENUES = [
     { id: "room26", nome: "Room 26", perc: 15, logo: "loghi/room26.png" },
     { id: "inspace", nome: "In Space", perc: 20, logo: "loghi/inspace.png" },
-    { id: "zonacalda", nome: "Zona Calda", perc: null, logo: "loghi/zonacalda.svg", esclusa: true },
+    { id: "zonacalda", nome: "Zona Calda", perc: null, logo: "loghi/zonacalda.svg", esclusa: true, org: true },
     { id: "grottaaurelia", nome: "Grotta Aurelia", perc: 15, logo: null },
     { id: "sunbay", nome: "Sunbay", perc: 15, logo: null },
   ];
-  let TAVOLI = [];
+  let TAVOLI = [], SPESE = [];
+  // categorie proposte per le spese di Zona Calda (se ne possono scrivere di nuove)
+  const CAT_BASE = ["Location", "DJ e artisti", "Promozione e social", "Grafiche e stampa", "Bevande", "Personale e staff",
+    "Sicurezza", "SIAE e permessi", "Service e allestimento", "Trasporti", "Altro"];
+  let orgPer = "mese"; // periodo dei riepiloghi: mese, anno, tutto
   let corrente = "all";
   const oggi = new Date();
   let mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
@@ -370,15 +423,18 @@
     });
     TAVOLI = (d.tavoli || []).filter((t) => t && t.id && trova(t.locale) && !trova(t.locale).esclusa
       && /^\d{4}-\d{2}-\d{2}$/.test(t.data) && Number.isInteger(t.cent) && t.cent > 0 && typeof t.perc === "number");
+    SPESE = (d.spese || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data) && Number.isInteger(x.cent) && x.cent > 0)
+      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), evento: String(x.evento || ""), nota: String(x.nota || ""), pagata: !!x.pagata }));
   }
   const testo = () => JSON.stringify({
-    v: 2,
+    v: 3,
     locali: VENUES.map(({ id, nome, perc }) => ({ id, nome, perc })),
     tavoli: TAVOLI,
+    spese: SPESE,
   });
   // salva; se non va, si torna allo stato di prima
   async function salva(cambia) {
-    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES) };
+    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES), sp: JSON.stringify(SPESE) };
     cambia();
     const txt = testo();
     try {
@@ -387,7 +443,7 @@
       if (fin !== txt) { applica(fin); Cassaforte.adottato(COL, VOCE); }
       avviso("");
     } catch (e) {
-      TAVOLI = JSON.parse(prima.tav);
+      TAVOLI = JSON.parse(prima.tav); SPESE = JSON.parse(prima.sp);
       JSON.parse(prima.loc).forEach((x, i) => Object.assign(VENUES[i], x));
       throw e;
     } finally {
@@ -445,7 +501,7 @@
       if (v.id === "all") b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>';
       else if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; b.appendChild(i); }
       else b.appendChild(el("span", "", sigla(v.nome)));
-      b.appendChild(el("span", "tip", v.nome + (v.esclusa ? " · gestione separata" : "")));
+      b.appendChild(el("span", "tip", v.nome + (v.org ? " · organizzazione" : "")));
       b.addEventListener("click", () => vai(v.id));
       nav.appendChild(b);
       if (v.id === "all") nav.appendChild(el("div", "nav-sep"));
@@ -466,22 +522,22 @@
     // intestazione
     $("title").textContent = isAll ? "I tuoi tavoli" : v.nome;
     $("subtitle").textContent = isAll ? "Tavoli segnati e percentuali di tutti i locali"
-      : esclusa ? "Gestione separata" : "Percentuale " + percTxt(v.perc) + " su ogni tavolo";
+      : esclusa ? "Organizzazione · le spese e i loro riepiloghi" : "Percentuale " + percTxt(v.perc) + " su ogni tavolo";
     const tl = $("title-logo"); tl.hidden = isAll; tl.innerHTML = "";
     if (v) { if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; tl.appendChild(i); } else tl.textContent = sigla(v.nome); }
     $("impostazioni").hidden = isAll;
-    $("mese").textContent = nomeMese.charAt(0).toUpperCase() + nomeMese.slice(1);
-    $("mese-box").hidden = esclusa;
-    $("nuovo").hidden = esclusa;
+    $("mese").textContent = esclusa && orgPer === "anno" ? String(mese.getFullYear()) : nomeMese.charAt(0).toUpperCase() + nomeMese.slice(1);
+    $("mese-box").hidden = esclusa && orgPer === "tutto";
+    $("nuovo-t").textContent = esclusa ? "Aggiungi spesa" : "Aggiungi tavolo";
     $("nuovo").disabled = !pronto;
     document.querySelectorAll("[data-id]").forEach((b) => b.setAttribute("aria-current", String(b.dataset.id === corrente)));
 
     // riepilogo
     const kpi = $("kpi"); kpi.innerHTML = ""; kpi.hidden = esclusa;
-    $("esclusa").hidden = !esclusa;
+    $("org").hidden = !esclusa;
     $("elenco").hidden = esclusa;
     $("schede").hidden = !isAll;
-    if (esclusa) return;
+    if (esclusa) return disegnaOrg(v);
     const delMese = tavoliDelMese(corrente);
     const tutti = TAVOLI.filter((t) => isAll || t.locale === corrente);
     const daIncassare = tutti.filter((t) => !t.pagata);
@@ -502,10 +558,12 @@
         a.setAttribute("aria-label", "Apri " + x.nome);
         const r = el("div", "riga"); r.appendChild(logo(x));
         const n = el("div"); n.appendChild(el("div", "nome", x.nome));
-        if (x.esclusa) n.appendChild(el("div", "perc", "Gestione separata"));
+        if (x.esclusa) n.appendChild(el("div", "perc", "Organizzazione · spese"));
         r.appendChild(n); a.appendChild(r);
         const l = tavoliDelMese(x.id), dati = el("div", "dati");
-        [[String(l.length), "Tavoli del mese"], [soldi(somma(l, provv)), "Guadagno del mese"]].forEach(([b, s]) => {
+        const sm = SPESE.filter((z) => z.data.startsWith(chiaveMese(mese)));
+        (x.org ? [[soldi(somma(sm, (z) => z.cent)), "Spese del mese"], [soldi(somma(SPESE.filter((z) => !z.pagata), (z) => z.cent)), "Da pagare"]]
+          : [[String(l.length), "Tavoli del mese"], [soldi(somma(l, provv)), "Guadagno del mese"]]).forEach(([b, s]) => {
           const d = el("div"); d.appendChild(el("b", "mono", b)); d.appendChild(el("small", "", s)); dati.appendChild(d);
         });
         a.appendChild(dati);
@@ -571,11 +629,106 @@
     });
   }
 
+  // --- Zona Calda: spese e riepiloghi
+  const MESI_C = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+  function spesePeriodo() {
+    if (orgPer === "tutto") return SPESE.slice();
+    const k = orgPer === "anno" ? String(mese.getFullYear()) : chiaveMese(mese);
+    return SPESE.filter((x) => x.data.startsWith(k));
+  }
+  function nomePeriodo() {
+    if (orgPer === "tutto") return "tutte le date";
+    if (orgPer === "anno") return "il " + mese.getFullYear();
+    return mese.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  }
+  // un riquadro di riepilogo: righe con nome, importo, percentuale sul totale e barra
+  function riepilogo(titolo, righe, tot, vuoto) {
+    const b = el("div", "riep"); b.appendChild(el("h3", "", titolo));
+    if (!righe.length) { b.appendChild(el("div", "nulla", vuoto)); return b; }
+    const mx = Math.max(...righe.map((r) => r[1]));
+    righe.forEach(([nome, cent, extra]) => {
+      const r = el("div", "r"), sp = el("span", "", nome);
+      if (extra) sp.appendChild(el("small", "", extra));
+      r.appendChild(sp);
+      const bb = el("b", "mono", soldi(cent)); r.appendChild(bb);
+      const barra = el("i"), em = el("em"); em.style.width = Math.max(2, Math.round(cent / (mx || 1) * 100)) + "%"; barra.appendChild(em); r.appendChild(barra);
+      r.title = nome + ": " + soldi(cent) + (tot ? " · " + Math.round(cent / tot * 100) + "% del totale" : "");
+      b.appendChild(r);
+    });
+    return b;
+  }
+  function raggruppa(l, chiave) {
+    const m = new Map(); l.forEach((x) => { const k = chiave(x); m.set(k, (m.get(k) || []).concat(x)); });
+    return [...m].map(([k, xs]) => [k, somma(xs, (x) => x.cent), xs.length]).sort((a, b) => b[1] - a[1]);
+  }
+  function disegnaOrg(v) {
+    const per = $("org-per"); per.innerHTML = "";
+    [["mese", "Mese"], ["anno", "Anno"], ["tutto", "Tutto"]].forEach(([k, t]) => {
+      const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-pressed", String(orgPer === k));
+      b.addEventListener("click", () => { orgPer = k; disegna(); }); per.appendChild(b);
+    });
+    const l = spesePeriodo(), tot = somma(l, (x) => x.cent), dap = SPESE.filter((x) => !x.pagata), np = nomePeriodo();
+    const kpi = $("org-kpi"); kpi.innerHTML = "";
+    const eventi = new Set(l.map((x) => x.evento).filter(Boolean));
+    kpi.appendChild(tile("Spese · " + np, v.nome, soldi(tot), l.length ? l.length + (l.length === 1 ? " spesa" : " spese") + (eventi.size ? " · " + eventi.size + (eventi.size === 1 ? " evento" : " eventi") : "") : "Nessuna spesa in questo periodo", true));
+    kpi.appendChild(tile("Da pagare", "Tutte le date", soldi(somma(dap, (x) => x.cent)), dap.length ? dap.length + (dap.length === 1 ? " spesa ancora da pagare" : " spese ancora da pagare") : "Tutto pagato"));
+    kpi.appendChild(tile("Già pagate", np.charAt(0).toUpperCase() + np.slice(1), soldi(somma(l.filter((x) => x.pagata), (x) => x.cent)), l.length ? Math.round(somma(l.filter((x) => x.pagata), (x) => x.cent) / (tot || 1) * 100) + "% del periodo" : "—"));
+    // riepiloghi: per categoria, per evento, per mese (anno o tutto)
+    const rb = $("org-riep"); rb.innerHTML = "";
+    const pct = (c) => tot ? Math.round(c / tot * 100) + "%" : "";
+    rb.appendChild(riepilogo("Per categoria", raggruppa(l, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, pct(c) + " · " + n]), tot, "Nessuna spesa da riepilogare."));
+    const conEv = l.filter((x) => x.evento);
+    const ev = raggruppa(conEv, (x) => x.evento).map(([k, c, n]) => [k, c, n + (n === 1 ? " spesa" : " spese")]);
+    if (conEv.length && conEv.length < l.length) { const n = l.length - conEv.length; ev.push(["Senza evento", tot - somma(conEv, (x) => x.cent), n + (n === 1 ? " spesa" : " spese")]); }
+    rb.appendChild(riepilogo("Per evento", ev, tot, "Nessun evento indicato: scrivilo nella spesa per vedere quanto costa ogni serata."));
+    if (orgPer !== "mese") {
+      const mesi = raggruppa(l, (x) => x.data.slice(0, 7)).sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([k, c, n]) => [MESI_C[+k.slice(5) - 1] + " " + k.slice(0, 4), c, n + (n === 1 ? " spesa" : " spese")]);
+      rb.appendChild(riepilogo("Per mese", mesi, tot, "Nessuna spesa."));
+    } else {
+      rb.appendChild(riepilogo("Stato", [["Da pagare", somma(l.filter((x) => !x.pagata), (x) => x.cent), pct(somma(l.filter((x) => !x.pagata), (x) => x.cent))], ["Pagate", somma(l.filter((x) => x.pagata), (x) => x.cent), pct(somma(l.filter((x) => x.pagata), (x) => x.cent))]].filter((r) => r[1]), tot, "Nessuna spesa."));
+    }
+    // elenco delle spese, per giorno
+    $("org-tit").textContent = "Spese · " + np;
+    const box = $("org-lista"); box.innerHTML = "";
+    if (!l.length) { box.appendChild(el("div", "vuoto", pronto ? "Nessuna spesa in questo periodo. Premi «Aggiungi spesa» per segnarne una." : "Le spese compaiono qui dopo lo sblocco.")); return; }
+    const gg = new Map();
+    l.sort((a, b) => b.data.localeCompare(a.data)).forEach((x) => gg.set(x.data, (gg.get(x.data) || []).concat(x)));
+    gg.forEach((xs, data) => {
+      const s = el("div", "serata"), h = el("div", "serata-h");
+      const g = new Date(data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: orgPer === "tutto" ? "numeric" : undefined });
+      h.appendChild(el("b", "", g.charAt(0).toUpperCase() + g.slice(1)));
+      h.appendChild(el("span", "mono", soldi(somma(xs, (x) => x.cent))));
+      s.appendChild(h);
+      xs.forEach((x) => {
+        const r = el("div", "tav spesa");
+        r.appendChild(el("span", "ic", sigla(x.cat || "Altro")));
+        const tt = el("div", "t");
+        tt.appendChild(el("div", "", x.desc || x.cat || "Spesa"));
+        tt.appendChild(el("small", "", [x.cat, x.evento, x.nota].filter(Boolean).join(" · ")));
+        r.appendChild(tt);
+        const gb = el("div", "g"); gb.appendChild(el("b", "mono", soldi(x.cent))); r.appendChild(gb);
+        const st = el("button", "stato " + (x.pagata ? "pagata" : "dapagare"), x.pagata ? "Pagata" : "Da pagare"); st.type = "button";
+        st.setAttribute("aria-pressed", String(x.pagata));
+        st.setAttribute("aria-label", (x.pagata ? "Pagata" : "Da pagare") + ": cambia lo stato di " + (x.desc || "questa spesa"));
+        st.addEventListener("click", () => salva(() => { const y = SPESE.find((z) => z.id === x.id); if (y) y.pagata = !y.pagata; }).catch((e) => avviso(msgErrore(e))));
+        r.appendChild(st);
+        const ap = el("button", "apri"); ap.type = "button"; ap.setAttribute("aria-label", "Modifica " + (x.desc || "spesa"));
+        ap.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+        ap.addEventListener("click", () => apriSpesa(x));
+        r.appendChild(ap);
+        s.appendChild(r);
+      });
+      box.appendChild(s);
+    });
+  }
+
   function vai(id) { corrente = id; disegna(); if (window.Moto) Moto.entra(document.querySelector("main")); }
 
   // --- mese
-  $("mese-prec").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegna(); });
-  $("mese-succ").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegna(); });
+  const passo = () => (trova(corrente) || {}).org && orgPer === "anno" ? 12 : 1; // per Zona Calda in "Anno" le frecce spostano l'anno
+  $("mese-prec").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() - passo(), 1); disegna(); });
+  $("mese-succ").addEventListener("click", () => { mese = new Date(mese.getFullYear(), mese.getMonth() + passo(), 1); disegna(); });
 
   // --- finestre
   document.querySelectorAll("[data-chiudi]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
@@ -616,7 +769,58 @@
     $("dlg-tavolo").showModal();
     setTimeout(() => (t ? fNome : fImporto).focus(), 30);
   }
-  $("nuovo").addEventListener("click", () => apriTavolo(null));
+  $("nuovo").addEventListener("click", () => ((trova(corrente) || {}).org ? apriSpesa(null) : apriTavolo(null)));
+
+  // aggiungi o modifica una spesa di Zona Calda
+  let spesaMod = null;
+  function opzioni(id, valori) { const d = $(id); d.innerHTML = ""; [...new Set(valori.filter(Boolean))].sort((a, b) => a.localeCompare(b)).forEach((v) => { const o = el("option"); o.value = v; d.appendChild(o); }); }
+  function apriSpesa(x) {
+    spesaMod = x || null;
+    const k = orgPer === "mese" ? chiaveMese(mese) : chiaveMese(oggi);
+    $("s-data").value = x ? x.data : (k === chiaveMese(oggi) ? isoOggi() : k + "-01");
+    $("s-importo").value = x ? (x.cent / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
+    $("s-desc").value = x ? x.desc : "";
+    $("s-cat").value = x ? x.cat : "";
+    $("s-ev").value = x ? x.evento : "";
+    $("s-nota").value = x ? x.nota : "";
+    $("s-pagata").checked = x ? x.pagata : true;
+    opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat)));
+    opzioni("l-ev", SPESE.map((z) => z.evento));
+    $("sp-tit").textContent = x ? "Modifica spesa" : "Nuova spesa";
+    $("s-elimina").hidden = !x;
+    $("s-err").textContent = "";
+    $("dlg-spesa").showModal();
+    setTimeout(() => $(x ? "s-desc" : "s-importo").focus(), 30);
+  }
+  $("form-spesa").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cent = leggiEuro($("s-importo").value), err = $("s-err");
+    if (!$("s-data").value) { err.textContent = "Scegli la data."; return; }
+    if (!cent || cent <= 0) { err.textContent = "Scrivi l'importo, per esempio 250 o 1.200,50."; return; }
+    const pulito = (id, n) => $(id).value.trim().replace(/\s+/g, " ").slice(0, n);
+    const dati = { data: $("s-data").value, cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", evento: pulito("s-ev", 60), nota: pulito("s-nota", 120), pagata: $("s-pagata").checked };
+    // la stessa categoria scritta in un altro modo (maiuscole) diventa quella già usata
+    const gia = CAT_BASE.concat(SPESE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;
+    const evGia = SPESE.map((z) => z.evento).find((c) => c && c.toLowerCase() === dati.evento.toLowerCase()); if (evGia) dati.evento = evGia;
+    const b = $("s-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
+    try {
+      const id = spesaMod ? spesaMod.id : nuovoId();
+      await salva(() => {
+        if (spesaMod) Object.assign(SPESE.find((z) => z.id === id) || {}, dati);
+        else SPESE.push({ id, ...dati });
+      });
+      if (orgPer === "mese") mese = new Date(+dati.data.slice(0, 4), +dati.data.slice(5, 7) - 1, 1);
+      disegna();
+      $("dlg-spesa").close();
+    } catch (x) { err.textContent = msgErrore(x); }
+    finally { b.disabled = false; b.textContent = "Salva"; }
+  });
+  $("s-elimina").addEventListener("click", async () => {
+    if (!spesaMod || !confirm("Eliminare questa spesa?")) return;
+    const id = spesaMod.id;
+    try { await salva(() => { SPESE = SPESE.filter((z) => z.id !== id); }); $("dlg-spesa").close(); }
+    catch (x) { $("s-err").textContent = msgErrore(x); }
+  });
   fImporto.addEventListener("input", aggiornaCalcolo);
   fPerc.addEventListener("input", aggiornaCalcolo);
   // cambiando locale si propone la sua percentuale
