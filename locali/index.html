@@ -171,13 +171,15 @@
   /* barra in basso (telefono) */
   .seg{max-width:100%;margin:0;border-radius:99px;padding:5px;display:none;gap:4px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,.22);border:1px solid var(--line)}
   .seg::-webkit-scrollbar{display:none}
-  .seg button{background:transparent;border:0;cursor:pointer;color:var(--ink2);font-weight:600;font-size:12.5px;padding:10px 14px;border-radius:99px;white-space:nowrap;flex:0 0 auto}
+  .seg button{background:transparent;border:0;cursor:pointer;color:var(--ink2);font-weight:800;font-size:13px;width:52px;height:46px;padding:0;border-radius:99px;flex:0 0 auto;display:grid;place-items:center}
+  .seg button img{width:32px;height:32px;object-fit:contain;display:block}
+  .seg button[aria-current="true"]:has(img){background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 2px var(--acc)}
   .seg button[aria-current="true"]{background:var(--acc);color:#fff}
 
   @media (max-width:700px){
     .wrap{padding:calc(12px + var(--sat)) 12px 12px;gap:12px}
     nav{display:none}
-    .seg{display:flex;margin:-4px -4px 0}
+    .seg{display:flex;justify-content:space-between;margin:-4px -4px 0}
     main{padding:18px;border-radius:22px}
     .campi{grid-template-columns:1fr}
     .tav{flex-wrap:wrap}
@@ -600,7 +602,11 @@
       nav.appendChild(b);
       if (v.id === "all") nav.appendChild(el("div", "nav-sep"));
 
-      const s = el("button", "", v.nome); s.type = "button"; s.dataset.id = v.id;
+      // telefono: solo il logo (Panoramica con la sua icona, i locali senza logo con la sigla); il nome resta per chi non vede
+      const s = el("button"); s.type = "button"; s.dataset.id = v.id; s.setAttribute("aria-label", v.nome); s.title = v.nome;
+      if (v.id === "all") s.innerHTML = b.querySelector("svg").outerHTML;
+      else if (v.logo) { const i = el("img"); i.src = v.logo; i.alt = ""; s.appendChild(i); }
+      else s.appendChild(el("span", "sg", sigla(v.nome)));
       s.addEventListener("click", () => vai(v.id));
       seg.appendChild(s);
     });
