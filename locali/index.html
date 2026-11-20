@@ -169,7 +169,7 @@
   .chip:hover{background:rgba(255,255,255,.14);color:#fff}
 
   /* barra in basso (telefono) */
-  .seg{width:fit-content;max-width:calc(100% - 24px);margin:0 auto calc(20px + var(--sab));border-radius:99px;padding:5px;display:none;gap:4px;overflow-x:auto;scrollbar-width:none}
+  .seg{max-width:100%;margin:0;border-radius:99px;padding:5px;display:none;gap:4px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,.22);border:1px solid var(--line)}
   .seg::-webkit-scrollbar{display:none}
   .seg button{background:transparent;border:0;cursor:pointer;color:var(--ink2);font-weight:600;font-size:12.5px;padding:10px 14px;border-radius:99px;white-space:nowrap;flex:0 0 auto}
   .seg button[aria-current="true"]{background:var(--acc);color:#fff}
@@ -177,7 +177,7 @@
   @media (max-width:700px){
     .wrap{padding:calc(12px + var(--sat)) 12px 12px;gap:12px}
     nav{display:none}
-    .seg{display:flex;position:sticky;bottom:calc(10px + var(--sab));margin-bottom:calc(10px + var(--sab))}
+    .seg{display:flex;margin:-4px -4px 0}
     main{padding:18px;border-radius:22px}
     .campi{grid-template-columns:1fr}
     .tav{flex-wrap:wrap}
@@ -236,6 +236,8 @@
   </nav>
 
   <main class="glass">
+    <!-- telefono: i locali in alto, sopra il titolo (sul computer c'è la barra a sinistra) -->
+    <div class="seg" id="seg" role="navigation" aria-label="Locali"></div>
     <div class="head">
       <div style="flex:1 1 260px;min-width:0">
         <div class="titolo">
@@ -289,7 +291,6 @@
 
 </div>
 
-<div class="seg glass" id="seg" role="navigation" aria-label="Locali"></div>
 
 <!-- aggiungi o modifica un tavolo -->
 <dialog id="dlg-tavolo" aria-labelledby="tav-tit">
