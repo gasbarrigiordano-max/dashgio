@@ -16,10 +16,11 @@ L'utente l'ha chiesto espressamente: non deve aprire né unire nulla a mano.
 Vedi README.md. `locali/` è la dashboard da PR (prima nel repo dashboard-locali, ora integrata qui):
 tavoli per serata e percentuale calcolata da sola, dati in `bilancio/{uid}/locali/locali`.
 Percentuali: Room 26 15%, In Space 20% (HYN sul sito Elite), Grotta Aurelia 15%, Sunbay 15%. Zona Calda non è un
-locale ma un'organizzazione: niente tavoli, si segnano le sue spese (`spese` nella stessa voce: data, importo, descrizione,
-categoria, evento, nota, pagata) con i riepiloghi per categoria, evento e mese (periodo Mese / Anno / Tutto).
+locale ma un'organizzazione: niente tavoli e tutto diviso per serata. `serate` (id, nome, data) e `spese` (data, importo,
+descrizione, categoria, serata = id o "" per le spese generali, nota, pagata) nella stessa voce; riepiloghi per serata
+(Tutte le serate: confronto tra serate e categorie; una serata: totale, da pagare, per categoria, elenco).
 Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo `sito-zonacalda`: lista, inviti, porta, staff,
-backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine; le serate sono in `ZC_SERATE`
-(locali/index.html) e vengono proposte come evento nelle spese: a ogni nuova serata va aggiunta lì. Loghi in `locali/loghi/`; Grotta Aurelia e Sunbay ancora da avere.
+backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine. Le serate si creano dall'app ("+ Serata");
+`ZC_SERATE` (locali/index.html) ha quelle di partenza (28 novembre). Loghi in `locali/loghi/` con i colori originali (non adattati come sul sito Elite); Sunbay ancora da avere.
 Le percentuali si cambiano: per locale (bottone della percentuale sulle schede della Panoramica, o matita del locale;
 vale per i tavoli nuovi) e tavolo per tavolo (campo Percentuale nel modulo del tavolo).

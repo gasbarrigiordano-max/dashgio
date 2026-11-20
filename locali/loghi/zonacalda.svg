@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="104 99 260 260" width="520" height="520" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="146 122 176 182" width="352" height="364" fill="none" stroke-linecap="round" stroke-linejoin="round">
 <defs><filter id="b0" filterUnits="userSpaceOnUse" x="104" y="99" width="260" height="260"><feGaussianBlur stdDeviation="20"/></filter><filter id="b1" filterUnits="userSpaceOnUse" x="104" y="99" width="260" height="260"><feGaussianBlur stdDeviation="9"/></filter><filter id="b2" filterUnits="userSpaceOnUse" x="104" y="99" width="260" height="260"><feGaussianBlur stdDeviation="3.7"/></filter><filter id="b3" filterUnits="userSpaceOnUse" x="104" y="99" width="260" height="260"><feGaussianBlur stdDeviation="1.5"/></filter><filter id="b4" filterUnits="userSpaceOnUse" x="104" y="99" width="260" height="260"><feGaussianBlur stdDeviation="0.6"/></filter></defs>
-<rect id="sfondo" x="104" y="99" width="260" height="260" fill="#070405" stroke="none"/>
+
 <g stroke="#ff0f19" stroke-width="5.75" filter="url(#b0)" opacity="0.5">
 <path d="M220 197C225 197 242 193 251 195C259 197 267 201 271 208C275 215 274 225 275 235C276 244 278 255 276 264C275 272 271 278 265 283C260 288 252 293 243 295C235 297 222 300 214 297C206 295 202 287 196 280C190 273 179 264 177 255C174 246 179 236 181 228C184 220 185 211 191 205C197 199 209 194 218 192C227 191 242 197 247 198"/>
 <path d="M207 200C204 199 194 201 190 194C186 188 184 161 185 158C186 156 193 173 198 179C204 185 214 191 217 194"/>
