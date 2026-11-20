@@ -205,6 +205,10 @@
   .sera-card .sc-h b{font-size:15px;font-weight:800} .sera-card .sc-h span{font-size:16px;font-weight:700;color:var(--acc-ink)}
   .sera-card small{font-size:12px;color:var(--tile-ink2)}
   .sera-card .prossima{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:800;color:#fff;background:var(--acc);border-radius:99px;padding:2px 8px;vertical-align:2px}
+  .avviso-fisse{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-radius:16px;padding:12px 14px;background:rgba(242,113,28,.14);border:1px solid rgba(242,113,28,.35);font-size:13px;color:var(--ink2)}
+  .avviso-fisse b{color:#fff}
+  .gruppo-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:4px}
+  .gruppo-h h3{margin:0;font-size:13px;font-weight:800;color:#fff} .gruppo-h span{font-size:13px;font-weight:700;color:var(--acc-soft)}
   .stato.dapagare{background:#fff4ec;border-color:#f0c9ad;color:var(--acc-ink)}
   .sito-zc{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
   .sito-zc .sz-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)}
@@ -271,6 +275,7 @@
       <div class="filtri" id="org-per" role="group" aria-label="Serata"></div>
       <div class="sez" id="org-sera-h" hidden><h2 id="org-sera-tit"></h2><button class="sec" type="button" id="org-sera-mod">Modifica serata</button></div>
       <section class="tiles" id="org-kpi" aria-label="Riepilogo delle spese"></section>
+      <div class="avviso-fisse" id="org-fisse-manca" hidden></div>
       <div class="riepiloghi" id="org-riep"></div>
       <div class="sez"><h2 id="org-tit">Spese</h2></div>
       <div class="serate" id="org-lista"></div>
@@ -318,7 +323,8 @@
       <label>Importo (€)<input id="s-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 250" required></label>
       <label class="tutta">Descrizione<input id="s-desc" type="text" maxlength="80" autocomplete="off" placeholder="es. DJ della serata"></label>
       <label>Categoria<input id="s-cat" type="text" list="l-cat" maxlength="40" autocomplete="off" placeholder="es. DJ e artisti"></label>
-      <label class="tutta">Serata<select id="s-serata"></select></label>
+      <label>Serata<select id="s-serata"></select></label>
+      <label>Tipo<select id="s-tipo"><option value="variabile">Variabile</option><option value="fissa">Fissa</option></select></label>
       <label class="tutta">Nota (facoltativa)<input id="s-nota" type="text" maxlength="120" autocomplete="off"></label>
       <label class="chk tutta"><input id="s-pagata" type="checkbox"> Già pagata</label>
     </div>
@@ -333,6 +339,27 @@
   </form>
 </dialog>
 
+<!-- spesa fissa di Zona Calda (uguale per ogni serata) -->
+<dialog id="dlg-fissa" aria-labelledby="fi-tit">
+  <form class="box glass" id="form-fissa" method="dialog" novalidate>
+    <div class="box-h"><h2 id="fi-tit">Nuova spesa fissa</h2><button class="tondo" type="button" data-chiudi aria-label="Chiudi">✕</button></div>
+    <div class="campi">
+      <label class="tutta">Descrizione<input id="fi-desc" type="text" maxlength="80" autocomplete="off" placeholder="es. Affitto"></label>
+      <label>Categoria<input id="fi-cat" type="text" list="l-cat" maxlength="40" autocomplete="off" placeholder="es. Location"></label>
+      <label>Importo per serata (€)<input id="fi-importo" type="text" inputmode="decimal" autocomplete="off" placeholder="es. 1.500"></label>
+      <label class="tutta">Nota (facoltativa)<input id="fi-nota" type="text" maxlength="120" autocomplete="off"></label>
+      <p class="tutta" style="margin:0;font-size:12px;color:var(--ink2)">Le spese fisse entrano da sole in ogni serata nuova. In una serata puoi cambiare l'importo solo per quella sera.</p>
+    </div>
+    <p class="err" id="fi-err" role="alert"></p>
+    <div class="azioni">
+      <button class="sec rosso" type="button" id="fi-elimina" hidden>Elimina</button>
+      <span class="spazio"></span>
+      <button class="sec" type="button" data-chiudi>Annulla</button>
+      <button class="pill" type="submit" id="fi-salva">Salva</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- serata di Zona Calda -->
 <dialog id="dlg-serata" aria-labelledby="se-tit">
   <form class="box glass" id="form-serata" method="dialog" novalidate>
@@ -340,6 +367,7 @@
     <div class="campi">
       <label class="tutta">Nome<input id="se-nome" type="text" maxlength="60" autocomplete="off" placeholder="es. Serata 28 novembre"></label>
       <label class="tutta">Data della serata<input id="se-data" type="date" required></label>
+      <label class="chk tutta" id="se-fisse-box"><input id="se-fisse" type="checkbox" checked> <span id="se-fisse-t">Aggiungi le spese fisse</span></label>
     </div>
     <p class="err" id="se-err" role="alert"></p>
     <div class="azioni">
@@ -377,7 +405,9 @@
       "locali":[{"id","nome","perc"}],
       "tavoli":[{"id","locale","data":"AAAA-MM-GG","cent":importo in centesimi,"perc":% al momento del tavolo,"nome","pagata"}],
       "serate":[{"id","nome","data":"AAAA-MM-GG"}],
-      "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","serata":id della serata o "" (spese generali),"nota","pagata"}]}
+      "fisse":[{"id","desc","cat","cent","nota"}]  (spese fisse: il modello uguale per ogni serata),
+      "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","serata":id della serata o "" (spese generali),"nota","pagata",
+                "tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
      Zona Calda è un'organizzazione, non un locale: niente tavoli; tutto è diviso per serata (ogni spesa ha la sua serata,
      o va nelle spese generali), con i riepiloghi per serata e per categoria. Le spese non entrano nei totali dei tavoli. */
   const COL = "locali", VOCE = "locali";
@@ -388,10 +418,10 @@
     { id: "grottaaurelia", nome: "Grotta Aurelia", perc: 15, logo: "loghi/grottaaurelia.png" },
     { id: "sunbay", nome: "Sunbay", perc: 15, logo: null },
   ];
-  let TAVOLI = [], SPESE = [], SERATE = [];
+  let TAVOLI = [], SPESE = [], SERATE = [], FISSE = []; // FISSE: le spese fisse, uguali per ogni serata (modello)
   // categorie proposte per le spese di Zona Calda (se ne possono scrivere di nuove)
-  const CAT_BASE = ["Location", "DJ e artisti", "Promozione e social", "Grafiche e stampa", "Bevande", "Personale e staff",
-    "Sicurezza", "SIAE e permessi", "Service e allestimento", "Trasporti", "Altro"];
+  const CAT_BASE = ["Affitto", "Luci", "Service e allestimento", "Bar", "DJ e artisti", "SIAE e permessi", "Sicurezza", "Promozione e social",
+    "Grafiche e stampa", "Personale e staff", "Trasporti", "Altro"];
   let zcSel = "tutte"; // Zona Calda: "tutte" le serate, l'id di una serata, oppure "generali" (spese senza serata)
   /* Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo sito-zonacalda), con lista d'attesa, inviti,
      porta, staff, backstage e regia, collegati al Foglio Google. Da qui si aprono le sue pagine. Le serate si creano
@@ -464,7 +494,10 @@
       && /^\d{4}-\d{2}-\d{2}$/.test(t.data) && Number.isInteger(t.cent) && t.cent > 0 && typeof t.perc === "number");
     SERATE = (d.serate || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data)).map((x) => ({ id: x.id, nome: String(x.nome || "Serata").slice(0, 60), data: x.data }));
     SPESE = (d.spese || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data) && Number.isInteger(x.cent) && x.cent > 0)
-      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata, evento: x.evento ? String(x.evento) : "" }));
+      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata,
+        tipo: x.tipo === "fissa" ? "fissa" : "variabile", fissa: x.tipo === "fissa" && x.fissa ? String(x.fissa) : "", evento: x.evento ? String(x.evento) : "" }));
+    FISSE = (d.fisse || []).filter((x) => x && x.id && Number.isInteger(x.cent) && x.cent > 0)
+      .map((x) => ({ id: x.id, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), cent: x.cent, nota: String(x.nota || "") }));
     sistemaSerate();
   }
   // le serate di partenza; le spese salvate prima con un "evento" scritto a mano passano alla serata con quel nome
@@ -488,11 +521,12 @@
     locali: VENUES.map(({ id, nome, perc }) => ({ id, nome, perc })),
     tavoli: TAVOLI,
     serate: SERATE,
+    fisse: FISSE,
     spese: SPESE,
   });
   // salva; se non va, si torna allo stato di prima
   async function salva(cambia) {
-    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES), sp: JSON.stringify(SPESE), se: JSON.stringify(SERATE) };
+    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES), sp: JSON.stringify(SPESE), se: JSON.stringify(SERATE), fi: JSON.stringify(FISSE) };
     cambia();
     const txt = testo();
     try {
@@ -501,7 +535,7 @@
       if (fin !== txt) { applica(fin); Cassaforte.adottato(COL, VOCE); }
       avviso("");
     } catch (e) {
-      TAVOLI = JSON.parse(prima.tav); SPESE = JSON.parse(prima.sp); SERATE = JSON.parse(prima.se);
+      TAVOLI = JSON.parse(prima.tav); SPESE = JSON.parse(prima.sp); SERATE = JSON.parse(prima.se); FISSE = JSON.parse(prima.fi);
       JSON.parse(prima.loc).forEach((x, i) => Object.assign(VENUES[i], x));
       throw e;
     } finally {
@@ -696,6 +730,11 @@
     return fut[0] || ordinate()[0] || null;
   }
   const speseDi = (id) => SPESE.filter((x) => (id === "generali" ? !x.serata : x.serata === id));
+  const fisseDi = (l) => l.filter((x) => x.tipo === "fissa"), variabiliDi = (l) => l.filter((x) => x.tipo !== "fissa");
+  const centDi = (l) => somma(l, (x) => x.cent);
+  // le spese fisse del modello che in una serata non ci sono ancora
+  const fisseMancanti = (id) => FISSE.filter((f) => !SPESE.some((x) => x.serata === id && x.fissa === f.id));
+  const daFissa = (f, se) => ({ id: nuovoId(), data: se.data, cent: f.cent, desc: f.desc, cat: f.cat, serata: se.id, nota: f.nota, pagata: false, tipo: "fissa", fissa: f.id });
   // un riquadro di riepilogo: righe con nome, importo, nota e barra
   function riepilogo(titolo, righe, tot, vuoto) {
     const b = el("div", "riep"); b.appendChild(el("h3", "", titolo));
@@ -742,7 +781,7 @@
     r.appendChild(el("span", "ic", sigla(x.cat || "Altro")));
     const tt = el("div", "t");
     tt.appendChild(el("div", "", x.desc || x.cat || "Spesa"));
-    tt.appendChild(el("small", "", [x.cat, x.nota].filter(Boolean).join(" · ")));
+    tt.appendChild(el("small", "", [x.cat, new Date(x.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }), x.nota].filter(Boolean).join(" · ")));
     r.appendChild(tt);
     const gb = el("div", "g"); gb.appendChild(el("b", "mono", soldi(x.cent))); r.appendChild(gb);
     const st = el("button", "stato " + (x.pagata ? "pagata" : "dapagare"), x.pagata ? "Pagata" : "Da pagare"); st.type = "button";
@@ -758,12 +797,15 @@
   }
   function disegnaOrg(v) {
     disegnaSito();
-    if (zcSel !== "tutte" && zcSel !== "generali" && !SERATE.some((x) => x.id === zcSel)) zcSel = "tutte";
+    if (!["tutte", "generali", "fisse"].includes(zcSel) && !SERATE.some((x) => x.id === zcSel)) zcSel = "tutte";
+    $("nuovo-t").textContent = zcSel === "fisse" ? "Aggiungi spesa fissa" : "Aggiungi spesa";
+    $("org-fisse-manca").hidden = true;
     if (zcSel === "generali" && !speseDi("generali").length) zcSel = "tutte";
     // scelta della serata
     const per = $("org-per"); per.innerHTML = "";
     const scelta = (k, t) => { const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-pressed", String(zcSel === k)); b.addEventListener("click", () => { zcSel = k; disegna(); }); per.appendChild(b); };
     scelta("tutte", "Tutte le serate");
+    scelta("fisse", "Spese fisse");
     ordinate().forEach((x) => scelta(x.id, x.nome));
     if (speseDi("generali").length) scelta("generali", "Spese generali");
     const piu = el("button", "", "+ Serata"); piu.type = "button"; piu.addEventListener("click", () => apriSerata(null)); per.appendChild(piu);
@@ -778,9 +820,11 @@
       kpi.appendChild(tile("Da pagare", "Tutte le serate", soldi(somma(dap(SPESE), (x) => x.cent)), dap(SPESE).length ? nSpese(dap(SPESE).length) + " ancora da pagare" : "Tutto pagato"));
       if (sr) kpi.appendChild(tile(sr.data >= isoOggi() ? "Prossima serata" : "Ultima serata", sr.nome, soldi(somma(speseDi(sr.id), (x) => x.cent)), dataLunga(sr.data) + " · " + nSpese(speseDi(sr.id).length)));
       // confronto tra le serate e categorie di tutte le serate
-      const righe = ordinate().map((x) => { const l = speseDi(x.id); return [x.nome, somma(l, (y) => y.cent), nSpese(l.length)]; });
+      const righe = ordinate().map((x) => { const l = speseDi(x.id); return [x.nome, somma(l, (y) => y.cent), "fisse " + soldi(centDi(fisseDi(l))) + " · variabili " + soldi(centDi(variabiliDi(l)))]; });
       if (speseDi("generali").length) righe.push(["Spese generali", somma(speseDi("generali"), (x) => x.cent), nSpese(speseDi("generali").length)]);
       rb.appendChild(riepilogo("Per serata", righe.filter((r) => r[1]), tot, "Nessuna spesa ancora."));
+      const sv = SPESE.filter((x) => x.serata);
+      rb.appendChild(riepilogo("Fisse e variabili · tutte le serate", [["Spese fisse", centDi(fisseDi(sv)), nSpese(fisseDi(sv).length)], ["Spese variabili", centDi(variabiliDi(sv)), nSpese(variabiliDi(sv).length)]].filter((r) => r[1]), centDi(sv), "Nessuna spesa nelle serate."));
       rb.appendChild(riepilogo("Per categoria · tutte le serate", raggruppa(SPESE, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, (tot ? Math.round(c / tot * 100) + "% · " : "") + n]), tot, "Nessuna spesa ancora."));
       $("org-tit").textContent = "Le serate";
       if (!SERATE.length) box.appendChild(el("div", "vuoto", "Nessuna serata. Premi «+ Serata» per crearne una."));
@@ -790,34 +834,70 @@
         const h = el("div", "sc-h"), n = el("b", "", x.nome);
         if (x === sr && x.data >= isoOggi()) n.appendChild(el("span", "prossima", "prossima"));
         h.appendChild(n); h.appendChild(el("span", "mono", soldi(somma(l, (y) => y.cent)))); c.appendChild(h);
-        c.appendChild(el("small", "", dataLunga(x.data) + " · " + nSpese(l.length) + (dap(l).length ? " · da pagare " + soldi(somma(dap(l), (y) => y.cent)) : l.length ? " · tutto pagato" : "")));
+        c.appendChild(el("small", "", dataLunga(x.data) + " · fisse " + soldi(centDi(fisseDi(l))) + " · variabili " + soldi(centDi(variabiliDi(l))) + (dap(l).length ? " · da pagare " + soldi(somma(dap(l), (y) => y.cent)) : l.length ? " · tutto pagato" : "")));
         c.addEventListener("click", () => { zcSel = x.id; disegna(); });
         box.appendChild(c);
       });
       return;
     }
+    if (zcSel === "fisse") {
+      $("org-sera-h").hidden = false; $("org-sera-mod").hidden = true;
+      $("org-sera-tit").textContent = "Spese fisse · uguali per ogni serata";
+      const tot = centDi(FISSE);
+      kpi.appendChild(tile("Spese fisse per serata", v.nome, soldi(tot), FISSE.length ? FISSE.length + (FISSE.length === 1 ? " voce" : " voci") + " · entrano da sole in ogni serata nuova" : "Nessuna spesa fissa ancora", true));
+      const conTutte = SERATE.filter((x) => !fisseMancanti(x.id).length).length;
+      if (SERATE.length && FISSE.length) kpi.appendChild(tile("Serate", "Con le spese fisse", conTutte + " su " + SERATE.length, conTutte < SERATE.length ? "In quelle che mancano: apri la serata e premi «Aggiungi»" : "Tutte le serate le hanno"));
+      rb.appendChild(riepilogo("Per categoria", raggruppa(FISSE, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, (tot ? Math.round(c / tot * 100) + "% · " : "") + n]), tot, "Aggiungi le spese che già sai di avere a ogni serata: affitto, luci, service…"));
+      $("org-tit").textContent = "Le spese fisse";
+      if (!FISSE.length) { box.appendChild(el("div", "vuoto", "Nessuna spesa fissa. Premi «Aggiungi spesa fissa» per le spese che già sai di avere a ogni serata (per esempio affitto, luci, service). Bar, DJ, SIAE e sicurezza le segni come spese variabili dentro la serata.")); return; }
+      const s = el("div", "serata");
+      FISSE.slice().sort((a, b) => b.cent - a.cent).forEach((f) => {
+        const r = el("div", "tav spesa");
+        r.appendChild(el("span", "ic", sigla(f.cat || "Altro")));
+        const tt = el("div", "t"); tt.appendChild(el("div", "", f.desc || f.cat)); tt.appendChild(el("small", "", [f.cat, f.nota].filter(Boolean).join(" · "))); r.appendChild(tt);
+        const gb = el("div", "g"); gb.appendChild(el("b", "mono", soldi(f.cent))); gb.appendChild(el("small", "", "a serata")); r.appendChild(gb);
+        const ap = el("button", "apri"); ap.type = "button"; ap.setAttribute("aria-label", "Modifica " + (f.desc || "spesa fissa"));
+        ap.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+        ap.addEventListener("click", () => apriFissa(f)); r.appendChild(ap);
+        s.appendChild(r);
+      });
+      box.appendChild(s);
+      return;
+    }
     // una serata (o le spese generali)
     const se = SERATE.find((x) => x.id === zcSel), l = speseDi(zcSel), tot = somma(l, (x) => x.cent);
+    // spese fisse che in questa serata mancano: si aggiungono con un tocco
+    const manca = se ? fisseMancanti(se.id) : [];
+    if (manca.length) {
+      const av = $("org-fisse-manca"); av.hidden = false; av.innerHTML = "";
+      const t = el("span"); t.appendChild(el("b", "", manca.length + (manca.length === 1 ? " spesa fissa manca" : " spese fisse mancano")));
+      t.append(" in questa serata (" + soldi(centDi(manca)) + ")"); av.appendChild(t);
+      const bt = el("button", "pill", "Aggiungile"); bt.type = "button";
+      bt.addEventListener("click", () => salva(() => { manca.forEach((f) => SPESE.push(daFissa(f, se))); }).catch((e) => avviso(msgErrore(e))));
+      av.appendChild(bt);
+    }
     $("org-sera-h").hidden = false;
     $("org-sera-tit").textContent = se ? se.nome + " · " + dataLunga(se.data) : "Spese generali · non legate a una serata";
     $("org-sera-mod").hidden = !se;
-    kpi.appendChild(tile(se ? "Spese della serata" : "Spese generali", se ? se.nome : v.nome, soldi(tot), l.length ? nSpese(l.length) : "Nessuna spesa: premi «Aggiungi spesa»", true));
+    kpi.appendChild(tile(se ? "Spese della serata" : "Spese generali", se ? se.nome : v.nome, soldi(tot), l.length ? (se ? "fisse " + soldi(centDi(fisseDi(l))) + " · variabili " + soldi(centDi(variabiliDi(l))) : nSpese(l.length)) : "Nessuna spesa: premi «Aggiungi spesa»", true));
+    if (se) {
+      kpi.appendChild(tile("Spese fisse", "Questa serata", soldi(centDi(fisseDi(l))), nSpese(fisseDi(l).length)));
+      kpi.appendChild(tile("Spese variabili", "Questa serata", soldi(centDi(variabiliDi(l))), nSpese(variabiliDi(l).length)));
+    }
     kpi.appendChild(tile("Da pagare", se ? "Questa serata" : "Generali", soldi(somma(dap(l), (x) => x.cent)), dap(l).length ? nSpese(dap(l).length) + " ancora da pagare" : "Tutto pagato"));
     kpi.appendChild(tile("Già pagate", se ? "Questa serata" : "Generali", soldi(somma(l.filter((x) => x.pagata), (x) => x.cent)), l.length ? Math.round(somma(l.filter((x) => x.pagata), (x) => x.cent) / (tot || 1) * 100) + "% della serata" : "—"));
     const pct = (c) => tot ? Math.round(c / tot * 100) + "%" : "";
+    if (se) rb.appendChild(riepilogo("Fisse e variabili", [["Spese fisse", centDi(fisseDi(l)), pct(centDi(fisseDi(l)))], ["Spese variabili", centDi(variabiliDi(l)), pct(centDi(variabiliDi(l)))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Per categoria", raggruppa(l, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, pct(c) + " · " + n]), tot, "Nessuna spesa da riepilogare."));
     rb.appendChild(riepilogo("Stato", [["Da pagare", somma(dap(l), (x) => x.cent), pct(somma(dap(l), (x) => x.cent))], ["Pagate", somma(l.filter((x) => x.pagata), (x) => x.cent), pct(somma(l.filter((x) => x.pagata), (x) => x.cent))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     $("org-tit").textContent = se ? "Spese della serata" : "Spese generali";
     if (!l.length) { box.appendChild(el("div", "vuoto", pronto ? "Nessuna spesa per questa serata. Premi «Aggiungi spesa» per segnarne una." : "Le spese compaiono qui dopo lo sblocco.")); return; }
-    const gg = new Map();
-    l.sort((a, b) => b.data.localeCompare(a.data)).forEach((x) => gg.set(x.data, (gg.get(x.data) || []).concat(x)));
-    gg.forEach((xs, data) => {
-      const s = el("div", "serata"), h = el("div", "serata-h");
-      const g = new Date(data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-      h.appendChild(el("b", "", g.charAt(0).toUpperCase() + g.slice(1)));
-      h.appendChild(el("span", "mono", soldi(somma(xs, (x) => x.cent))));
-      s.appendChild(h);
-      xs.forEach((x) => s.appendChild(rigaSpesa(x)));
+    // le spese della serata in due blocchi: fisse e variabili (dentro, per data)
+    [["Spese fisse", fisseDi(l)], ["Spese variabili", variabiliDi(l)]].forEach(([titolo, xs]) => {
+      if (!xs.length) return;
+      const h = el("div", "gruppo-h"); h.appendChild(el("h3", "", titolo + " · " + xs.length)); h.appendChild(el("span", "mono", soldi(centDi(xs)))); box.appendChild(h);
+      const s = el("div", "serata");
+      xs.sort((a, b) => b.data.localeCompare(a.data) || b.cent - a.cent).forEach((x) => s.appendChild(rigaSpesa(x)));
       box.appendChild(s);
     });
   }
@@ -867,7 +947,7 @@
     $("dlg-tavolo").showModal();
     setTimeout(() => (t ? fNome : fImporto).focus(), 30);
   }
-  $("nuovo").addEventListener("click", () => ((trova(corrente) || {}).org ? apriSpesa(null) : apriTavolo(null)));
+  $("nuovo").addEventListener("click", () => ((trova(corrente) || {}).org ? (zcSel === "fisse" ? apriFissa(null) : apriSpesa(null)) : apriTavolo(null)));
 
   // aggiungi o modifica una spesa di Zona Calda
   let spesaMod = null;
@@ -888,6 +968,7 @@
     $("s-cat").value = x ? x.cat : "";
     $("s-nota").value = x ? x.nota : "";
     $("s-pagata").checked = x ? x.pagata : true;
+    $("s-tipo").value = x ? x.tipo : "variabile";
     opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat)));
     $("sp-tit").textContent = x ? "Modifica spesa" : "Nuova spesa";
     $("s-elimina").hidden = !x;
@@ -901,7 +982,8 @@
     if (!$("s-data").value) { err.textContent = "Scegli la data della spesa."; return; }
     if (!cent || cent <= 0) { err.textContent = "Scrivi l'importo, per esempio 250 o 1.200,50."; return; }
     const pulito = (id, n) => $(id).value.trim().replace(/\s+/g, " ").slice(0, n);
-    const dati = { data: $("s-data").value, cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", serata: $("s-serata").value, nota: pulito("s-nota", 120), pagata: $("s-pagata").checked };
+    const dati = { data: $("s-data").value, cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", serata: $("s-serata").value, nota: pulito("s-nota", 120), pagata: $("s-pagata").checked, tipo: $("s-tipo").value };
+    if (dati.tipo !== "fissa") dati.fissa = ""; // diventata variabile: non è più legata alla spesa fissa
     // la stessa categoria scritta in un altro modo (maiuscole) diventa quella già usata
     const gia = CAT_BASE.concat(SPESE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;
     const b = $("s-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
@@ -909,7 +991,7 @@
       const id = spesaMod ? spesaMod.id : nuovoId();
       await salva(() => {
         if (spesaMod) Object.assign(SPESE.find((z) => z.id === id) || {}, dati);
-        else SPESE.push({ id, ...dati });
+        else SPESE.push({ id, fissa: "", ...dati });
       });
       zcSel = dati.serata || "generali"; // si mostra la serata della spesa appena salvata
       disegna();
@@ -923,6 +1005,47 @@
     try { await salva(() => { SPESE = SPESE.filter((z) => z.id !== id); }); $("dlg-spesa").close(); }
     catch (x) { $("s-err").textContent = msgErrore(x); }
   });
+  let fissaMod = null;
+  function apriFissa(x) {
+    fissaMod = x || null;
+    $("fi-desc").value = x ? x.desc : ""; $("fi-cat").value = x ? x.cat : "";
+    $("fi-importo").value = x ? (x.cent / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
+    $("fi-nota").value = x ? x.nota : "";
+    opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat), FISSE.map((z) => z.cat)));
+    $("fi-tit").textContent = x ? "Modifica spesa fissa" : "Nuova spesa fissa";
+    $("fi-elimina").hidden = !x; $("fi-err").textContent = "";
+    $("dlg-fissa").showModal();
+    setTimeout(() => $("fi-desc").focus(), 30);
+  }
+  $("form-fissa").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cent = leggiEuro($("fi-importo").value), err = $("fi-err");
+    const pulito = (id, n) => $(id).value.trim().replace(/\s+/g, " ").slice(0, n);
+    const dati = { desc: pulito("fi-desc", 80), cat: pulito("fi-cat", 40) || "Altro", cent, nota: pulito("fi-nota", 120) };
+    if (!dati.desc) { err.textContent = "Scrivi di che spesa si tratta."; return; }
+    if (!cent || cent <= 0) { err.textContent = "Scrivi l'importo per serata, per esempio 1.500."; return; }
+    const gia = CAT_BASE.concat(SPESE.map((z) => z.cat), FISSE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;
+    // cambiata: si aggiorna anche nelle serate da fare dove non è ancora pagata
+    const daAgg = fissaMod ? SPESE.filter((x) => x.fissa === fissaMod.id && !x.pagata && (SERATE.find((z) => z.id === x.serata) || {}).data >= isoOggi()) : [];
+    const aggiorna = daAgg.length && ["desc", "cat", "cent", "nota"].some((k) => fissaMod[k] !== dati[k])
+      && confirm("Aggiornarla anche nelle serate da fare dove non è ancora pagata (" + daAgg.length + ")?");
+    const b = $("fi-salva"); b.disabled = true; b.textContent = "Salvo…"; err.textContent = "";
+    try {
+      await salva(() => {
+        if (fissaMod) Object.assign(FISSE.find((z) => z.id === fissaMod.id) || {}, dati);
+        else FISSE.push({ id: "f" + nuovoId(), ...dati });
+        if (aggiorna) { const ids = new Set(daAgg.map((x) => x.id)); SPESE.forEach((x) => { if (ids.has(x.id)) Object.assign(x, dati); }); }
+      });
+      $("dlg-fissa").close();
+    } catch (x) { err.textContent = msgErrore(x); }
+    finally { b.disabled = false; b.textContent = "Salva"; }
+  });
+  $("fi-elimina").addEventListener("click", async () => {
+    if (!fissaMod || !confirm("Eliminare la spesa fissa «" + (fissaMod.desc || "") + "»?\n\nNelle serate già create resta (la puoi togliere da lì); nelle serate nuove non entra più.")) return;
+    const id = fissaMod.id;
+    try { await salva(() => { FISSE = FISSE.filter((z) => z.id !== id); }); $("dlg-fissa").close(); }
+    catch (x) { $("fi-err").textContent = msgErrore(x); }
+  });
   let serataMod = null;
   function apriSerata(x) {
     serataMod = x || null;
@@ -931,6 +1054,8 @@
     $("se-tit").textContent = x ? "Modifica serata" : "Nuova serata";
     $("se-elimina").hidden = !x;
     $("se-err").textContent = "";
+    $("se-fisse-box").hidden = !!x || !FISSE.length; $("se-fisse").checked = true;
+    $("se-fisse-t").textContent = "Aggiungi le spese fisse (" + FISSE.length + (FISSE.length === 1 ? " voce · " : " voci · ") + soldi(centDi(FISSE)) + ")";
     $("dlg-serata").showModal();
     setTimeout(() => $(x ? "se-nome" : "se-data").focus(), 30);
   }
@@ -946,8 +1071,15 @@
     try {
       const id = serataMod ? serataMod.id : "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       await salva(() => {
-        if (serataMod) Object.assign(SERATE.find((x) => x.id === id) || {}, { nome, data });
-        else SERATE.push({ id, nome, data });
+        if (serataMod) {
+          const vecchia = serataMod.data;
+          Object.assign(SERATE.find((x) => x.id === id) || {}, { nome, data });
+          // le spese fisse seguono la nuova data della serata
+          if (vecchia !== data) SPESE.forEach((x) => { if (x.serata === id && x.tipo === "fissa" && x.data === vecchia) x.data = data; });
+        } else {
+          SERATE.push({ id, nome, data });
+          if ($("se-fisse").checked) FISSE.forEach((f) => SPESE.push(daFissa(f, { id, data })));
+        }
       });
       zcSel = id; disegna();
       $("dlg-serata").close();

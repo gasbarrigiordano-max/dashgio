@@ -19,6 +19,9 @@ Percentuali: Room 26 15%, In Space 20% (HYN sul sito Elite), Grotta Aurelia 15%,
 locale ma un'organizzazione: niente tavoli e tutto diviso per serata. `serate` (id, nome, data) e `spese` (data, importo,
 descrizione, categoria, serata = id o "" per le spese generali, nota, pagata) nella stessa voce; riepiloghi per serata
 (Tutte le serate: confronto tra serate e categorie; una serata: totale, da pagare, per categoria, elenco).
+Spese fisse (`fisse`: desc, cat, importo, nota) = modello uguale per ogni serata (affitto, luci, service…): entrano da sole
+nelle serate nuove (e con "Aggiungile" in quelle già create) come spese con `tipo:"fissa"` e `fissa` = id del modello; le altre
+(bar, DJ, SIAE, sicurezza…) sono `tipo:"variabile"`, inserite serata per serata. Riepiloghi fisse/variabili per serata e in totale.
 Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo `sito-zonacalda`: lista, inviti, porta, staff,
 backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine. Le serate si creano dall'app ("+ Serata");
 `ZC_SERATE` (locali/index.html) ha quelle di partenza (28 novembre). Loghi in `locali/loghi/` con i colori originali (non adattati come sul sito Elite); Sunbay ancora da avere.
