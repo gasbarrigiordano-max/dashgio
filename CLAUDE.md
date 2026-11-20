@@ -22,6 +22,8 @@ descrizione, categoria, serata = id o "" per le spese generali, nota, pagata) ne
 Spese fisse (`fisse`: desc, cat, importo, nota) = modello uguale per ogni serata (affitto, luci, service…): entrano da sole
 nelle serate nuove (e con "Aggiungile" in quelle già create) come spese con `tipo:"fissa"` e `fissa` = id del modello; le altre
 (bar, DJ, SIAE, sicurezza…) sono `tipo:"variabile"`, inserite serata per serata. Riepiloghi fisse/variabili per serata e in totale.
+Le spese non chiedono la data: prendono quella della serata. In "Tutte le serate" il riquadro "Spese di tutte le serate" (e il
+pulsante in alto) aggiunge una spesa di tutte le serate = spesa fissa, senza data, messa anche nelle serate da fare già create.
 Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo `sito-zonacalda`: lista, inviti, porta, staff,
 backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine. Le serate si creano dall'app ("+ Serata");
 `ZC_SERATE` (locali/index.html) ha quelle di partenza (28 novembre). Loghi in `locali/loghi/` con i colori originali (non adattati come sul sito Elite); Sunbay ancora da avere.
