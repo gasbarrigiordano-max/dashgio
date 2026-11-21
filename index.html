@@ -1547,7 +1547,7 @@ function precarica(lista){
 /* Versione del sito (versione.json, da cambiare a ogni pubblicazione): sull'iPhone la Dashboard aperta dalla schermata Home
    e le app dentro le cornici restavano quelle vecchie in memoria. Le app si aprono con ?v=versione (pagine sempre nuove) e,
    se sul sito c'è una versione diversa da questa, la Dashboard si ricarica da sola. */
-const VERSIONE = '2026-11-21c';
+const VERSIONE = '2026-11-21d';
 const conVersione = u => { const [base, h] = String(u).split('#'); return base + (base.includes('?') ? '&' : '?') + 'v=' + VERSIONE + (h !== undefined ? '#' + h : ''); };
 async function controllaVersione(){
   try {
