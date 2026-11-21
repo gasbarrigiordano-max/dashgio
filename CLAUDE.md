@@ -11,6 +11,12 @@ Ogni volta che l'utente chiede una modifica, senza aspettare altre conferme:
 
 L'utente l'ha chiesto espressamente: non deve aprire né unire nulla a mano.
 
+## Versione (a ogni pubblicazione)
+
+Cambia la versione in **due posti uguali**: `versione.json` (`{"v":"AAAA-MM-GGx"}`) e `const VERSIONE` in `index.html`.
+La Dashboard la controlla: se sul sito ce n'è una diversa si ricarica da sola, e le app nelle cornici si aprono con
+`?v=versione`. Senza questo, sull'iPhone (Dashboard aperta dalla schermata Home) restano le pagine vecchie in memoria.
+
 ## App
 
 Vedi README.md. `locali/` è la dashboard da PR (prima nel repo dashboard-locali, ora integrata qui):

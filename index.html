@@ -1247,6 +1247,23 @@ async function allineaLavoro(giornate){
   if(nuove.length) return {testo: `${nuove.length} ${nuove.length === 1 ? 'giornata aggiunta' : 'giornate aggiunte'} dal calendario` + (fatti ? ` · calendario: ${fatti} eventi sistemati` : ''), nuove};
   return (fatti ? `Calendario allineato: ${visibili.filter(x => x.tipo === 'sposta').length} spostati, ${visibili.filter(x => x.tipo === 'crea').length} aggiunti` : 'Il calendario era già allineato') + (p.orfani.length ? ` · ${p.orfani.length} eventi di lavoro senza giornata` : '');
 }
+let propostaCal = new Map(); // id della giornata proposta → evento del calendario
+addEventListener('message', async e => {
+  if(e.origin !== location.origin || !e.data || !(frames.lavoro && e.source === frames.lavoro.contentWindow)) return;
+  const rispondi = m => { try { e.source.postMessage(m, location.origin); } catch(x){} };
+  if(e.data.tipo === 'lavoro-mancanti'){ // giornate che ci sono solo nel calendario (anche dell'anno dopo)
+    if(!contoLavoroAttivo()) return rispondi({tipo: 'lavoro-mancanti-esito', pronto: false});
+    try {
+      const giornate = Array.isArray(e.data.giornate) ? e.data.giornate : [];
+      const p = await pianoAllinea(giornate), prop = giornateDaEventi(p.orfani, giornate);
+      propostaCal = new Map(prop.map(x => [x.g.id, x.e]));
+      rispondi({tipo: 'lavoro-mancanti-esito', pronto: true, nuove: prop.map(x => x.g)});
+    } catch(err){ console.warn('calendario', err); }
+  }
+  if(e.data.tipo === 'lavoro-collega'){ // aggiunte in Lavoro: l'evento resta collegato alla giornata
+    for(const g of (Array.isArray(e.data.giornate) ? e.data.giornate : [])){ const ev = propostaCal.get(g.id); if(ev) { try { await aggiornaEventoLavoro(ev, g, g, true); } catch(err){ console.warn(err); } } }
+  }
+});
 addEventListener('message', async e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea' || !(frames.lavoro && e.source === frames.lavoro.contentWindow)) return; // solo dalla cornice di Lavoro
   const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
@@ -1527,10 +1544,26 @@ function precarica(lista){
   if(frames[v]) return dopo();
   frameDi(v).addEventListener('load', () => setTimeout(dopo, 1200), {once: true});
 }
+/* Versione del sito (versione.json, da cambiare a ogni pubblicazione): sull'iPhone la Dashboard aperta dalla schermata Home
+   e le app dentro le cornici restavano quelle vecchie in memoria. Le app si aprono con ?v=versione (pagine sempre nuove) e,
+   se sul sito c'è una versione diversa da questa, la Dashboard si ricarica da sola. */
+const VERSIONE = '2026-11-21b';
+const conVersione = u => { const [base, h] = String(u).split('#'); return base + (base.includes('?') ? '&' : '?') + 'v=' + VERSIONE + (h !== undefined ? '#' + h : ''); };
+async function controllaVersione(){
+  try {
+    const r = await fetch('versione.json?t=' + Date.now(), { cache: 'no-store' }); if(!r.ok) return;
+    const v = (await r.json()).v; if(!v || v === VERSIONE) return;
+    // niente giri a vuoto: una sola ricarica per versione nuova
+    if(sessionStorage.getItem('dg:ricaricata') === v) return; sessionStorage.setItem('dg:ricaricata', v);
+    location.reload();
+  } catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') controllaVersione(); });
+setTimeout(controllaVersione, 3000);
 function frameDi(v, extra){
   if(!frames[v]){
     const f = document.createElement('iframe');
-    f.src = PERCORSI[v] + (extra || ''); f.title = {mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro', locali:'Locali'}[v];
+    f.src = conVersione(PERCORSI[v] + (extra || '')); f.title = {mezzi:'Mezzi', palestra:'Palestra', lavoro:'Lavoro', locali:'Locali'}[v];
     $('app-vista').appendChild(f); frames[v] = f;
   }
   return frames[v];
@@ -1674,7 +1707,7 @@ document.addEventListener('click', e => {
 /* ---- Accesso unico: account e passphrase si chiedono qui, poi Bilancio e Mezzi si aprono senza chiedere ---- */
 (async () => {
   await Cassaforte.porta({ nome: 'il tuo account', bilancio: 'bilancio/' });
-  bil.src = 'bilancio/index.html';
+  bil.src = conVersione('bilancio/index.html');
   // arrivato da un'app aperta da sola (?torna=…): si apre qui dentro
   const torna = new URLSearchParams(location.search).get('torna');
   if(['bilancio/', 'giornale/', 'palestra/', 'lavoro/', 'locali/'].includes(torna)){ history.replaceState(null, '', location.pathname); dashVai(torna); }
