@@ -412,7 +412,8 @@ function vistaMesi(){
   if (giorAnno !== 'tutti' && !anni.includes(giorAnno)) giorAnno = anno;
   const mesiCi = [...new Set(L.giornate.filter(g => giorAnno === 'tutti' || g.d.startsWith(giorAnno)).map(g => g.d.slice(0, 7)))].sort();
   if (giorMese && !mesiCi.includes(giorMese)) giorMese = '';
-  const lista = ordinate().reverse().filter(g => (giorAnno === 'tutti' || g.d.startsWith(giorAnno)) && (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
+  // mesi da gennaio a dicembre (in alto i primi), giorni in ordine dentro il mese
+  const lista = ordinate().filter(g => (giorAnno === 'tutti' || g.d.startsWith(giorAnno)) && (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
   const perMese = new Map(); lista.forEach(g => { const k = g.d.slice(0, 7); if (!perMese.has(k)) perMese.set(k, []); perMese.get(k).push(g); });
   const nomeMese = k => MESI[+k.slice(5) - 1] + (k.startsWith(anno) ? '' : ' ' + k.slice(2, 4));
   const testa = (k, l) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>`;
@@ -421,7 +422,7 @@ function vistaMesi(){
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     ${giorAnno !== 'tutti' ? `<div class="filtri mesi-anno" role="group" aria-label="Mese del ${giorAnno}"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutto il ${giorAnno}</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${MESI[+k.slice(5) - 1]}</button>`).join('')}</div>` : ''}
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
-    ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.slice().reverse().map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi dal più recente, giorni del mese in ordine (2, 3… 28)
+    ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi da gennaio a dicembre, giorni del mese in ordine (2, 3… 28)
 }
 function vistaFatture(){
   const da = ordinate().filter(g => statoDi(g) === 'da'), fatt = ordinate().filter(g => statoDi(g) === 'fatturato');
