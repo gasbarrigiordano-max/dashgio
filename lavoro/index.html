@@ -365,6 +365,8 @@ const titolo = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUppe
 let tab = 'prossime', filtroAg = '';
 let riepMese = null, riepAg = '';   // riepilogo: mese scelto (0-11, null = anno intero) e, dentro il mese, l'agenzia
 function filtraRiep(m, ag){ riepMese = m; riepAg = ag || ''; disegna(); Moto.entra($('vista')); }
+let riepAnno = String(new Date().getFullYear());
+function filtraRiepAnno(a){ riepAnno = a; riepMese = null; riepAg = ''; disegna(); Moto.entra($('vista')); }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; disegna(); scrollTo(0, 0); Moto.entra($('vista')); });
 // la scheda scelta scivola sotto la voce; la Dashboard fa entrare la vista quando si apre l'app
 Moto.pillola(document.querySelector('.tabs')); window.motoVista = () => $('vista');
@@ -411,19 +413,6 @@ let giorAnno = String(new Date().getFullYear()), giorMese = '', giorCal = (() =>
 function vistaGiornate(cal){ giorCal = cal; try { localStorage.setItem('lv:giornateCal', cal ? '1' : '0'); } catch (e) {} disegna(); Moto.entra($('vista')); }
 function filtraGiornate(mese, ag){ if (mese !== undefined) giorMese = mese; if (ag !== undefined) filtroAg = ag; disegna(); Moto.entra($('vista')); }
 function filtraAnno(a){ giorAnno = a; giorMese = ''; disegna(); Moto.entra($('vista')); }
-// totale delle giornate dell'anno scelto (o di tutti gli anni), con l'agenzia scelta: quante, lordo, netto, extra, totale
-function totaleAnno(l){
-  if (!l.length) return '';
-  const oggi = oggiISO(), fatte = l.filter(g => g.d <= oggi), prog = l.filter(g => g.d > oggi);
-  const tit = (giorAnno === 'tutti' ? 'Tutti gli anni' : 'Tutto il ' + giorAnno) + (filtroAg ? ' · ' + filtroAg : '');
-  return `<section class="card glass totale-anno"><h2>${esc(tit)}</h2>
-    <div class="kpi" style="margin-top:10px">
-      <div><b>${l.length}</b><small>${l.length === 1 ? 'giornata segnata' : 'giornate segnate'}${prog.length && fatte.length ? ` (${fatte.length} fatte, ${prog.length} in programma)` : prog.length ? ' (tutte in programma)' : ''}</small></div>
-      <div><b class="mono">${eur(somma(l, totale))}</b><small>totale (netto + extra)</small></div>
-      <div><b class="mono">${eur(somma(l, g => num(g.lordo) || 0))}</b><small>lordo</small></div>
-      <div><b class="mono">${eur(somma(l, netto))}</b><small>netto · extra ${eur(somma(l, g => num(g.extra) || 0))}</small></div>
-    </div></section>`;
-}
 function vistaMesi(){
   const ags = agenzie(), anno = String(new Date().getFullYear());
   // prima l'anno, poi (sotto) i mesi di quell'anno
@@ -445,7 +434,6 @@ function vistaMesi(){
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     ${giorAnno !== 'tutti' ? `<div class="filtri mesi-anno" role="group" aria-label="Mese del ${giorAnno}"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutto il ${giorAnno}</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${MESI[+k.slice(5) - 1]}</button>`).join('')}</div>` : ''}
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...agsVisibili].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
-    ${!giorMese ? totaleAnno(lista) : ''}
     ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi da gennaio a dicembre, giorni del mese in ordine (2, 3… 28)
 }
 function vistaFatture(){
@@ -465,7 +453,10 @@ function vistaFatture(){
     <p class="nota" style="margin:0 2px">Le giornate pagate sono in Giornate, con il numero di fattura.</p>`;
 }
 function vistaRiepilogo(){
-  const anno = String(new Date().getFullYear()), dellAnno = L.giornate.filter(g => g.d.startsWith(anno)), oggi = oggiISO();
+  // prima l'anno (quelli con giornate, più l'anno in corso), sotto i mesi di quell'anno
+  const anni = [...new Set([String(new Date().getFullYear()), ...L.giornate.map(g => g.d.slice(0, 4))])].sort();
+  if (!anni.includes(riepAnno)) riepAnno = String(new Date().getFullYear());
+  const anno = riepAnno, dellAnno = L.giornate.filter(g => g.d.startsWith(anno)), oggi = oggiISO();
   const mk = riepMese == null ? null : anno + '-' + String(riepMese + 1).padStart(2, '0');
   const delMese = mk ? dellAnno.filter(g => g.d.startsWith(mk)) : dellAnno;
   const agMese = [...new Set(delMese.map(g => g.agenzia).filter(Boolean))].sort();
@@ -475,7 +466,8 @@ function vistaRiepilogo(){
   const mesi = Array.from({length: 12}, (_, i) => { const k = anno + '-' + String(i + 1).padStart(2, '0'); const m = dellAnno.filter(g => g.d.startsWith(k)); return {i, tot: somma(m, totale), fut: k > oggi.slice(0, 7)}; });
   const mx = Math.max(1, ...mesi.map(m => m.tot));
   const titolo = mk ? MESI_L[riepMese] + ' ' + anno + (riepAg ? ' · ' + riepAg : '') : anno;
-  const filtri = `<div class="filtri" role="group" aria-label="Mese"><button type="button" class="${mk ? '' : 'on'}" onclick="filtraRiep(null)">Anno</button>${MESI.map((n, i) => `<button type="button" class="${riepMese === i ? 'on' : ''}" onclick="filtraRiep(${i})">${n}</button>`).join('')}</div>
+  const filtri = `<div class="filtri" role="group" aria-label="Anno">${anni.map(a => `<button type="button" class="${a === anno ? 'on' : ''}" onclick="filtraRiepAnno('${a}')">${a}</button>`).join('')}</div>
+    <div class="filtri mesi-anno" role="group" aria-label="Mese del ${anno}"><button type="button" class="${mk ? '' : 'on'}" onclick="filtraRiep(null)">Tutto il ${anno}</button>${MESI.map((n, i) => `<button type="button" class="${riepMese === i ? 'on' : ''}" onclick="filtraRiep(${i})">${n}</button>`).join('')}</div>
     ${mk && agMese.length ? `<div class="filtri" role="group" aria-label="Agenzia"><button type="button" class="${riepAg ? '' : 'on'}" onclick="filtraRiep(${riepMese})">Tutte</button>${agMese.map(a => `<button type="button" class="${riepAg === a ? 'on' : ''}" style="text-transform:none" onclick='filtraRiep(${riepMese}, ${esc(JSON.stringify(a))})'>${logoAg(a)}${esc(a)}</button>`).join('')}</div>` : ''}`;
   return `${filtri}<section class="card glass"><h2 style="text-transform:capitalize">${esc(titolo)}</h2>
       <div class="kpi" style="margin-top:10px">
