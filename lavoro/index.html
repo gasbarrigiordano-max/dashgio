@@ -267,9 +267,15 @@ function toast(m){ const t = $('toast'); t.textContent = m; t.classList.add('on'
 /* ---------------- Dati nella cassaforte ---------------- */
 const BASE = { giornate: [], aliquote: { imponibile: 0.85, ritenuta: 0.21, rivalsa: 0.04 } };
 let L = JSON.parse(JSON.stringify(BASE)), tSalva = null, salvando = false, sporco = false;
+// Costa Crociere e Costamed sono la stessa agenzia: un nome solo (COSTAMED)
+const normAgenzia = a => { const x = String(a || '').trim().toUpperCase().replace(/\s+/g, ' '); return /^COSTA( CROCIERE)?$|^COSTA ?MED$/.test(x) ? 'COSTAMED' : x; };
 async function carica(){
   const t = await Cassaforte.leggi('dashboard', 'lavoro');
   L = t ? {...JSON.parse(JSON.stringify(BASE)), ...JSON.parse(t)} : JSON.parse(JSON.stringify(BASE));
+  // giornate segnate prima come "COSTA" o "COSTA CROCIERE": diventano COSTAMED (e si salva una volta)
+  let cambiate = 0;
+  (L.giornate || []).forEach(g => { const n = normAgenzia(g.agenzia); if (g.agenzia && n !== g.agenzia) { g.agenzia = n; cambiate++; } });
+  if (cambiate) setTimeout(salva, 1500);
 }
 function salva(){ sporco = true; setSync('salvo'); clearTimeout(tSalva); tSalva = setTimeout(invia, 500); }
 async function invia(){
@@ -426,6 +432,10 @@ function vistaMesi(){
   const mesiCi = [...new Set(L.giornate.filter(g => giorAnno === 'tutti' || g.d.startsWith(giorAnno)).map(g => g.d.slice(0, 7)))].sort();
   if (giorMese && !mesiCi.includes(giorMese)) giorMese = '';
   // mesi da gennaio a dicembre (in alto i primi), giorni in ordine dentro il mese
+  // filtro agenzia: solo le agenzie con giornate nell'anno (e nel mese) scelto; se quella scelta non c'è, si torna a "Tutte"
+  const nelPeriodo = L.giornate.filter(g => (giorAnno === 'tutti' || g.d.startsWith(giorAnno)) && (!giorMese || g.d.startsWith(giorMese)));
+  const agsVisibili = ags.filter(a => nelPeriodo.some(g => g.agenzia === a));
+  if (filtroAg && !agsVisibili.includes(filtroAg)) filtroAg = '';
   const lista = ordinate().filter(g => (giorAnno === 'tutti' || g.d.startsWith(giorAnno)) && (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
   const perMese = new Map(); lista.forEach(g => { const k = g.d.slice(0, 7); if (!perMese.has(k)) perMese.set(k, []); perMese.get(k).push(g); });
   const nomeMese = k => MESI[+k.slice(5) - 1] + (k.startsWith(anno) ? '' : ' ' + k.slice(2, 4));
@@ -434,7 +444,7 @@ function vistaMesi(){
       <button type="button" class="btn ghost piccolo" style="flex:none;min-height:32px" onclick="allineaCalendario()" title="Controlla che gli eventi del calendario siano alle date delle giornate">↻ Allinea calendario</button>
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     ${giorAnno !== 'tutti' ? `<div class="filtri mesi-anno" role="group" aria-label="Mese del ${giorAnno}"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutto il ${giorAnno}</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${MESI[+k.slice(5) - 1]}</button>`).join('')}</div>` : ''}
-    <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
+    <div class="filtri" role="group" aria-label="Agenzia">${['', ...agsVisibili].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
     ${!giorMese ? totaleAnno(lista) : ''}
     ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi da gennaio a dicembre, giorni del mese in ordine (2, 3… 28)
 }
@@ -563,7 +573,7 @@ document.addEventListener('keydown', e => {
 function ricalcola(){ const g = { lordo: $('m-l').value, extra: $('m-e').value }; $('m-c').innerHTML = `<span>Netto<br><b class="mono">${eur(netto(g))}</b></span><span>Extra<br><b class="mono">${eur(num(g.extra) || 0)}</b></span><span>Totale<br><b class="mono">${eur(totale(g))}</b></span>`; }
 function salvaGiornata(id){
   const d = $('m-d').value; if (!d) return toast('Scegli la data');
-  const g = { id: id || nuovoId(), d, agenzia: $('m-a').value.trim().toUpperCase(), nave: $('m-n').value.trim(), tipo: $('m-t').value.trim(),
+  const g = { id: id || nuovoId(), d, agenzia: normAgenzia($('m-a').value), nave: $('m-n').value.trim(), tipo: $('m-t').value.trim(),
     lordo: num($('m-l').value) ?? '', extra: num($('m-e').value) ?? '', stato: $('m-s').value, fattura: $('m-f').value.trim(), note: $('m-no').value.trim() };
   const vecchia = L.giornate.find(x => x.id === id);
   if (vecchia) { g.dataFattura = vecchia.dataFattura; g.dataPagamento = vecchia.dataPagamento; }
@@ -607,7 +617,7 @@ addEventListener('message', e => {
   if (e.origin !== location.origin || e.source !== parent || !e.data || e.data.tipo !== 'lavoro-mancanti-esito') return;
   if (!e.data.pronto) { setTimeout(chiediMancanti, 8000); return; } // Google non ancora collegato: si riprova
   mancantiCal = (Array.isArray(e.data.nuove) ? e.data.nuove : []).filter(g => g && g.id && /^\d{4}-\d{2}-\d{2}$/.test(g.d) && !L.giornate.some(x => x.d === g.d && (x.agenzia || '') === (g.agenzia || '')))
-    .map(g => ({ id: String(g.id), d: g.d, agenzia: String(g.agenzia || '').toUpperCase().slice(0, 40), nave: String(g.nave || '').slice(0, 60), tipo: '',
+    .map(g => ({ id: String(g.id), d: g.d, agenzia: normAgenzia(g.agenzia).slice(0, 40), nave: String(g.nave || '').slice(0, 60), tipo: '',
       lordo: typeof g.lordo === 'number' ? g.lordo : '', extra: '', stato: '', fattura: '', note: 'dal calendario' }));
   if (tab === 'mesi') disegna();
 });
@@ -622,7 +632,7 @@ addEventListener('message', e => {
   // giornate trovate nel calendario (es. quelle dell'anno dopo): entrano in Lavoro, senza doppioni (stessa data e agenzia)
   const nuove = (Array.isArray(e.data.nuove) ? e.data.nuove : []).filter(g => g && /^\d{4}-\d{2}-\d{2}$/.test(g.d) && g.id
     && !L.giornate.some(x => x.id === g.id || (x.d === g.d && (x.agenzia || '') === (g.agenzia || ''))))
-    .map(g => ({ id: String(g.id), d: g.d, agenzia: String(g.agenzia || '').toUpperCase().slice(0, 40), nave: String(g.nave || '').slice(0, 60), tipo: '',
+    .map(g => ({ id: String(g.id), d: g.d, agenzia: normAgenzia(g.agenzia).slice(0, 40), nave: String(g.nave || '').slice(0, 60), tipo: '',
       lordo: typeof g.lordo === 'number' ? g.lordo : '', extra: '', stato: '', fattura: '', note: String(g.note || '').slice(0, 120) }));
   if (nuove.length) { L.giornate.push(...nuove); salva(); giorMese = ''; disegna(); }
   if (e.data.testo) toast(e.data.testo);
@@ -671,7 +681,7 @@ async function importa(file){
   let d; try { d = JSON.parse(await file.text()); } catch(e){ return toast('File non leggibile'); }
   if (!d || d.tipo !== 'lavoro-porto' || !Array.isArray(d.giornate)) return toast('Non è un file delle giornate di lavoro');
   const t = v => String(v ?? '').trim().slice(0, 80);
-  const nuove = d.giornate.filter(g => /^\d{4}-\d{2}-\d{2}$/.test(g.d)).map(g => ({ id: nuovoId(), d: g.d, agenzia: t(g.agenzia).toUpperCase(), nave: t(g.nave), tipo: t(g.tipo),
+  const nuove = d.giornate.filter(g => /^\d{4}-\d{2}-\d{2}$/.test(g.d)).map(g => ({ id: nuovoId(), d: g.d, agenzia: normAgenzia(t(g.agenzia)), nave: t(g.nave), tipo: t(g.tipo),
     lordo: num(g.lordo) ?? '', extra: num(g.extra) ?? '', stato: ['fatturato', 'pagato'].includes(g.stato) ? g.stato : '', fattura: t(g.fattura), note: t(g.note) }));
   // stessa data e agenzia già presente: non si duplica
   const chiave = g => g.d + '|' + g.agenzia, ci = new Set(L.giornate.map(chiave)), da = nuove.filter(g => !ci.has(chiave(g)));
