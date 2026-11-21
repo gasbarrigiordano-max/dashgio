@@ -132,6 +132,7 @@ a.tile:hover{transform:translateY(-3px);color:var(--tile-ink)}
 .cal{background:rgba(255,255,255,.06);border-radius:18px;padding:14px}
 .cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .cal-h button{width:32px;height:32px;border-radius:99px;border:0;background:rgba(255,255,255,.10);cursor:pointer}
+.cal-h .cal-piu{background:var(--acc);color:#fff;font-size:18px;font-weight:700;line-height:1}
 .cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
 .cal-g .wd{font-size:10.5px;color:var(--ink3);padding:4px 0}
 .cal-g .d{height:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11.5px;color:rgba(255,255,255,.85);border-radius:99px;position:relative}
@@ -473,7 +474,7 @@ main{container-type:inline-size}
   <div class="stats" id="stats"></div>
   <div class="cal">
     <div class="cal-h"><b style="font-size:13px" id="cal-tit"></b>
-      <div style="display:flex;gap:6px"><button aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button aria-label="Mese successivo" onclick="calSposta(1)">›</button></div></div>
+      <div style="display:flex;gap:6px"><button aria-label="Mese precedente" onclick="calSposta(-1)">‹</button><button aria-label="Mese successivo" onclick="calSposta(1)">›</button><button class="cal-piu" aria-label="Aggiungi un evento al calendario" title="Aggiungi un evento" onclick="nuovoEventoLato()">+</button></div></div>
     <div class="cal-g" id="cal"></div>
     <div class="cal-leg"><span><b style="color:var(--acc)">●</b> oggi</span><span><b style="color:var(--ok)">●</b> rate e scadenze</span><span><b style="color:var(--goo)">●</b> Google</span></div>
     <div class="goo-bar" id="goo"></div>
@@ -1073,6 +1074,11 @@ let evGiorno = [], evAperto = null;
 
 /* ---- Eventi di Google Calendar: aggiungere, modificare, eliminare ---- */
 const piuGiorno = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n); return isoLocale(d); };
+// "+" del calendario di lato: nuovo evento oggi (o il primo del mese che si sta guardando)
+function nuovoEventoLato(){
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + calOff);
+  apriEvento({d: calOff ? isoLocale(d) : isoLocale(new Date())});
+}
 function apriEvento(ev){
   evAperto = ev;
   $('p-ev').classList.add('on');
@@ -1174,8 +1180,10 @@ async function creaEventoLavoro(g){
    se no stessa agenzia, il più vicino entro 10 giorni) si sposta; se non c'è si crea. Gli eventi di lavoro senza giornata si segnalano soltanto. */
 async function pianoAllinea(giornate){
   const oggi = isoLocale(new Date()), gg = giornate.filter(g => g.d >= piuGiorno(oggi, -30)).sort((a, b) => a.d.localeCompare(b.d));
-  if(!gg.length) return null;
-  const ev = await eventiGoogleTra(piuGiorno(gg[0].d, -10), piuGiorno(gg.at(-1).d, 10));
+  // si guarda da un mese fa fino a ~15 mesi avanti (anche oltre l'ultima giornata): così si trovano gli eventi di lavoro
+  // già messi in calendario per l'anno dopo e non ancora in Lavoro
+  const da = gg.length && gg[0].d < piuGiorno(oggi, -30) ? gg[0].d : piuGiorno(oggi, -30), lontano = piuGiorno(oggi, 460);
+  const ev = await eventiGoogleTra(piuGiorno(da, -10), piuGiorno(gg.length && gg.at(-1).d > lontano ? gg.at(-1).d : lontano, 10));
   const navi = [...new Set(gg.map(g => normT(g.nave)).filter(Boolean))], ags = [...new Set([...gg.map(g => normT(g.agenzia)), ...agenzie().map(normT)].filter(Boolean))];
   const diLavoro = e => { const t = ' ' + normT(e.titolo) + ' '; return !!e.dglav || e.tag === 'LAV' || navi.some(n => t.includes(' ' + n + ' ')) || ags.some(x => t.includes(' ' + x + ' ')); };
   // l'evento nomina un'altra nave delle giornate: non è di questa giornata, anche se l'agenzia è la stessa
@@ -1194,15 +1202,29 @@ async function pianoAllinea(giornate){
       .sort((x, y) => puntiEvento(y, g) - puntiEvento(x, g) || giorni(x) - giorni(y))[0];
     if(c){ usati.add(c); passi.push({tipo: 'sposta', e: c, g}); } else passi.push({tipo: 'crea', g});
   });
-  const orfani = ev.filter(e => !usati.has(e) && diLavoro(e) && e.d >= piuGiorno(oggi, -30) && !(e.dglav && gg.some(g => g.id === e.dglav)));
-  return {passi, orfani};
+  const orfani = ev.filter(e => !usati.has(e) && diLavoro(e) && e.d >= piuGiorno(oggi, -30) && !(e.dglav && gg.some(g => g.id === e.dglav)))
+    .filter((e, i, l) => l.findIndex(x => x.d === e.d && normT(x.titolo) === normT(e.titolo)) === i); // stesso evento in due calendari: una volta
+  return {passi, orfani, ags};
+}
+/* Eventi di lavoro del calendario senza giornata (es. le date dell'anno dopo già segnate): diventano giornate di Lavoro.
+   Agenzia = quella nominata nel titolo; nave = il resto del titolo; lordo = quello dell'ultima giornata della stessa agenzia. */
+function giornateDaEventi(orfani, giornate){
+  const agenzieNote = [...new Set([...giornate.map(g => g.agenzia), ...agenzie()].filter(Boolean))];
+  return orfani.map(e => {
+    const t = ' ' + normT(e.titolo) + ' ';
+    const agenzia = (agenzieNote.find(a => t.includes(' ' + normT(a) + ' ')) || '').toUpperCase();
+    let nave = String(e.titolo || '');
+    if(agenzia) nave = nave.replace(reTesto(agenzia), ' ');
+    nave = nave.replace(/\b(lavoro|porto|turno)\b/ig, ' ').replace(/[·|\-–—,:]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const ultima = giornate.filter(g => g.agenzia === agenzia && g.lordo !== '' && g.lordo != null).sort((a, b) => b.d.localeCompare(a.d))[0];
+    return {e, g: {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), d: e.d, agenzia, nave, tipo: '', lordo: ultima ? ultima.lordo : '', extra: '', stato: '', fattura: '', note: 'dal calendario'}};
+  });
 }
 async function allineaLavoro(giornate){
   const p = await pianoAllinea(giornate);
-  if(!p) return 'Nessuna giornata da controllare';
   const visibili = p.passi.filter(x => x.tipo !== 'segna');
   const righe = visibili.map(x => x.tipo === 'sposta' ? `• Sposto "${x.e.titolo}" dal ${fmtD(x.e.d)} al ${fmtD(x.g.d)}` : `• Aggiungo "${[x.g.nave || 'Lavoro', x.g.agenzia].filter(Boolean).join(' · ')}" il ${fmtD(x.g.d)}`);
-  const extra = p.orfani.length ? `\n\nEventi di lavoro senza giornata (non li tocco): ${p.orfani.slice(0, 6).map(e => fmtD(e.d) + ' "' + e.titolo + '"').join(', ')}${p.orfani.length > 6 ? '…' : ''}` : '';
+  const extra = p.orfani.length ? `\n\nEventi di lavoro senza giornata in Lavoro (dopo ti chiedo se aggiungerli): ${p.orfani.slice(0, 6).map(e => fmtD(e.d) + ' "' + e.titolo + '"').join(', ')}${p.orfani.length > 6 ? '…' : ''}` : '';
   if(visibili.length && !confirm(`Allineo il calendario alle giornate di Lavoro:\n\n${righe.slice(0, 15).join('\n')}${righe.length > 15 ? `\n… e altre ${righe.length - 15}` : ''}${extra}`)) return 'Calendario non toccato';
   let fatti = 0;
   for(const x of p.passi){
@@ -1211,14 +1233,26 @@ async function allineaLavoro(giornate){
     else if(x.tipo === 'sposta'){ await aggiornaEventoLavoro(x.e, {id: x.g.id, d: x.e.d, nave: '', agenzia: ''}, x.g); fatti++; }
     else { await creaEventoLavoro(x.g); fatti++; }
   }
+  // eventi di lavoro senza giornata: si propongono come giornate nuove (e l'evento si collega alla giornata)
+  let nuove = [];
+  if(p.orfani.length){
+    const prop = giornateDaEventi(p.orfani, giornate);
+    const el = prop.map(x => `• ${fmtD(x.g.d)} · ${x.g.nave || 'nave da inserire'}${x.g.agenzia ? ' · ' + x.g.agenzia : ''}`);
+    if(confirm(`Nel calendario ci sono ${prop.length} giornate di lavoro che in Lavoro non ci sono:\n\n${el.slice(0, 20).join('\n')}${el.length > 20 ? `\n… e altre ${el.length - 20}` : ''}\n\nLe aggiungo in Lavoro? (il lordo è quello dell'ultima giornata della stessa agenzia: si cambia dalla giornata)`)){
+      for(const x of prop){ try { await aggiornaEventoLavoro(x.e, x.g, x.g, true); } catch(err){ console.warn('collegamento evento', err); } }
+      nuove = prop.map(x => x.g);
+    }
+  }
   await gcalLeggi();
+  if(nuove.length) return {testo: `${nuove.length} ${nuove.length === 1 ? 'giornata aggiunta' : 'giornate aggiunte'} dal calendario` + (fatti ? ` · calendario: ${fatti} eventi sistemati` : ''), nuove};
   return (fatti ? `Calendario allineato: ${visibili.filter(x => x.tipo === 'sposta').length} spostati, ${visibili.filter(x => x.tipo === 'crea').length} aggiunti` : 'Il calendario era già allineato') + (p.orfani.length ? ` · ${p.orfani.length} eventi di lavoro senza giornata` : '');
 }
 addEventListener('message', async e => {
   if(e.origin !== location.origin || !e.data || e.data.tipo !== 'lavoro-allinea' || !(frames.lavoro && e.source === frames.lavoro.contentWindow)) return; // solo dalla cornice di Lavoro
   const rispondi = testo => { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo}, location.origin); } catch(x){} };
   if(!contoLavoroAttivo()) return rispondi(`Collega Google${contoLavoro() ? ' (' + contoLavoro() + ')' : ''} nella Dashboard per allineare il calendario`);
-  try { rispondi(await allineaLavoro(e.data.giornate || [])); } catch(err){ rispondi('Calendario non allineato: ' + err.message); }
+  try { const r = await allineaLavoro(e.data.giornate || []); if(r && r.nuove) { try { e.source.postMessage({tipo: 'lavoro-cal-esito', testo: r.testo, nuove: r.nuove}, location.origin); } catch(x){} } else rispondi(r); }
+  catch(err){ rispondi('Calendario non allineato: ' + err.message); }
 });
 // modifiche di Lavoro arrivate con l'account del lavoro non ancora collegato (per esempio appena aperta l'app): partono appena si collega
 const codaLavoro = [];
