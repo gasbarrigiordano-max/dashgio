@@ -405,6 +405,19 @@ let giorAnno = String(new Date().getFullYear()), giorMese = '', giorCal = (() =>
 function vistaGiornate(cal){ giorCal = cal; try { localStorage.setItem('lv:giornateCal', cal ? '1' : '0'); } catch (e) {} disegna(); Moto.entra($('vista')); }
 function filtraGiornate(mese, ag){ if (mese !== undefined) giorMese = mese; if (ag !== undefined) filtroAg = ag; disegna(); Moto.entra($('vista')); }
 function filtraAnno(a){ giorAnno = a; giorMese = ''; disegna(); Moto.entra($('vista')); }
+// totale delle giornate dell'anno scelto (o di tutti gli anni), con l'agenzia scelta: quante, lordo, netto, extra, totale
+function totaleAnno(l){
+  if (!l.length) return '';
+  const oggi = oggiISO(), fatte = l.filter(g => g.d <= oggi), prog = l.filter(g => g.d > oggi);
+  const tit = (giorAnno === 'tutti' ? 'Tutti gli anni' : 'Tutto il ' + giorAnno) + (filtroAg ? ' · ' + filtroAg : '');
+  return `<section class="card glass totale-anno"><h2>${esc(tit)}</h2>
+    <div class="kpi" style="margin-top:10px">
+      <div><b>${l.length}</b><small>${l.length === 1 ? 'giornata segnata' : 'giornate segnate'}${prog.length && fatte.length ? ` (${fatte.length} fatte, ${prog.length} in programma)` : prog.length ? ' (tutte in programma)' : ''}</small></div>
+      <div><b class="mono">${eur(somma(l, totale))}</b><small>totale (netto + extra)</small></div>
+      <div><b class="mono">${eur(somma(l, g => num(g.lordo) || 0))}</b><small>lordo</small></div>
+      <div><b class="mono">${eur(somma(l, netto))}</b><small>netto · extra ${eur(somma(l, g => num(g.extra) || 0))}</small></div>
+    </div></section>`;
+}
 function vistaMesi(){
   const ags = agenzie(), anno = String(new Date().getFullYear());
   // prima l'anno, poi (sotto) i mesi di quell'anno
@@ -422,6 +435,7 @@ function vistaMesi(){
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
     ${giorAnno !== 'tutti' ? `<div class="filtri mesi-anno" role="group" aria-label="Mese del ${giorAnno}"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutto il ${giorAnno}</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${MESI[+k.slice(5) - 1]}</button>`).join('')}</div>` : ''}
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
+    ${!giorMese ? totaleAnno(lista) : ''}
     ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi da gennaio a dicembre, giorni del mese in ordine (2, 3… 28)
 }
 function vistaFatture(){
