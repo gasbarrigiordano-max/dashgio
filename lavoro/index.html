@@ -165,6 +165,9 @@ html.largo .wrap{max-width:100%}
 .cg.pagato{background:rgba(127,211,168,.18);color:var(--ok)}
 .cg.futura{background:rgba(255,255,255,.06);color:var(--ink2);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.3)}
 .cg.oggi{box-shadow:inset 0 0 0 2px var(--acc)}
+.avviso-cal{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-color:rgba(242,113,28,.45) !important;background:rgba(242,113,28,.16) !important}
+.avviso-cal b{display:block;font-size:14px} .avviso-cal small{color:var(--ink2);font-size:12px}
+.mesi-anno{margin-top:-4px}
 /* loghi delle agenzie (Medov, CFFT, Costamed) accanto al nome */
 .lg-ag{width:18px;height:18px;border-radius:5px;object-fit:cover;vertical-align:-4px;margin-right:6px;display:inline-block;background:#fff}
 .lg-ag.grande{width:44px;height:44px;border-radius:12px;margin:0;vertical-align:middle;box-shadow:0 2px 10px rgba(0,0,0,.25)}
@@ -398,20 +401,25 @@ function vistaProssime(){
     ${fut.slice(1).map(rigaG).join('') || '<p class="vuoto">Nient\'altro in programma.</p>'}`;
 }
 // Giornate: filtro per mese e per agenzia, a elenco o a calendario (la scelta resta su questo dispositivo)
-let giorMese = '', giorCal = (() => { try { return localStorage.getItem('lv:giornateCal') === '1'; } catch (e) { return false; } })();
+let giorAnno = String(new Date().getFullYear()), giorMese = '', giorCal = (() => { try { return localStorage.getItem('lv:giornateCal') === '1'; } catch (e) { return false; } })();
 function vistaGiornate(cal){ giorCal = cal; try { localStorage.setItem('lv:giornateCal', cal ? '1' : '0'); } catch (e) {} disegna(); Moto.entra($('vista')); }
 function filtraGiornate(mese, ag){ if (mese !== undefined) giorMese = mese; if (ag !== undefined) filtroAg = ag; disegna(); Moto.entra($('vista')); }
+function filtraAnno(a){ giorAnno = a; giorMese = ''; disegna(); Moto.entra($('vista')); }
 function vistaMesi(){
   const ags = agenzie(), anno = String(new Date().getFullYear());
-  const mesiCi = [...new Set(L.giornate.map(g => g.d.slice(0, 7)))].sort().reverse();
+  // prima l'anno, poi (sotto) i mesi di quell'anno
+  const anni = [...new Set([anno, ...L.giornate.map(g => g.d.slice(0, 4))])].sort();
+  if (giorAnno !== 'tutti' && !anni.includes(giorAnno)) giorAnno = anno;
+  const mesiCi = [...new Set(L.giornate.filter(g => giorAnno === 'tutti' || g.d.startsWith(giorAnno)).map(g => g.d.slice(0, 7)))].sort();
   if (giorMese && !mesiCi.includes(giorMese)) giorMese = '';
-  const lista = ordinate().reverse().filter(g => (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
+  const lista = ordinate().reverse().filter(g => (giorAnno === 'tutti' || g.d.startsWith(giorAnno)) && (!filtroAg || g.agenzia === filtroAg) && (!giorMese || g.d.startsWith(giorMese)));
   const perMese = new Map(); lista.forEach(g => { const k = g.d.slice(0, 7); if (!perMese.has(k)) perMese.set(k, []); perMese.get(k).push(g); });
   const nomeMese = k => MESI[+k.slice(5) - 1] + (k.startsWith(anno) ? '' : ' ' + k.slice(2, 4));
   const testa = (k, l) => `<div class="mese-h"><b>${MESI_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</b><small>${l.length} ${l.length === 1 ? 'giornata' : 'giornate'} · netto ${eur(somma(l, netto))} · totale <b class="mono">${eur(somma(l, totale))}</b></small></div>`;
-  return `<div class="filtri-testa"><div class="filtri" role="group" aria-label="Mese"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutti</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${nomeMese(k)}</button>`).join('')}</div>
+  return `${avvisoCal()}<div class="filtri-testa"><div class="filtri" role="group" aria-label="Anno">${anni.map(a => `<button type="button" class="${giorAnno === a ? 'on' : ''}" onclick="filtraAnno('${a}')">${a}</button>`).join('')}<button type="button" class="${giorAnno === 'tutti' ? 'on' : ''}" onclick="filtraAnno('tutti')">Tutti gli anni</button></div>
       <button type="button" class="btn ghost piccolo" style="flex:none;min-height:32px" onclick="allineaCalendario()" title="Controlla che gli eventi del calendario siano alle date delle giornate">↻ Allinea calendario</button>
       <div class="vista-tog" role="group" aria-label="Vista"><button type="button" class="${giorCal ? '' : 'on'}" aria-pressed="${!giorCal}" onclick="vistaGiornate(false)">☰ Elenco</button><button type="button" class="${giorCal ? 'on' : ''}" aria-pressed="${giorCal}" onclick="vistaGiornate(true)">▦ Calendario</button></div></div>
+    ${giorAnno !== 'tutti' ? `<div class="filtri mesi-anno" role="group" aria-label="Mese del ${giorAnno}"><button type="button" class="${giorMese ? '' : 'on'}" onclick="filtraGiornate('')">Tutto il ${giorAnno}</button>${mesiCi.map(k => `<button type="button" class="${giorMese === k ? 'on' : ''}" onclick="filtraGiornate('${k}')">${MESI[+k.slice(5) - 1]}</button>`).join('')}</div>` : ''}
     <div class="filtri" role="group" aria-label="Agenzia">${['', ...ags].map(a => `<button type="button" class="${a === filtroAg ? 'on' : ''}" style="text-transform:none" onclick='filtraGiornate(undefined, ${esc(JSON.stringify(a))})'>${a ? logoAg(a) + esc(a) : 'Tutte'}</button>`).join('')}</div>
     ${[...perMese].map(([k, l]) => giorCal ? `<div class="blocco-mese">${testa(k, l)}${calendarioMese(k, l, '')}</div>` : `<div class="blocco-mese lista">${testa(k, l)}<div class="righe">${l.slice().reverse().map(rigaG).join('')}</div></div>`).join('') || '<p class="vuoto">Nessuna giornata.</p>'}`; // mesi dal più recente, giorni del mese in ordine (2, 3… 28)
 }
@@ -558,6 +566,36 @@ function elimina(id){
   if (g) avvisaCalendario('elimina', {...g}, null);
 }
 // il calendario (Google) lo aggiorna la Dashboard, che ha l'accesso; qui arriva l'esito da mostrare
+/* Giornate che ci sono solo nel calendario (es. quelle dell'anno dopo): la Dashboard le cerca e qui compare un avviso
+   con il pulsante per aggiungerle. Si chiede all'apertura e, se Google non è ancora collegato, si riprova. */
+let mancantiCal = [], tentativiCal = 0;
+function chiediMancanti(){
+  if (parent === window || tentativiCal > 6) return; tentativiCal++;
+  parent.postMessage({ tipo: 'lavoro-mancanti', giornate: L.giornate.map(g => ({ id: g.id, d: g.d, nave: g.nave || '', agenzia: g.agenzia || '', lordo: g.lordo ?? '' })) }, location.origin);
+}
+function avvisoCal(){
+  if (!mancantiCal.length) return '';
+  const d = mancantiCal.map(g => g.d).sort();
+  return `<section class="card glass avviso-cal"><div><b>${mancantiCal.length} ${mancantiCal.length === 1 ? 'giornata è' : 'giornate sono'} solo nel calendario</b><small>${d.length === 1 ? 'il ' + fmtD(d[0]) : 'dal ' + fmtD(d[0]) + ' al ' + fmtD(d.at(-1))} · tocca per aggiungerle in Lavoro</small></div>
+    <button class="btn piccolo" type="button" onclick="aggiungiMancanti()">Aggiungile</button></section>`;
+}
+function aggiungiMancanti(){
+  const nuove = mancantiCal.filter(g => !L.giornate.some(x => x.d === g.d && (x.agenzia || '') === (g.agenzia || '')));
+  if (!nuove.length) { mancantiCal = []; return disegna(); }
+  L.giornate.push(...nuove); salva();
+  try { parent.postMessage({ tipo: 'lavoro-collega', giornate: nuove }, location.origin); } catch (e) {}
+  const ultimoAnno = nuove.map(g => g.d.slice(0, 4)).sort().at(-1);
+  mancantiCal = []; giorAnno = ultimoAnno; giorMese = ''; disegna();
+  toast(nuove.length + (nuove.length === 1 ? ' giornata aggiunta' : ' giornate aggiunte') + ' dal calendario');
+}
+addEventListener('message', e => {
+  if (e.origin !== location.origin || e.source !== parent || !e.data || e.data.tipo !== 'lavoro-mancanti-esito') return;
+  if (!e.data.pronto) { setTimeout(chiediMancanti, 8000); return; } // Google non ancora collegato: si riprova
+  mancantiCal = (Array.isArray(e.data.nuove) ? e.data.nuove : []).filter(g => g && g.id && /^\d{4}-\d{2}-\d{2}$/.test(g.d) && !L.giornate.some(x => x.d === g.d && (x.agenzia || '') === (g.agenzia || '')))
+    .map(g => ({ id: String(g.id), d: g.d, agenzia: String(g.agenzia || '').toUpperCase().slice(0, 40), nave: String(g.nave || '').slice(0, 60), tipo: '',
+      lordo: typeof g.lordo === 'number' ? g.lordo : '', extra: '', stato: '', fattura: '', note: 'dal calendario' }));
+  if (tab === 'mesi') disegna();
+});
 function allineaCalendario(){
   if (parent === window) return toast('Apri Lavoro dalla Dashboard per allineare il calendario');
   toast('Controllo il calendario…');
@@ -648,7 +686,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudi(); })
     return;
   }
   const t = new URLSearchParams(location.search).get('t'); if (['prossime', 'mesi', 'fatture', 'riepilogo'].includes(t)) tab = t;
-  disegna(); leggiPorto();
+  disegna(); leggiPorto(); setTimeout(chiediMancanti, 1500);
 })();
 </script>
 </body>
