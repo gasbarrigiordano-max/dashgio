@@ -30,6 +30,9 @@ nelle serate nuove (e con "Aggiungile" in quelle già create) come spese con `ti
 (bar, DJ, SIAE, sicurezza…) sono `tipo:"variabile"`, inserite serata per serata. Riepiloghi fisse/variabili per serata e in totale.
 Le spese non chiedono la data: prendono quella della serata. In "Tutte le serate" il riquadro "Spese di tutte le serate" (e il
 pulsante in alto) aggiunge una spesa di tutte le serate = spesa fissa, senza data, messa anche nelle serate da fare già create.
+Checklist della serata: modello uguale per tutte (`check`: id, testo, quando prima/giorno/dopo; se manca vale CHECK_BASE
+in locali/index.html), spunte e voci per serata in `serate[].fatti`, `extra` (solo quella serata), `tolte` (voci del modello
+tolte solo lì). Sezione "Checklist" in Zona Calda per cambiare il modello.
 Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo `sito-zonacalda`: lista, inviti, porta, staff,
 backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine. Le serate si creano dall'app ("+ Serata");
 `ZC_SERATE` (locali/index.html) ha quelle di partenza (28 novembre). Loghi in `locali/loghi/` con i colori originali (non adattati come sul sito Elite); Sunbay ancora da avere.
