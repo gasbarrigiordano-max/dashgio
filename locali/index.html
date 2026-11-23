@@ -211,6 +211,23 @@
   .avviso-fisse b{color:#fff}
   .gruppo-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:4px}
   .gruppo-h h3{margin:0;font-size:13px;font-weight:800;color:#fff} .gruppo-h span{font-size:13px;font-weight:700;color:var(--acc-soft)}
+  .checklist{background:var(--tile);color:var(--tile-ink);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .checklist .ck-h{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .checklist .ck-h h3{margin:0;font-size:15px;font-weight:800}
+  .checklist .ck-h span{font-size:12.5px;font-weight:800;color:var(--acc-ink)}
+  .checklist .barra{height:8px;border-radius:99px;background:#f0e4da;overflow:hidden} .checklist .barra i{display:block;height:100%;background:var(--ok);border-radius:99px}
+  .checklist h4{margin:8px 0 0;font-size:11.5px;font-weight:800;color:var(--tile-ink2);text-transform:uppercase;letter-spacing:.06em}
+  .ck{display:flex;align-items:center;gap:10px;min-height:44px;border-top:1px solid #f0e8e2}
+  .ck label{flex:1 1 auto;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:600;min-height:44px}
+  .ck input{width:22px;height:22px;accent-color:var(--ok);flex:none;color-scheme:light}
+  .ck.fatto label span{color:var(--tile-ink2);text-decoration:line-through}
+  .ck .solo{font-size:10.5px;font-weight:800;color:var(--acc-ink);background:#fff4ec;border-radius:99px;padding:2px 7px;margin-left:4px;text-decoration:none}
+  .ck .via{flex:none;width:32px;height:32px;border-radius:99px;border:1px solid #e3d8cf;background:#fff;color:var(--tile-ink2);cursor:pointer;font-size:13px;padding:0}
+  .ck-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .ck-add input,.ck-add select{height:40px;border-radius:10px;border:1px solid #e3d8cf;background:#fff;color:var(--tile-ink);padding:0 10px;font:500 14px Manrope,sans-serif;min-width:0}
+  .ck-add input[type=text]{flex:1 1 180px}
+  .ck-add .tutte{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tile-ink2);font-weight:600}
+  .ck-add button{height:40px;border-radius:99px;border:0;background:var(--acc);color:#fff;font-weight:800;padding:0 14px;cursor:pointer}
   .stato.dapagare{background:#fff4ec;border-color:#f0c9ad;color:var(--acc-ink)}
   .sito-zc{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
   .sito-zc .sz-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)}
@@ -280,6 +297,7 @@
       <div class="sez" id="org-sera-h" hidden><h2 id="org-sera-tit"></h2><button class="sec" type="button" id="org-sera-mod">Modifica serata</button></div>
       <section class="tiles" id="org-kpi" aria-label="Riepilogo delle spese"></section>
       <div class="avviso-fisse" id="org-fisse-manca" hidden></div>
+      <section class="checklist" id="org-check" hidden></section>
       <div class="riepiloghi" id="org-riep"></div>
       <div class="sez"><h2 id="org-tit">Spese</h2></div>
       <div class="serate" id="org-lista"></div>
@@ -409,6 +427,7 @@
       "tavoli":[{"id","locale","data":"AAAA-MM-GG","cent":importo in centesimi,"perc":% al momento del tavolo,"nome","pagata"}],
       "serate":[{"id","nome","data":"AAAA-MM-GG"}],
       "fisse":[{"id","desc","cat","cent","nota"}]  (spese fisse: il modello uguale per ogni serata),
+      "check":[{"id","testo","quando":"prima"|"giorno"|"dopo"}]  (checklist: il modello uguale per ogni serata; serate[].fatti/tolte/extra),
       "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","serata":id della serata o "" (spese generali),"nota","pagata",
                 "tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
      Zona Calda è un'organizzazione, non un locale: niente tavoli; tutto è diviso per serata (ogni spesa ha la sua serata,
@@ -421,7 +440,22 @@
     { id: "grottaaurelia", nome: "Grotta Aurelia", perc: 15, logo: "loghi/grottaaurelia.png" },
     { id: "sunbay", nome: "Sunbay", perc: 15, logo: null },
   ];
-  let TAVOLI = [], SPESE = [], SERATE = [], FISSE = []; // FISSE: le spese fisse, uguali per ogni serata (modello)
+  let TAVOLI = [], SPESE = [], SERATE = [], FISSE = [];
+  /* Checklist della serata: un modello uguale per tutte le serate (CHECK, modificabile dalla sezione "Checklist") più le voci
+     aggiunte solo in una serata (serata.extra); le spunte stanno nella serata (serata.fatti), le voci del modello tolte solo
+     da una serata in serata.tolte. Il modello di partenza segue il lavoro del sito (inviti, luogo, riserve, porta…). */
+  const CHECK_QUANDO = [["prima", "Prima della serata"], ["giorno", "Il giorno della serata"], ["dopo", "Dopo la serata"]];
+  const CHECK_BASE = [
+    ["prima", "Location confermata e acconto pagato"], ["prima", "DJ confermati"], ["prima", "Service audio e luci prenotati"],
+    ["prima", "Sicurezza prenotata"], ["prima", "SIAE e permessi"], ["prima", "Ordine del bar"], ["prima", "Grafiche e post pubblicati"],
+    ["prima", "Inviti mandati dal foglio (martedì)"], ["prima", "Luogo comunicato a chi ha confermato (venerdì)"],
+    ["prima", "Staff registrato con il pass"], ["prima", "Braccialetti e timbri"], ["prima", "Cassa, POS e fondo cassa"],
+    ["giorno", "Allestimento e prova audio e luci"], ["giorno", "Porta: PIN e telefono carico"], ["giorno", "Inviti di riserva (sabato 00:30)"],
+    ["dopo", "Pagati DJ, service e sicurezza"], ["dopo", "Pulizie e riconsegna della location"], ["dopo", "Avvisati quelli non invitati"],
+    ["dopo", "Spese della serata segnate"], ["dopo", "Cancellati i dati di chi non vuole le prossime serate (entro 30 giorni)"],
+  ].map(([quando, testo], i) => ({ id: "k" + (i + 1), quando, testo }));
+  let CHECK = null; // null = modello di partenza (non ancora cambiato)
+  const checkModello = () => CHECK || CHECK_BASE; // FISSE: le spese fisse, uguali per ogni serata (modello)
   // categorie proposte per le spese di Zona Calda (se ne possono scrivere di nuove)
   const CAT_BASE = ["Affitto", "Luci", "Service e allestimento", "Bar", "DJ e artisti", "SIAE e permessi", "Sicurezza", "Promozione e social",
     "Grafiche e stampa", "Personale e staff", "Trasporti", "Altro"];
@@ -495,7 +529,11 @@
     });
     TAVOLI = (d.tavoli || []).filter((t) => t && t.id && trova(t.locale) && !trova(t.locale).esclusa
       && /^\d{4}-\d{2}-\d{2}$/.test(t.data) && Number.isInteger(t.cent) && t.cent > 0 && typeof t.perc === "number");
-    SERATE = (d.serate || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data)).map((x) => ({ id: x.id, nome: String(x.nome || "Serata").slice(0, 60), data: x.data }));
+    const ids = (a) => (Array.isArray(a) ? a : []).filter((z) => typeof z === "string").slice(0, 200);
+    const voci = (a) => (Array.isArray(a) ? a : []).filter((z) => z && z.id && z.testo).map((z) => ({ id: String(z.id), testo: String(z.testo).slice(0, 120), quando: ["prima", "giorno", "dopo"].includes(z.quando) ? z.quando : "prima" }));
+    SERATE = (d.serate || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data)).map((x) => ({ id: x.id, nome: String(x.nome || "Serata").slice(0, 60), data: x.data,
+      fatti: ids(x.fatti), tolte: ids(x.tolte), extra: voci(x.extra) }));
+    CHECK = Array.isArray(d.check) ? voci(d.check) : null;
     SPESE = (d.spese || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data) && Number.isInteger(x.cent) && x.cent > 0)
       .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata,
         tipo: x.tipo === "fissa" ? "fissa" : "variabile", fissa: x.tipo === "fissa" && x.fissa ? String(x.fissa) : "", evento: x.evento ? String(x.evento) : "" }));
@@ -525,11 +563,12 @@
     tavoli: TAVOLI,
     serate: SERATE,
     fisse: FISSE,
+    ...(CHECK ? { check: CHECK } : {}),
     spese: SPESE,
   });
   // salva; se non va, si torna allo stato di prima
   async function salva(cambia) {
-    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES), sp: JSON.stringify(SPESE), se: JSON.stringify(SERATE), fi: JSON.stringify(FISSE) };
+    const prima = { tav: JSON.stringify(TAVOLI), loc: JSON.stringify(VENUES), sp: JSON.stringify(SPESE), se: JSON.stringify(SERATE), fi: JSON.stringify(FISSE), ck: JSON.stringify(CHECK) };
     cambia();
     const txt = testo();
     try {
@@ -538,7 +577,7 @@
       if (fin !== txt) { applica(fin); Cassaforte.adottato(COL, VOCE); }
       avviso("");
     } catch (e) {
-      TAVOLI = JSON.parse(prima.tav); SPESE = JSON.parse(prima.sp); SERATE = JSON.parse(prima.se); FISSE = JSON.parse(prima.fi);
+      TAVOLI = JSON.parse(prima.tav); SPESE = JSON.parse(prima.sp); SERATE = JSON.parse(prima.se); FISSE = JSON.parse(prima.fi); CHECK = JSON.parse(prima.ck);
       JSON.parse(prima.loc).forEach((x, i) => Object.assign(VENUES[i], x));
       throw e;
     } finally {
@@ -629,6 +668,7 @@
     $("mese").textContent = nomeMese.charAt(0).toUpperCase() + nomeMese.slice(1);
     $("mese-box").hidden = esclusa; // Zona Calda va per serata, non per mese
     $("nuovo-t").textContent = esclusa ? "Aggiungi spesa" : "Aggiungi tavolo";
+    $("nuovo").hidden = false; // Zona Calda in "Checklist" lo nasconde (disegnaOrg)
     $("nuovo").disabled = !pronto;
     document.querySelectorAll("[data-id]").forEach((b) => b.setAttribute("aria-current", String(b.dataset.id === corrente)));
 
@@ -805,7 +845,9 @@
   }
   function disegnaOrg(v) {
     disegnaSito();
-    if (!["tutte", "generali", "fisse"].includes(zcSel) && !SERATE.some((x) => x.id === zcSel)) zcSel = "tutte";
+    $("org-check").hidden = true;
+    if (!["tutte", "generali", "fisse", "check"].includes(zcSel) && !SERATE.some((x) => x.id === zcSel)) zcSel = "tutte";
+    $("nuovo").hidden = zcSel === "check";
     $("nuovo-t").textContent = zcSel === "fisse" ? "Aggiungi spesa fissa" : zcSel === "tutte" ? "Spesa di tutte le serate" : "Aggiungi spesa";
     $("org-fisse-manca").hidden = true;
     if (zcSel === "generali" && !speseDi("generali").length) zcSel = "tutte";
@@ -814,6 +856,7 @@
     const scelta = (k, t) => { const b = el("button", "", t); b.type = "button"; b.setAttribute("aria-pressed", String(zcSel === k)); b.addEventListener("click", () => { zcSel = k; disegna(); }); per.appendChild(b); };
     scelta("tutte", "Tutte le serate");
     scelta("fisse", "Spese fisse");
+    scelta("check", "Checklist");
     ordinate().forEach((x) => scelta(x.id, x.nome));
     if (speseDi("generali").length) scelta("generali", "Spese generali");
     const piu = el("button", "", "+ Serata"); piu.type = "button"; piu.addEventListener("click", () => apriSerata(null)); per.appendChild(piu);
@@ -843,10 +886,20 @@
         const h = el("div", "sc-h"), n = el("b", "", x.nome);
         if (x === sr && x.data >= isoOggi()) n.appendChild(el("span", "prossima", "prossima"));
         h.appendChild(n); h.appendChild(el("span", "mono", soldi(somma(l, (y) => y.cent)))); c.appendChild(h);
+ const ck = vociDi(x), fatte = ck.filter((z) => (x.fatti || []).includes(z.id)).length;
+        c.appendChild(el("small", "", "checklist " + fatte + "/" + ck.length + (fatte === ck.length && ck.length ? " ✓" : "")));
         c.appendChild(el("small", "", dataLunga(x.data) + " · fisse " + soldi(centDi(fisseDi(l))) + " · variabili " + soldi(centDi(variabiliDi(l))) + (dap(l).length ? " · da pagare " + soldi(somma(dap(l), (y) => y.cent)) : l.length ? " · tutto pagato" : "")));
         c.addEventListener("click", () => { zcSel = x.id; disegna(); });
         box.appendChild(c);
       });
+      return;
+    }
+    if (zcSel === "check") { // il modello della checklist, uguale per tutte le serate
+      $("org-sera-h").hidden = false; $("org-sera-mod").hidden = true;
+      $("org-sera-tit").textContent = "Checklist · uguale per ogni serata";
+      kpi.appendChild(tile("Checklist della serata", v.nome, String(checkModello().length), "voci in ogni serata · le spunte si mettono dentro la serata"));
+      disegnaChecklist(null);
+      $("org-tit").textContent = "";
       return;
     }
     if (zcSel === "fisse") {
@@ -877,6 +930,7 @@
     const se = SERATE.find((x) => x.id === zcSel), l = speseDi(zcSel), tot = somma(l, (x) => x.cent);
     // spese fisse che in questa serata mancano: si aggiungono con un tocco
     const manca = se ? fisseMancanti(se.id) : [];
+    if (se) disegnaChecklist(se);
     if (manca.length) {
       const av = $("org-fisse-manca"); av.hidden = false; av.innerHTML = "";
       const t = el("span"); t.appendChild(el("b", "", manca.length + (manca.length === 1 ? " spesa fissa manca" : " spese fisse mancano")));
@@ -909,6 +963,63 @@
       xs.sort((a, b) => b.data.localeCompare(a.data) || b.cent - a.cent).forEach((x) => s.appendChild(rigaSpesa(x)));
       box.appendChild(s);
     });
+  }
+
+  // voci della checklist di una serata: il modello (senza quelle tolte da lei) più le sue voci in più
+  const vociDi = (se) => checkModello().filter((z) => !(se.tolte || []).includes(z.id)).concat(se.extra || []);
+  const nuovaVoce = () => "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  function disegnaChecklist(se) {
+    const box = $("org-check"); box.hidden = false; box.innerHTML = "";
+    const l = se ? vociDi(se) : checkModello(), fatti = se ? (se.fatti || []) : [];
+    const n = l.filter((z) => fatti.includes(z.id)).length;
+    const h = el("div", "ck-h"); h.appendChild(el("h3", "", se ? "Checklist della serata" : "Voci della checklist"));
+    if (se) h.appendChild(el("span", "mono", n + " / " + l.length + (n === l.length && l.length ? " · tutto fatto ✓" : "")));
+    box.appendChild(h);
+    if (se) { const b = el("div", "barra"), i = el("i"); i.style.width = (l.length ? Math.round(n / l.length * 100) : 0) + "%"; b.appendChild(i); box.appendChild(b); }
+    CHECK_QUANDO.forEach(([q, titolo]) => {
+      const voci = l.filter((z) => z.quando === q); if (!voci.length) return;
+      box.appendChild(el("h4", "", titolo));
+      voci.forEach((z) => {
+        const r = el("div", "ck" + (fatti.includes(z.id) ? " fatto" : "")), lab = el("label");
+        if (se) {
+          const c = el("input"); c.type = "checkbox"; c.checked = fatti.includes(z.id);
+          c.addEventListener("change", () => salva(() => { const y = SERATE.find((w) => w.id === se.id); y.fatti = (y.fatti || []).filter((w) => w !== z.id); if (c.checked) y.fatti.push(z.id); }).catch((e) => avviso(msgErrore(e))));
+          lab.appendChild(c);
+        }
+        const t = el("span", "", z.testo); if (se && (se.extra || []).some((w) => w.id === z.id)) t.appendChild(el("em", "solo", "solo questa serata"));
+        lab.appendChild(t); r.appendChild(lab);
+        const via = el("button", "via", "✕"); via.type = "button";
+        via.setAttribute("aria-label", "Togli «" + z.testo + "»" + (se ? " da questa serata" : " dalla checklist di tutte le serate"));
+        via.addEventListener("click", () => {
+          if (!se && !confirm("Togliere «" + z.testo + "» dalla checklist di tutte le serate?")) return;
+          salva(() => {
+            if (!se) { CHECK = checkModello().filter((w) => w.id !== z.id); return; }
+            const y = SERATE.find((w) => w.id === se.id);
+            if ((y.extra || []).some((w) => w.id === z.id)) y.extra = y.extra.filter((w) => w.id !== z.id);
+            else y.tolte = [...new Set([...(y.tolte || []), z.id])];
+            y.fatti = (y.fatti || []).filter((w) => w !== z.id);
+          }).catch((e) => avviso(msgErrore(e)));
+        });
+        r.appendChild(via); box.appendChild(r);
+      });
+    });
+    // aggiungi una voce: in questa serata, o (spunta) in tutte
+    const add = el("form", "ck-add"); add.setAttribute("novalidate", "");
+    const tx = el("input"); tx.type = "text"; tx.maxLength = 120; tx.placeholder = se ? "Aggiungi una voce…" : "Nuova voce per tutte le serate…"; tx.setAttribute("aria-label", "Nuova voce della checklist");
+    const sel = el("select"); sel.setAttribute("aria-label", "Quando"); CHECK_QUANDO.forEach(([q, t]) => { const o = el("option", "", t); o.value = q; sel.appendChild(o); });
+    add.appendChild(tx); add.appendChild(sel);
+    let tutte = null;
+    if (se) { const lb = el("label", "tutte"); tutte = el("input"); tutte.type = "checkbox"; lb.appendChild(tutte); lb.append("anche nelle altre serate"); add.appendChild(lb); }
+    const bt = el("button", "", "Aggiungi"); bt.type = "submit"; add.appendChild(bt);
+    add.addEventListener("submit", (e) => {
+      e.preventDefault(); const testo = tx.value.trim().replace(/\s+/g, " ").slice(0, 120); if (!testo) return tx.focus();
+      const voce = { id: nuovaVoce(), testo, quando: sel.value };
+      salva(() => {
+        if (!se || (tutte && tutte.checked)) CHECK = checkModello().concat(voce);
+        else { const y = SERATE.find((w) => w.id === se.id); y.extra = (y.extra || []).concat(voce); }
+      }).catch((x) => avviso(msgErrore(x)));
+    });
+    box.appendChild(add);
   }
 
   function vai(id) { corrente = id; disegna(); if (window.Moto) Moto.entra(document.querySelector("main")); }
