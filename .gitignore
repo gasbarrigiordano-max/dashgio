@@ -1,6 +1,8 @@
 # Dati reali: mai nel repo
 *.csv
 *.json
+# eccezione: la versione del sito (nessun dato dentro), serve alla Dashboard per ricaricarsi da sola
+!versione.json
 *.numbers
 *.xlsx
 
