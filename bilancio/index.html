@@ -1210,7 +1210,9 @@ function periodTx(){ return S.tx.filter(inPeriod); }
 function periodLabel(){ return ui.month==='all' ? `Anno ${ui.year}` : `${MESI[ui.month]} ${ui.year}`; }
 /* Acquisto di gruppo: t.quota = la mia parte. t.amt resta quanto ho pagato (conto, carta, rate si muovono su quello),
    le statistiche (Panoramica, Mensile, categorie) contano spesa(t). I soldi che gli altri mi restituiscono sono
-   movimenti t:'rb' {gid: acquisto, conto}: entrano nel conto ma non sono entrate. */
+   movimenti t:'rb' {gid: acquisto, conto}: entrano nel conto ma non sono entrate.
+   Spesa da riprendere (t.ripr): pagata per qualcun altro, soldi da riavere tutti → quota 0, non conta in contabilità
+   (resta sulla carta / sul conto); i soldi ripresi sono rimborsi t:'rb' come sopra. */
 // inRate: acquisto pagato a rate in cui contano le singole rate ("Conta le rate come spesa"): l'acquisto non conta due volte
 const spesa = t => t.inRate ? 0 : t.quota!=null ? t.quota : t.amt;
 const rimborsi = t => S.tx.filter(x=>x.t==='rb' && x.gid===t.id);
@@ -1422,7 +1424,7 @@ function renderMovList(){
       <div class="mid"><b>${esc(t.sub)}</b><small>${esc(t.note)} · non è una spesa</small></div><b class="mono mut">-${eur(t.amt)}</b></div>`; return; }
     out += `<div class="tx" onclick="openTx('${t.id}')">
       ${t.abid && SRV_RE.some(([k,re])=>re.test(t.sub)) ? srvIcon(t.sub, 34) : t.det && window.logoAgenzia && logoAgenzia(t.det) ? `<img class="logo" src="${logoAgenzia(t.det)}" alt="">` : `<div class="dot" style="background:${c}22;color:${c}">${esc(t.cat[0]||'?')}</div>`}
-      <div class="mid"><b>${t.t==='rb'?'Rimborso · ':''}${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([t.sub?t.cat:'', t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t)?'💳 '+pagLabel(t):''].filter(Boolean).join(' · ')||(t.sub?'':'Totale mensile'))}</small>${t.quota!=null?`<small>👥 pagati ${eur(t.amt)} · ${daRicevere(t)>0?`da ricevere ${eur(daRicevere(t))}`:'rimborsato'}</small>`:''}</div>
+      <div class="mid"><b>${t.t==='rb'?'Rimborso · ':''}${esc([t.sub||t.cat, t.det].filter(Boolean).join(' · '))}</b><small>${esc([t.sub?t.cat:'', t.note.startsWith('Totale mensile')?'':t.note, pagLabel(t)?'💳 '+pagLabel(t):''].filter(Boolean).join(' · ')||(t.sub?'':'Totale mensile'))}</small>${t.ripr?`<small>↩ non conta · pagati ${eur(t.amt)} · ${daRicevere(t)>0?`da riprendere ${eur(daRicevere(t))}`:'ripresi tutti ✓'}</small>`:t.quota!=null?`<small>👥 pagati ${eur(t.amt)} · ${daRicevere(t)>0?`da ricevere ${eur(daRicevere(t))}`:'rimborsato'}</small>`:''}</div>
       <b class="mono ${t.t==='e'?'pos':t.t==='r'||t.t==='rb'?'mut':''}">${t.t==='e'||t.t==='rb'?'+':'-'}${eur(spesa(t))}</b></div>`;
   });
   $('mov-list').innerHTML = out;
@@ -2605,8 +2607,17 @@ function openTx(id, carta, pre){
         ${lock?'<p class="note" style="margin:-6px 0 12px">Ci sono già rate pagate: per cambiare il piano vai nella sezione Rate.</p>':''}
       </div>
     </div>
-    <div id="t-g-w" style="display:${t.t==='u'?'block':'none'}">
-      <label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="t-g" ${t.quota!=null?'checked':''} onchange="$('t-g-f').style.display=this.checked?'block':'none';txGruppoPrev()"> Acquisto di gruppo</label>
+    <div id="t-x-w" style="display:${t.t==='u'&&!t.rid&&!t.abid?'block':'none'}">
+      <label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="t-x" ${t.ripr?'checked':''} onchange="txRipr()"> Da riprendere · non contarla in contabilità</label>
+      <div id="t-x-f" style="display:${t.ripr?'block':'none'}">
+        <p class="note" style="margin:-4px 0 12px">Soldi che hai anticipato e che ti ridaranno: escono dalla carta o dal conto, ma non entrano nelle spese. Quando li riprendi segnali qui sotto (entrano nel conto, non sono un'entrata).</p>
+        ${id && t.ripr ? `${rimborsi(t).map(x=>`<div class="tx" onclick="openRimb('${t.id}','${x.id}')"><div class="mid"><b>Soldi ripresi</b><small>${esc([fmtD(x.d), pagLabel(x), x.note].filter(Boolean).join(' · '))}</small></div><b class="mono mut">+${eur(x.amt)}</b></div>`).join('')}
+          <p class="note" style="margin:0 0 8px">${daRicevere(t)>0?`Da riprendere ancora <b class="mono" style="color:var(--ink)">${eur(daRicevere(t))}</b>`:'Ripresi tutti ✓'}</p>
+          ${daRicevere(t)>0?`<button class="btn sm ghost" style="margin:0 0 12px" onclick="openRimb('${t.id}')">+ Soldi ripresi</button>`:''}` : ''}
+      </div>
+    </div>
+    <div id="t-g-w" style="display:${t.t==='u'&&!t.ripr?'block':'none'}">
+      <label class="chk" style="justify-content:flex-start;margin:-2px 0 10px"><input type="checkbox" id="t-g" ${t.quota!=null&&!t.ripr?'checked':''} onchange="$('t-g-f').style.display=this.checked?'block':'none';txGruppoPrev()"> Acquisto di gruppo</label>
       <div id="t-g-f" style="display:${t.quota!=null?'block':'none'}">
         <div class="f"><label>La mia quota (€)</label><input id="t-q" inputmode="decimal" value="${t.quota!=null?dec(t.quota):''}" placeholder="0,00 €" oninput="txGruppoPrev()"></div>
         <p class="note" id="t-g-p" style="margin:-4px 0 12px"></p>
@@ -2623,6 +2634,13 @@ function openTx(id, carta, pre){
   txRatePrev();
   $('t-k').addEventListener('change', txEstratto); $('t-d').addEventListener('input', txEstratto); txEstratto();
   if(!id) setTimeout(()=>$('t-a').focus(),120);
+}
+// "Da riprendere" e "Acquisto di gruppo" non vanno insieme: con la prima la mia parte è zero
+function txRipr(){
+  const on = $('t-x').checked;
+  $('t-x-f').style.display = on ? 'block' : 'none';
+  $('t-g-w').style.display = on ? 'none' : 'block';
+  if(on){ $('t-g').checked = false; $('t-g-f').style.display = 'none'; }
 }
 function txGruppoPrev(){
   const el = $('t-g-p'); if(!el) return;
@@ -2660,7 +2678,8 @@ function openDaLavoro(t){
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">Chiudi</button>`);
 }
 function setTxT(v){
-  $('t-t').value=v; draftT=v; $('t-k-w').style.display = v==='u'?'block':'none'; $('t-r-w').style.display = v==='u'?'block':'none'; $('t-g-w').style.display = v==='u'?'block':'none';
+  $('t-t').value=v; draftT=v; $('t-k-w').style.display = v==='u'?'block':'none'; $('t-r-w').style.display = v==='u'?'block':'none'; $('t-g-w').style.display = v==='u' && !($('t-x') && $('t-x').checked) ?'block':'none';
+  if($('t-x-w')) $('t-x-w').style.display = v==='u'?'block':'none';
   document.querySelectorAll('#tx-seg button').forEach(b=>b.classList.toggle('on',b.classList.contains(v)));
   fillCats(''); txEstratto();
 }
@@ -2704,12 +2723,14 @@ function saveTx(id){
   if(!o.amt) return toast('Inserisci un importo');
   if(!o.cat) return toast('Scegli una categoria');
   if(!o.d) return toast('Inserisci la data');
-  const gruppo = o.t==='u' && $('t-g') && $('t-g').checked;
-  if(gruppo){
+  const ripr = o.t==='u' && $('t-x') && $('t-x').checked && $('t-x-w').style.display!=='none';
+  const gruppo = ripr || (o.t==='u' && $('t-g') && $('t-g').checked);
+  if(ripr){ o.quota = 0; o.ripr = true; }
+  else if(gruppo){
     if($('t-q').value.trim()==='') return toast('Inserisci la tua quota');
     o.quota = round2(num($('t-q').value));
     if(o.quota<0 || o.quota>=o.amt) return toast('La tua quota deve essere minore dell\'importo pagato');
-  } else if(id && rimborsi({id}).length) return toast('Ci sono rimborsi ricevuti: eliminali prima di togliere "Acquisto di gruppo"');
+  } else if(id && rimborsi({id}).length) return toast('Ci sono soldi già ripresi: eliminali prima di togliere la spunta');
   const old = id && S.tx.find(x=>x.id===id);
   if(!(old && (old.rid || old.pf))) Object.assign(o, o.t==='u' ? pagParse($('t-k').value) : {carta:'', pag:'', conto:''});
   if(o.carta && soloCarburante(o.carta) && !(old && old.carta===o.carta) && !carburante(o)) return toast(`${cartaName(o.carta)} si usa solo per i rifornimenti (Mezzi › mezzo › Benzina o Gasolio)`);
@@ -2739,7 +2760,7 @@ function saveTx(id){
   if(old && old.pf){ const f=carte().flatMap(c=>c.flex||[]).find(f=>f.id===old.pf); if(f && o.amt!==old.amt){ if(f.done) return toast('Rateizzazione già in corso: l\'importo non si può cambiare'); f.imp=o.amt; } }
   // carta di debito / conto / contanti: l'importo esce subito dal conto (prima tolgo l'effetto della versione vecchia)
   if(old) applyPag(old, -1);
-  if(old){ Object.assign(old,o); if(!gruppo) delete old.quota; if(!o.det) delete old.det; } else S.tx.push({id:uid(),...o});
+  if(old){ Object.assign(old,o); if(!gruppo) delete old.quota; if(!ripr) delete old.ripr; if(!o.det) delete old.det; } else S.tx.push({id:uid(),...o});
   const tx = old || S.tx[S.tx.length-1];
   applyPag(tx);
   if(o.t==='u' && !(old && (old.rid || old.pf))) ui.lastPag = $('t-k').value;
@@ -2773,8 +2794,8 @@ function delTx(id){
 function openRimb(gid, id){
   const G = gruppo(gid), g = G.g, x = id ? S.tx.find(y=>y.id===id) : {amt:daRicevere(g), d:today(), conto:'', note:''};
   const conti = S.conti.filter(liquido);
-  sheet(`<h3>${id?'Rimborso ricevuto':'Nuovo rimborso'}</h3>
-    <p class="note" style="margin:-6px 0 12px"><b style="color:var(--ink)">${esc(G.nome)}</b> · pagati ${eur(G.tot)} · tua quota ${eur(g.quota)} · da ricevere ${eur(daRicevere(g) + (id ? x.amt : 0))}</p>
+  sheet(`<h3>${g.ripr ? (id?'Soldi ripresi':'Nuovi soldi ripresi') : id?'Rimborso ricevuto':'Nuovo rimborso'}</h3>
+    <p class="note" style="margin:-6px 0 12px"><b style="color:var(--ink)">${esc(G.nome)}</b> · pagati ${eur(G.tot)} · ${g.ripr ? `da riprendere ${eur(daRicevere(g) + (id ? x.amt : 0))} · non conta in contabilità` : `tua quota ${eur(g.quota)} · da ricevere ${eur(daRicevere(g) + (id ? x.amt : 0))}`}</p>
     <div class="f"><input id="rb-a" class="amt" inputmode="decimal" placeholder="0,00 €" value="${x.amt>0?String(x.amt).replace('.',','):''}"></div>
     <div class="grid2">
       <div class="f"><label>Data</label><input type="date" id="rb-d" value="${x.d}"></div>
