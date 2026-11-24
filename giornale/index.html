@@ -3617,6 +3617,11 @@ async function vaLoadAll() {
     const exp = h.expenseId && vState.expenses.find(x => x.id === h.expenseId);
     if (exp && exp.category === 'manutenzione') { exp.category = 'tagliando'; vaCategoryFixed = true; }
   });
+  // le spese dei componenti del tagliando (olio motore, filtri) già registrate come manutenzione passano a Tagliando
+  if (currentVehicle.type === 'auto') TAGLIANDO_SUBPARTS.forEach(sp => ((vState.parts[sp.key] || {}).history || []).forEach(h => {
+    const exp = h.expenseId && vState.expenses.find(x => x.id === h.expenseId);
+    if (exp && exp.category === 'manutenzione') { exp.category = 'tagliando'; vaCategoryFixed = true; }
+  }));
   if (vaCategoryFixed) await vaSave('expenses', vState.expenses);
 
   // Rimuove il suffisso "(importato)" lasciato nelle note dei rifornimenti importati da vecchie
@@ -4784,7 +4789,9 @@ async function vaSavePartChange() {
   else { entry = { id: uid(), ...data }; vState.parts[key].history.push(entry); }
   const allParts = [...VEHICLE_STANDARD_PARTS[currentVehicle.type].ordinaria, ...VEHICLE_STANDARD_PARTS[currentVehicle.type].straordinaria, ...(currentVehicle.type === 'auto' ? TAGLIANDO_SUBPARTS : [])];
   const label = allParts.find(p => p.key === key)?.label || key;
-  vaSyncLinkedExpense(entry, { date, amount: entry.price, note: label, category: 'manutenzione', excluded, ...pag });
+  // i componenti del tagliando (olio, filtri) vanno sotto Tagliando, gli altri ricambi in manutenzione ordinaria
+  const delTagliando = TAGLIANDO_SUBPARTS.some(sp => sp.key === key);
+  vaSyncLinkedExpense(entry, { date, amount: entry.price, note: label, category: delTagliando ? 'tagliando' : 'manutenzione', excluded, ...pag });
   closeVaModal('va-part-modal-overlay');
   showToast('Cambio registrato');
   if (vaKmAvanti(data.km)) { vaSave('settings', vState.settings); vaRenderMasthead(); }
