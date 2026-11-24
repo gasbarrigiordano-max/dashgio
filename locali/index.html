@@ -25,7 +25,7 @@
   un'organizzazione: niente tavoli, tutto è diviso per serata (ogni spesa appartiene a una serata, o alle spese generali).
   Dati cifrati nella cassaforte comune (comune/cassaforte.js), voce bilancio/{uid}/locali/locali:
   {v:3, locali:[{id, nome, perc}], tavoli:[{id, locale, data:'AAAA-MM-GG', cent, perc, nome, pagata}],
-   serate:[{id, nome, data:'AAAA-MM-GG'}], spese:[{id, data:'AAAA-MM-GG', cent, desc, cat, serata:id|'' (generali), nota, pagata}]}
+   serate:[{id, nome, data:'AAAA-MM-GG'}], spese:[{id, data:'AAAA-MM-GG', cent, desc, cat, serata:id|'' (generali), nota, pagata, chi (chi l'ha anticipata), ripresa (soldi già ripresi a fine serata)}]}
   Ogni tavolo tiene la percentuale del momento in cui è stato segnato. Loghi in locali/loghi/ con i colori originali (Room 26 e HYN dal sito Elite
   prima della ricolorazione in oro, Grotta Aurelia, il diavoletto dal sito di Zona Calda senza il fondo nero).
 -->
@@ -230,6 +230,15 @@
   .ck-add .tutte{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tile-ink2);font-weight:600}
   .ck-add button{height:40px;border-radius:99px;border:0;background:var(--acc);color:#fff;font-weight:800;padding:0 14px;cursor:pointer}
   .stato.dapagare{background:#fff4ec;border-color:#f0c9ad;color:var(--acc-ink)}
+  .stato.anticipata{background:#fff8e6;border-color:#efd58f;color:#8a5a00}
+  /* conti della serata: quanto ognuno ha anticipato e quanto deve ancora prendere */
+  .conti .cr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid #f0e4da}
+  .conti .cr span{font-weight:800;min-width:0}
+  .conti .cr span small{display:block;color:var(--tile-ink2);font-size:11px;font-weight:600;margin-top:2px}
+  .conti .cr b{font-size:14px;color:var(--acc-ink);text-align:right}
+  .conti .cr .stato{grid-column:1/-1;justify-self:start}
+  .conti .ctot{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;font-weight:800;padding-top:4px}
+  .conti .ctot b{color:var(--acc-ink)}
   .sito-zc{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
   .sito-zc .sz-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)}
   .sito-zc .sz-h b{color:#fff;font-size:13.5px}
@@ -351,7 +360,8 @@
       <label>Serata<select id="s-serata"></select></label>
       <label>Tipo<select id="s-tipo"><option value="variabile">Variabile</option><option value="fissa">Fissa</option></select></label>
       <label class="tutta">Nota (facoltativa)<input id="s-nota" type="text" maxlength="120" autocomplete="off"></label>
-      <label class="tutta">Chi l'ha pagata<select id="s-chi"><option value="">—</option></select></label>
+      <label class="tutta">Anticipata da<select id="s-chi"><option value="">— nessuno</option></select></label>
+      <label class="chk tutta" id="s-ripresa-l" hidden><input id="s-ripresa" type="checkbox"> Pagata a fine serata (soldi già presi dall'incasso)</label>
       <label class="chk tutta"><input id="s-pagata" type="checkbox"> Già pagata</label>
     </div>
     <datalist id="l-cat"></datalist>
@@ -435,7 +445,7 @@
       "fisse":[{"id","desc","cat","cent","nota"}]  (spese fisse: il modello uguale per ogni serata),
       "check":[{"id","testo","quando":"prima"|"giorno"|"dopo"}]  (checklist: il modello uguale per ogni serata; serate[].fatti/tolte/extra),
       "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","serata":id della serata o "" (spese generali),"nota","pagata",
-                "chi":"Giordano"|"David"|"" (chi l'ha pagata),"tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
+                "chi":"Giordano"|"David"|"" (chi l'ha anticipata),"ripresa":true quando a fine serata ha ripreso i soldi,"tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
      Zona Calda è un'organizzazione, non un locale: niente tavoli; tutto è diviso per serata (ogni spesa ha la sua serata,
      o va nelle spese generali), con i riepiloghi per serata e per categoria. Le spese non entrano nei totali dei tavoli. */
   const COL = "locali", VOCE = "locali";
@@ -542,7 +552,7 @@
       fatti: ids(x.fatti), tolte: ids(x.tolte), extra: voci(x.extra) }));
     CHECK = Array.isArray(d.check) ? voci(d.check) : null;
     SPESE = (d.spese || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data) && Number.isInteger(x.cent) && x.cent > 0)
-      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata, chi: ZC_SOCI.includes(x.chi) ? x.chi : "",
+      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata, chi: ZC_SOCI.includes(x.chi) ? x.chi : "", ripresa: ZC_SOCI.includes(x.chi) && !!x.ripresa,
         tipo: x.tipo === "fissa" ? "fissa" : "variabile", fissa: x.tipo === "fissa" && x.fissa ? String(x.fissa) : "", evento: x.evento ? String(x.evento) : "" }));
     FISSE = (d.fisse || []).filter((x) => x && x.id && Number.isInteger(x.cent) && x.cent > 0)
       .map((x) => ({ id: x.id, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), cent: x.cent, nota: String(x.nota || "") }));
@@ -812,15 +822,34 @@
     return [...m].map(([k, xs]) => [k, somma(xs, (x) => x.cent), xs.length]).sort((a, b) => b[1] - a[1]);
   }
   const nSpese = (n) => n + (n === 1 ? " spesa" : " spese");
-  // un riquadro per ognuno: quanto ha pagato (anticipato) di tasca sua
-  const anticipi = (l, tag) => ZC_SOCI.map((n) => { const m = l.filter((x) => x.pagata && x.chi === n); return tile("Pagato da " + n, tag, soldi(centDi(m)), m.length ? nSpese(m.length) + (m.length === 1 ? " anticipata" : " anticipate") : "Niente anticipato"); });
-  // quanto ha pagato ognuno (solo le spese già pagate) e quanto resta da pagare
-  function chiHaPagato(l) {
-    const pag = l.filter((x) => x.pagata), righe = ZC_SOCI.map((n) => { const m = pag.filter((x) => x.chi === n); return [n, centDi(m), nSpese(m.length)]; });
-    const senza = pag.filter((x) => !ZC_SOCI.includes(x.chi)), dap = l.filter((x) => !x.pagata);
-    if (senza.length) righe.push(["Pagate, chi non indicato", centDi(senza), nSpese(senza.length)]);
-    if (dap.length) righe.push(["Ancora da pagare", centDi(dap), nSpese(dap.length)]);
-    return righe.filter((r) => r[1]);
+  // spese anticipate: chi le ha pagate di tasca sua; "ripresa" = a fine serata ha già preso i soldi dall'incasso
+  const anticipate = (l, n) => l.filter((x) => x.chi === n);
+  const daPrendere = (l, n) => anticipate(l, n).filter((x) => !x.ripresa);
+  // un riquadro per ognuno: quanto deve ancora prendere di quello che ha anticipato
+  const anticipi = (l, tag) => ZC_SOCI.map((n) => {
+    const tutte = anticipate(l, n), resto = daPrendere(l, n), preso = centDi(tutte) - centDi(resto);
+    return tile("Da prendere · " + n, tag, soldi(centDi(resto)), !tutte.length ? "Niente anticipato" : resto.length ? "anticipati " + soldi(centDi(tutte)) + (preso ? " · già pagati " + soldi(preso) : "") : "Tutto pagato ✓ · aveva anticipato " + soldi(centDi(tutte)));
+  });
+  // i conti: per ognuno anticipato, già pagato, da prendere; con il pulsante per segnare pagato tutto
+  function conti(titolo, l, conPulsanti) {
+    const b = el("div", "riep conti"); b.appendChild(el("h3", "", titolo));
+    const chi = ZC_SOCI.filter((n) => anticipate(l, n).length);
+    if (!chi.length) { b.appendChild(el("div", "nulla", "Nessuna spesa anticipata. Quando segni una spesa scegli chi l'ha anticipata (Giordano o David).")); return b; }
+    chi.forEach((n) => {
+      const tutte = anticipate(l, n), resto = daPrendere(l, n), r = el("div", "cr"), sp = el("span", "", n);
+      sp.appendChild(el("small", "", "anticipato " + soldi(centDi(tutte)) + " · già pagato " + soldi(centDi(tutte) - centDi(resto))));
+      r.appendChild(sp); r.appendChild(el("b", "mono", resto.length ? soldi(centDi(resto)) : "✓ pari"));
+      if (conPulsanti && resto.length) {
+        const bt = el("button", "stato anticipata", "Pagato tutto a " + n); bt.type = "button";
+        bt.setAttribute("aria-label", "Segna pagate a " + n + " tutte le sue spese anticipate (" + soldi(centDi(resto)) + ")");
+        bt.addEventListener("click", () => salva(() => { const ids = resto.map((x) => x.id); SPESE.forEach((x) => { if (ids.includes(x.id)) x.ripresa = true; }); }).catch((e) => avviso(msgErrore(e))));
+        r.appendChild(bt);
+      }
+      b.appendChild(r);
+    });
+    const t = el("div", "ctot"); t.appendChild(el("span", "", "Da prendere dall'incasso"));
+    t.appendChild(el("b", "mono", soldi(centDi(l.filter((x) => ZC_SOCI.includes(x.chi) && !x.ripresa))))); b.appendChild(t);
+    return b;
   }
   function disegnaSito() {
     const box = $("org-sito"); box.innerHTML = "";
@@ -847,13 +876,15 @@
     r.appendChild(el("span", "ic", sigla(x.cat || "Altro")));
     const tt = el("div", "t");
     tt.appendChild(el("div", "", x.desc || x.cat || "Spesa"));
-    tt.appendChild(el("small", "", [x.cat, new Date(x.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }), x.chi ? "pagata da " + x.chi : "", x.nota].filter(Boolean).join(" · ")));
+    tt.appendChild(el("small", "", [x.cat, new Date(x.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }), x.chi ? "anticipata da " + x.chi : "", x.nota].filter(Boolean).join(" · ")));
     r.appendChild(tt);
     const gb = el("div", "g"); gb.appendChild(el("b", "mono", soldi(x.cent))); r.appendChild(gb);
-    const st = el("button", "stato " + (x.pagata ? "pagata" : "dapagare"), x.pagata ? "Pagata" : "Da pagare"); st.type = "button";
-    st.setAttribute("aria-pressed", String(x.pagata));
-    st.setAttribute("aria-label", (x.pagata ? "Pagata" : "Da pagare") + ": cambia lo stato di " + (x.desc || "questa spesa"));
-    st.addEventListener("click", () => salva(() => { const y = SPESE.find((z) => z.id === x.id); if (y) y.pagata = !y.pagata; }).catch((e) => avviso(msgErrore(e))));
+    // anticipata da qualcuno: "Anticipata" finché a fine serata non riprende i soldi, poi "Pagata"
+    const ant = !!x.chi, ok = ant ? x.ripresa : x.pagata, nome = ant ? (ok ? "Pagata" : "Anticipata") : (ok ? "Pagata" : "Da pagare");
+    const st = el("button", "stato " + (ok ? "pagata" : ant ? "anticipata" : "dapagare"), nome); st.type = "button";
+    st.setAttribute("aria-pressed", String(!!ok));
+    st.setAttribute("aria-label", nome + ": " + (ant ? (ok ? "segna di nuovo da restituire a " : "segna pagata (soldi ripresi) a ") + x.chi : "cambia lo stato") + " · " + (x.desc || "questa spesa"));
+    st.addEventListener("click", () => salva(() => { const y = SPESE.find((z) => z.id === x.id); if (!y) return; if (y.chi) { y.ripresa = !y.ripresa; y.pagata = true; } else y.pagata = !y.pagata; }).catch((e) => avviso(msgErrore(e))));
     r.appendChild(st);
     const ap = el("button", "apri"); ap.type = "button"; ap.setAttribute("aria-label", "Modifica " + (x.desc || "spesa"));
     ap.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
@@ -899,7 +930,7 @@
       rb.appendChild(riepilogo("Per serata", righe.filter((r) => r[1]), tot, "Nessuna spesa ancora."));
       const sv = SPESE.filter((x) => x.serata);
       rb.appendChild(riepilogo("Fisse e variabili · tutte le serate", [["Spese fisse", centDi(fisseDi(sv)), nSpese(fisseDi(sv).length)], ["Spese variabili", centDi(variabiliDi(sv)), nSpese(variabiliDi(sv).length)]].filter((r) => r[1]), centDi(sv), "Nessuna spesa nelle serate."));
-      rb.appendChild(riepilogo("Chi ha pagato · tutte le serate", chiHaPagato(SPESE), tot, "Nessuna spesa ancora."));
+      rb.insertBefore(conti("Conti · tutte le serate", SPESE, false), rb.firstChild);
       rb.appendChild(riepilogo("Per categoria · tutte le serate", raggruppa(SPESE, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, (tot ? Math.round(c / tot * 100) + "% · " : "") + n]), tot, "Nessuna spesa ancora."));
       $("org-tit").textContent = "Le serate";
       if (!SERATE.length) box.appendChild(el("div", "vuoto", "Nessuna serata. Premi «+ Serata» per crearne una."));
@@ -971,11 +1002,11 @@
       kpi.appendChild(tile("Spese variabili", "Questa serata", soldi(centDi(variabiliDi(l))), nSpese(variabiliDi(l).length)));
     }
     kpi.appendChild(tile("Da pagare", se ? "Questa serata" : "Generali", soldi(somma(dap(l), (x) => x.cent)), dap(l).length ? nSpese(dap(l).length) + " ancora da pagare" : "Tutto pagato"));
-    anticipi(l, se ? "Questa serata" : "Generali").forEach((t) => kpi.appendChild(t)); // al posto di "Già pagate": quanto ha anticipato ognuno
+    anticipi(l, se ? "Questa serata" : "Generali").forEach((t) => kpi.appendChild(t)); // quanto deve ancora prendere ognuno
     const pct = (c) => tot ? Math.round(c / tot * 100) + "%" : "";
+    rb.appendChild(conti(se ? "Conti della serata" : "Conti · spese generali", l, true));
     if (se) rb.appendChild(riepilogo("Fisse e variabili", [["Spese fisse", centDi(fisseDi(l)), pct(centDi(fisseDi(l)))], ["Spese variabili", centDi(variabiliDi(l)), pct(centDi(variabiliDi(l)))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Per categoria", raggruppa(l, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, pct(c) + " · " + n]), tot, "Nessuna spesa da riepilogare."));
-    rb.appendChild(riepilogo("Chi ha pagato", chiHaPagato(l), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Stato", [["Da pagare", somma(dap(l), (x) => x.cent), pct(somma(dap(l), (x) => x.cent))], ["Pagate", somma(l.filter((x) => x.pagata), (x) => x.cent), pct(somma(l.filter((x) => x.pagata), (x) => x.cent))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     $("org-tit").textContent = se ? "Spese della serata" : "Spese generali";
     if (!l.length) { box.appendChild(el("div", "vuoto", pronto ? "Nessuna spesa per questa serata. Premi «Aggiungi spesa» per segnarne una." : "Le spese compaiono qui dopo lo sblocco.")); return; }
@@ -1118,6 +1149,7 @@
     $("s-pagata").checked = x ? x.pagata : true;
     $("s-tipo").value = x ? x.tipo : "variabile";
     { const c = $("s-chi"); c.innerHTML = '<option value="">—</option>' + ZC_SOCI.map((n) => `<option>${n}</option>`).join(""); c.value = x ? (x.chi || "") : ""; }
+    $("s-ripresa").checked = !!(x && x.ripresa); $("s-ripresa-l").hidden = !$("s-chi").value;
     opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat)));
     $("sp-tit").textContent = x ? "Modifica spesa" : "Nuova spesa";
     $("s-elimina").hidden = !x;
@@ -1125,6 +1157,8 @@
     $("dlg-spesa").showModal();
     setTimeout(() => $(x ? "s-desc" : "s-importo").focus(), 30);
   }
+  // scegliendo chi l'ha anticipata la spesa è pagata (con i suoi soldi): resta da riprendere a fine serata
+  $("s-chi").addEventListener("change", () => { const c = !!$("s-chi").value; if (c) $("s-pagata").checked = true; $("s-ripresa-l").hidden = !c; if (!c) $("s-ripresa").checked = false; });
   $("form-spesa").addEventListener("submit", async (e) => {
     e.preventDefault();
     const cent = leggiEuro($("s-importo").value), err = $("s-err");
@@ -1133,6 +1167,7 @@
     // niente data da chiedere: la spesa prende quella della sua serata (le spese generali: quella del giorno in cui si segnano)
     const sera = SERATE.find((z) => z.id === $("s-serata").value);
     const dati = { data: sera ? sera.data : (spesaMod && !spesaMod.serata ? spesaMod.data : isoOggi()), cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", serata: $("s-serata").value, nota: pulito("s-nota", 120), pagata: $("s-pagata").checked, tipo: $("s-tipo").value, chi: $("s-chi").value };
+    dati.ripresa = !!dati.chi && $("s-ripresa").checked; if (dati.chi) dati.pagata = true; // anticipata = già pagata al fornitore
     if (dati.tipo !== "fissa") dati.fissa = ""; // diventata variabile: non è più legata alla spesa fissa
     // la stessa categoria scritta in un altro modo (maiuscole) diventa quella già usata
     const gia = CAT_BASE.concat(SPESE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;

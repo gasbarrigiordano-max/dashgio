@@ -33,7 +33,9 @@ pulsante in alto) aggiunge una spesa di tutte le serate = spesa fissa, senza dat
 Checklist della serata: modello uguale per tutte (`check`: id, testo, quando prima/giorno/dopo; se manca vale CHECK_BASE
 in locali/index.html), spunte e voci per serata in `serate[].fatti`, `extra` (solo quella serata), `tolte` (voci del modello
 tolte solo lì). Sezione "Checklist" in Zona Calda per cambiare il modello.
-Spese di Zona Calda: `chi` = chi l'ha pagata (Giordano o David, `ZC_SOCI`), riepilogo "Chi ha pagato". In "Tutte le serate"
+Spese di Zona Calda: `chi` = chi l'ha anticipata (Giordano o David, `ZC_SOCI`; la spesa diventa pagata). A fine serata si fanno i conti:
+`ripresa: true` = soldi già presi dall'incasso (pulsante "Anticipata" → "Pagata" sulla spesa, o "Pagato tutto a X" nel riquadro
+"Conti della serata", che mostra per ognuno anticipato, già pagato e da prendere, e il totale da prendere dall'incasso). In "Tutte le serate"
 accanto a "Spesa di tutte le serate" c'è "Spesa per la prossima serata" (serata già scelta).
 Zona Calda è anche l'altro progetto: il sito zonacaldaclubuse.it (repo `sito-zonacalda`: lista, inviti, porta, staff,
 backstage, regia, Foglio Google). Nella sezione ci sono i link alle sue pagine. Le serate si creano dall'app ("+ Serata");
