@@ -84,6 +84,7 @@
   .pill{background:var(--acc);color:#fff;border:0;cursor:pointer;text-decoration:none;font-weight:700;font-size:13px;border-radius:99px;padding:0 18px;min-height:44px;box-shadow:0 8px 20px rgba(242,113,28,.35);display:inline-flex;align-items:center;gap:6px}
   .pill:hover{filter:brightness(1.08)}
   .pill[disabled]{opacity:.6;cursor:default}
+  .pill.sec-pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,176,122,.55);box-shadow:none;color:#fff}
   .titolo{display:flex;align-items:center;gap:12px;min-width:0}
   .tondo{width:40px;height:40px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none;padding:0}
   .tondo:hover{background:rgba(255,255,255,.14)}
@@ -281,6 +282,10 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         <span id="nuovo-t">Aggiungi tavolo</span>
       </button>
+      <button class="pill sec-pill" type="button" id="nuovo-prossima" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span id="nuovo-prossima-t">Spesa per la prossima serata</span>
+      </button>
     </div>
 
     <p class="avviso" id="avviso" hidden></p>
@@ -346,6 +351,7 @@
       <label>Serata<select id="s-serata"></select></label>
       <label>Tipo<select id="s-tipo"><option value="variabile">Variabile</option><option value="fissa">Fissa</option></select></label>
       <label class="tutta">Nota (facoltativa)<input id="s-nota" type="text" maxlength="120" autocomplete="off"></label>
+      <label class="tutta">Chi l'ha pagata<select id="s-chi"><option value="">—</option></select></label>
       <label class="chk tutta"><input id="s-pagata" type="checkbox"> Già pagata</label>
     </div>
     <datalist id="l-cat"></datalist>
@@ -429,7 +435,7 @@
       "fisse":[{"id","desc","cat","cent","nota"}]  (spese fisse: il modello uguale per ogni serata),
       "check":[{"id","testo","quando":"prima"|"giorno"|"dopo"}]  (checklist: il modello uguale per ogni serata; serate[].fatti/tolte/extra),
       "spese":[{"id","data":"AAAA-MM-GG","cent","desc","cat","serata":id della serata o "" (spese generali),"nota","pagata",
-                "tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
+                "chi":"Giordano"|"David"|"" (chi l'ha pagata),"tipo":"fissa"|"variabile","fissa":id della spesa fissa da cui viene}]}
      Zona Calda è un'organizzazione, non un locale: niente tavoli; tutto è diviso per serata (ogni spesa ha la sua serata,
      o va nelle spese generali), con i riepiloghi per serata e per categoria. Le spese non entrano nei totali dei tavoli. */
   const COL = "locali", VOCE = "locali";
@@ -464,6 +470,7 @@
      porta, staff, backstage e regia, collegati al Foglio Google. Da qui si aprono le sue pagine. Le serate si creano
      dall'app ("+ Serata"); quelle qui sotto ci sono già (la data sul sito resta segreta fino all'annuncio). */
   const ZC_SITO = "https://zonacaldaclubuse.it/";
+  const ZC_SOCI = ["Giordano", "David"]; // chi può aver pagato una spesa di Zona Calda
   const ZC_PAGINE = [["regia/", "Regia"], ["porta/", "Porta"], ["staff/", "Staff"], ["backstage/", "Backstage"], ["lista/", "Lista d'attesa"], ["", "Sito"]];
   const ZC_SERATE = [{ data: "2026-11-28", nome: "Serata 28 novembre" }];
   let corrente = "all";
@@ -535,7 +542,7 @@
       fatti: ids(x.fatti), tolte: ids(x.tolte), extra: voci(x.extra) }));
     CHECK = Array.isArray(d.check) ? voci(d.check) : null;
     SPESE = (d.spese || []).filter((x) => x && x.id && /^\d{4}-\d{2}-\d{2}$/.test(x.data) && Number.isInteger(x.cent) && x.cent > 0)
-      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata,
+      .map((x) => ({ id: x.id, data: x.data, cent: x.cent, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), serata: String(x.serata || ""), nota: String(x.nota || ""), pagata: !!x.pagata, chi: ZC_SOCI.includes(x.chi) ? x.chi : "",
         tipo: x.tipo === "fissa" ? "fissa" : "variabile", fissa: x.tipo === "fissa" && x.fissa ? String(x.fissa) : "", evento: x.evento ? String(x.evento) : "" }));
     FISSE = (d.fisse || []).filter((x) => x && x.id && Number.isInteger(x.cent) && x.cent > 0)
       .map((x) => ({ id: x.id, desc: String(x.desc || ""), cat: String(x.cat || "Altro"), cent: x.cent, nota: String(x.nota || "") }));
@@ -669,6 +676,7 @@
     $("mese-box").hidden = esclusa; // Zona Calda va per serata, non per mese
     $("nuovo-t").textContent = esclusa ? "Aggiungi spesa" : "Aggiungi tavolo";
     $("nuovo").hidden = false; // Zona Calda in "Checklist" lo nasconde (disegnaOrg)
+    $("nuovo-prossima").hidden = true; // solo in Zona Calda › Tutte le serate
     $("nuovo").disabled = !pronto;
     document.querySelectorAll("[data-id]").forEach((b) => b.setAttribute("aria-current", String(b.dataset.id === corrente)));
 
@@ -804,6 +812,14 @@
     return [...m].map(([k, xs]) => [k, somma(xs, (x) => x.cent), xs.length]).sort((a, b) => b[1] - a[1]);
   }
   const nSpese = (n) => n + (n === 1 ? " spesa" : " spese");
+  // quanto ha pagato ognuno (solo le spese già pagate) e quanto resta da pagare
+  function chiHaPagato(l) {
+    const pag = l.filter((x) => x.pagata), righe = ZC_SOCI.map((n) => { const m = pag.filter((x) => x.chi === n); return [n, centDi(m), nSpese(m.length)]; });
+    const senza = pag.filter((x) => !ZC_SOCI.includes(x.chi)), dap = l.filter((x) => !x.pagata);
+    if (senza.length) righe.push(["Pagate, chi non indicato", centDi(senza), nSpese(senza.length)]);
+    if (dap.length) righe.push(["Ancora da pagare", centDi(dap), nSpese(dap.length)]);
+    return righe.filter((r) => r[1]);
+  }
   function disegnaSito() {
     const box = $("org-sito"); box.innerHTML = "";
     const h = el("div", "sz-h"), t = el("div"); t.appendChild(el("b", "", "Sito di Zona Calda"));
@@ -829,7 +845,7 @@
     r.appendChild(el("span", "ic", sigla(x.cat || "Altro")));
     const tt = el("div", "t");
     tt.appendChild(el("div", "", x.desc || x.cat || "Spesa"));
-    tt.appendChild(el("small", "", [x.cat, new Date(x.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }), x.nota].filter(Boolean).join(" · ")));
+    tt.appendChild(el("small", "", [x.cat, new Date(x.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }), x.chi ? "pagata da " + x.chi : "", x.nota].filter(Boolean).join(" · ")));
     r.appendChild(tt);
     const gb = el("div", "g"); gb.appendChild(el("b", "mono", soldi(x.cent))); r.appendChild(gb);
     const st = el("button", "stato " + (x.pagata ? "pagata" : "dapagare"), x.pagata ? "Pagata" : "Da pagare"); st.type = "button";
@@ -848,6 +864,9 @@
     $("org-check").hidden = true;
     if (!["tutte", "generali", "fisse", "check"].includes(zcSel) && !SERATE.some((x) => x.id === zcSel)) zcSel = "tutte";
     $("nuovo").hidden = zcSel === "check";
+    { const sr = SERATE.filter((x) => x.data >= isoOggi()).sort((a, b) => a.data.localeCompare(b.data))[0];
+      $("nuovo-prossima").hidden = !(zcSel === "tutte" && sr);
+      if (sr) $("nuovo-prossima-t").textContent = "Spesa per la prossima serata · " + new Date(sr.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }); }
     $("nuovo-t").textContent = zcSel === "fisse" ? "Aggiungi spesa fissa" : zcSel === "tutte" ? "Spesa di tutte le serate" : "Aggiungi spesa";
     $("org-fisse-manca").hidden = true;
     if (zcSel === "generali" && !speseDi("generali").length) zcSel = "tutte";
@@ -877,6 +896,7 @@
       rb.appendChild(riepilogo("Per serata", righe.filter((r) => r[1]), tot, "Nessuna spesa ancora."));
       const sv = SPESE.filter((x) => x.serata);
       rb.appendChild(riepilogo("Fisse e variabili · tutte le serate", [["Spese fisse", centDi(fisseDi(sv)), nSpese(fisseDi(sv).length)], ["Spese variabili", centDi(variabiliDi(sv)), nSpese(variabiliDi(sv).length)]].filter((r) => r[1]), centDi(sv), "Nessuna spesa nelle serate."));
+      rb.appendChild(riepilogo("Chi ha pagato · tutte le serate", chiHaPagato(SPESE), tot, "Nessuna spesa ancora."));
       rb.appendChild(riepilogo("Per categoria · tutte le serate", raggruppa(SPESE, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, (tot ? Math.round(c / tot * 100) + "% · " : "") + n]), tot, "Nessuna spesa ancora."));
       $("org-tit").textContent = "Le serate";
       if (!SERATE.length) box.appendChild(el("div", "vuoto", "Nessuna serata. Premi «+ Serata» per crearne una."));
@@ -952,6 +972,7 @@
     const pct = (c) => tot ? Math.round(c / tot * 100) + "%" : "";
     if (se) rb.appendChild(riepilogo("Fisse e variabili", [["Spese fisse", centDi(fisseDi(l)), pct(centDi(fisseDi(l)))], ["Spese variabili", centDi(variabiliDi(l)), pct(centDi(variabiliDi(l)))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Per categoria", raggruppa(l, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, pct(c) + " · " + n]), tot, "Nessuna spesa da riepilogare."));
+    rb.appendChild(riepilogo("Chi ha pagato", chiHaPagato(l), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Stato", [["Da pagare", somma(dap(l), (x) => x.cent), pct(somma(dap(l), (x) => x.cent))], ["Pagate", somma(l.filter((x) => x.pagata), (x) => x.cent), pct(somma(l.filter((x) => x.pagata), (x) => x.cent))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     $("org-tit").textContent = se ? "Spese della serata" : "Spese generali";
     if (!l.length) { box.appendChild(el("div", "vuoto", pronto ? "Nessuna spesa per questa serata. Premi «Aggiungi spesa» per segnarne una." : "Le spese compaiono qui dopo lo sblocco.")); return; }
@@ -1067,6 +1088,11 @@
     $("dlg-tavolo").showModal();
     setTimeout(() => (t ? fNome : fImporto).focus(), 30);
   }
+  // in "Tutte le serate": spesa della prossima serata (la serata è già scelta)
+  $("nuovo-prossima").addEventListener("click", () => {
+    const sr = SERATE.filter((x) => x.data >= isoOggi()).sort((a, b) => a.data.localeCompare(b.data))[0]; if (!sr) return;
+    apriSpesa(null, sr.id);
+  });
   $("nuovo").addEventListener("click", () => ((trova(corrente) || {}).org ? (zcSel === "fisse" || zcSel === "tutte" ? apriFissa(null) : apriSpesa(null)) : apriTavolo(null)));
 
   // aggiungi o modifica una spesa di Zona Calda
@@ -1078,9 +1104,9 @@
     const g = el("option", "", "Spese generali (nessuna serata)"); g.value = ""; d.appendChild(g);
     d.value = sel;
   }
-  function apriSpesa(x) {
+  function apriSpesa(x, serataScelta) {
     spesaMod = x || null;
-    const sel = x ? x.serata : (zcSel === "generali" ? "" : zcSel !== "tutte" ? zcSel : ((serataInVista() || {}).id || ""));
+    const sel = x ? x.serata : serataScelta ? serataScelta : (zcSel === "generali" ? "" : zcSel !== "tutte" ? zcSel : ((serataInVista() || {}).id || ""));
     opzioniSerate(sel);
     $("s-importo").value = x ? (x.cent / 100).toFixed(2).replace(".", ",").replace(",00", "") : "";
     $("s-desc").value = x ? x.desc : "";
@@ -1088,6 +1114,7 @@
     $("s-nota").value = x ? x.nota : "";
     $("s-pagata").checked = x ? x.pagata : true;
     $("s-tipo").value = x ? x.tipo : "variabile";
+    { const c = $("s-chi"); c.innerHTML = '<option value="">—</option>' + ZC_SOCI.map((n) => `<option>${n}</option>`).join(""); c.value = x ? (x.chi || "") : ""; }
     opzioni("l-cat", CAT_BASE.concat(SPESE.map((z) => z.cat)));
     $("sp-tit").textContent = x ? "Modifica spesa" : "Nuova spesa";
     $("s-elimina").hidden = !x;
@@ -1102,7 +1129,7 @@
     const pulito = (id, n) => $(id).value.trim().replace(/\s+/g, " ").slice(0, n);
     // niente data da chiedere: la spesa prende quella della sua serata (le spese generali: quella del giorno in cui si segnano)
     const sera = SERATE.find((z) => z.id === $("s-serata").value);
-    const dati = { data: sera ? sera.data : (spesaMod && !spesaMod.serata ? spesaMod.data : isoOggi()), cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", serata: $("s-serata").value, nota: pulito("s-nota", 120), pagata: $("s-pagata").checked, tipo: $("s-tipo").value };
+    const dati = { data: sera ? sera.data : (spesaMod && !spesaMod.serata ? spesaMod.data : isoOggi()), cent, desc: pulito("s-desc", 80), cat: pulito("s-cat", 40) || "Altro", serata: $("s-serata").value, nota: pulito("s-nota", 120), pagata: $("s-pagata").checked, tipo: $("s-tipo").value, chi: $("s-chi").value };
     if (dati.tipo !== "fissa") dati.fissa = ""; // diventata variabile: non è più legata alla spesa fissa
     // la stessa categoria scritta in un altro modo (maiuscole) diventa quella già usata
     const gia = CAT_BASE.concat(SPESE.map((z) => z.cat)).find((c) => c.toLowerCase() === dati.cat.toLowerCase()); if (gia) dati.cat = gia;
