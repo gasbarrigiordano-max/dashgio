@@ -812,6 +812,8 @@
     return [...m].map(([k, xs]) => [k, somma(xs, (x) => x.cent), xs.length]).sort((a, b) => b[1] - a[1]);
   }
   const nSpese = (n) => n + (n === 1 ? " spesa" : " spese");
+  // un riquadro per ognuno: quanto ha pagato (anticipato) di tasca sua
+  const anticipi = (l, tag) => ZC_SOCI.map((n) => { const m = l.filter((x) => x.pagata && x.chi === n); return tile("Pagato da " + n, tag, soldi(centDi(m)), m.length ? nSpese(m.length) + (m.length === 1 ? " anticipata" : " anticipate") : "Niente anticipato"); });
   // quanto ha pagato ognuno (solo le spese già pagate) e quanto resta da pagare
   function chiHaPagato(l) {
     const pag = l.filter((x) => x.pagata), righe = ZC_SOCI.map((n) => { const m = pag.filter((x) => x.chi === n); return [n, centDi(m), nSpese(m.length)]; });
@@ -889,6 +891,7 @@
       kpi.appendChild(tile("Spese di tutte le serate", "+ Aggiungi", soldi(tot), (SPESE.length ? nSpese(SPESE.length) + " · " + SERATE.length + (SERATE.length === 1 ? " serata" : " serate") : "Nessuna spesa segnata") + " · tocca per aggiungere una spesa di tutte le serate", true,
         [() => apriFissa(null), "Aggiungi una spesa di tutte le serate (senza data: entra in ogni serata)"]));
       kpi.appendChild(tile("Da pagare", "Tutte le serate", soldi(somma(dap(SPESE), (x) => x.cent)), dap(SPESE).length ? nSpese(dap(SPESE).length) + " ancora da pagare" : "Tutto pagato"));
+      anticipi(SPESE, "Tutte le serate").forEach((t) => kpi.appendChild(t));
       if (sr) kpi.appendChild(tile(sr.data >= isoOggi() ? "Prossima serata" : "Ultima serata", sr.nome, soldi(somma(speseDi(sr.id), (x) => x.cent)), dataLunga(sr.data) + " · " + nSpese(speseDi(sr.id).length)));
       // confronto tra le serate e categorie di tutte le serate
       const righe = ordinate().map((x) => { const l = speseDi(x.id); return [x.nome, somma(l, (y) => y.cent), "fisse " + soldi(centDi(fisseDi(l))) + " · variabili " + soldi(centDi(variabiliDi(l)))]; });
@@ -968,7 +971,7 @@
       kpi.appendChild(tile("Spese variabili", "Questa serata", soldi(centDi(variabiliDi(l))), nSpese(variabiliDi(l).length)));
     }
     kpi.appendChild(tile("Da pagare", se ? "Questa serata" : "Generali", soldi(somma(dap(l), (x) => x.cent)), dap(l).length ? nSpese(dap(l).length) + " ancora da pagare" : "Tutto pagato"));
-    kpi.appendChild(tile("Già pagate", se ? "Questa serata" : "Generali", soldi(somma(l.filter((x) => x.pagata), (x) => x.cent)), l.length ? Math.round(somma(l.filter((x) => x.pagata), (x) => x.cent) / (tot || 1) * 100) + "% della serata" : "—"));
+    anticipi(l, se ? "Questa serata" : "Generali").forEach((t) => kpi.appendChild(t)); // al posto di "Già pagate": quanto ha anticipato ognuno
     const pct = (c) => tot ? Math.round(c / tot * 100) + "%" : "";
     if (se) rb.appendChild(riepilogo("Fisse e variabili", [["Spese fisse", centDi(fisseDi(l)), pct(centDi(fisseDi(l)))], ["Spese variabili", centDi(variabiliDi(l)), pct(centDi(variabiliDi(l)))]].filter((r) => r[1]), tot, "Nessuna spesa."));
     rb.appendChild(riepilogo("Per categoria", raggruppa(l, (x) => x.cat || "Altro").map(([k, c, n]) => [k, c, pct(c) + " · " + n]), tot, "Nessuna spesa da riepilogare."));
